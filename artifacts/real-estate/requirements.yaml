@@ -1,0 +1,22 @@
+packages:
+  "framer-motion": "For elegant page transitions and scroll animations matching the luxury feel"
+  "react-hook-form": "For complex admin project creation and editing forms"
+  "@hookform/resolvers": "For Zod validation integration with react-hook-form"
+  "embla-carousel-react": "For the property image gallery slider"
+  "lucide-react": "For UI icons"
+
+images:
+  - path: "artifacts/real-estate/public/images/hero-bg.png"
+    description: "Luxury modern mansion exterior at night with warm interior lighting and a dark navy sky, hyper realistic, architectural photography, premium real estate"
+    aspect_ratio: "16:9"
+  - path: "artifacts/real-estate/public/images/about-bg.png"
+    description: "Elegant dark navy and gold abstract architectural lines, premium luxury texture, smooth gradients"
+    aspect_ratio: "16:9"
+  - path: "artifacts/real-estate/public/images/logo.png"
+    description: "Minimalist luxury real estate logo monogram, pure gold color on a completely transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated Orval hooks from @workspace/api-client-react
+  - Implementing a luxury dark mode (Navy & Gold) as the default theme
+  - Simple hardcoded admin auth implemented via React Context and sessionStorage
