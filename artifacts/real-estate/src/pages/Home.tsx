@@ -46,10 +46,10 @@ export default function Home() {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-              Discover Your <br/><span className="text-gold-gradient italic">Extraordinary</span> Next Chapter
+              Zbulo <br/><span className="text-gold-gradient italic">Pronën Tënde të Ëndrrave</span>
             </h1>
             <p className="text-lg md:text-xl text-white/80 font-light mb-12 max-w-2xl mx-auto">
-              Exclusive properties, breathtaking virtual tours, and unparalleled luxury real estate experiences.
+              Prona ekskluzive, ture virtuale mahnitëse dhe përvoja të pashembullta në fushën e pasurive të paluajtshme luksoze.
             </p>
 
             {/* Search Box */}
@@ -62,7 +62,7 @@ export default function Home() {
                 value={country}
                 onChange={(e) => { setCountry(e.target.value); setCity(""); }}
               >
-                <option value="" className="bg-card text-white">Any Country</option>
+                <option value="" className="bg-card text-white">Të Gjitha Shtetet</option>
                 {countries?.map(c => (
                   <option key={c} value={c} className="bg-card text-white">{c}</option>
                 ))}
@@ -74,7 +74,7 @@ export default function Home() {
                 onChange={(e) => setCity(e.target.value)}
                 disabled={!country}
               >
-                <option value="" className="bg-card text-white">Any City</option>
+                <option value="" className="bg-card text-white">Të Gjitha Qytetet</option>
                 {cities?.map(c => (
                   <option key={c} value={c} className="bg-card text-white">{c}</option>
                 ))}
@@ -84,7 +84,7 @@ export default function Home() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
                 <input 
                   type="text"
-                  placeholder="Keyword, property name..."
+                  placeholder="Fjalë kyçe, emri i pronës..."
                   className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-primary"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -95,7 +95,7 @@ export default function Home() {
                 type="submit"
                 className="w-full md:w-auto px-8 py-4 bg-primary text-primary-foreground font-bold tracking-wider uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors"
               >
-                Search
+                Kërko
               </button>
             </form>
           </motion.div>
@@ -110,22 +110,22 @@ export default function Home() {
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Map size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-white mb-3">Immersive 360° Tours</h3>
-              <p className="text-muted-foreground leading-relaxed">Experience properties as if you were there. Our integrated virtual tours provide unparalleled realistic walk-throughs.</p>
+              <h3 className="font-display text-2xl text-white mb-3">Ture Virtuale 360°</h3>
+              <p className="text-muted-foreground leading-relaxed">Eksperienconi pronat sikur të ishit aty. Turet tona virtuale të integruara ofrojnë një shëtitje reale të pakrahasueshme.</p>
             </div>
             <div className="text-center group">
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Building2 size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-white mb-3">Curated Portfolio</h3>
-              <p className="text-muted-foreground leading-relaxed">Access an exclusive collection of the world's most sought-after residential and commercial properties.</p>
+              <h3 className="font-display text-2xl text-white mb-3">Portofol i Përzgjedhur</h3>
+              <p className="text-muted-foreground leading-relaxed">Përftoni akses në një koleksion ekskluziv të pronave rezidenciale dhe komerciale më të kërkuara në botë.</p>
             </div>
             <div className="text-center group">
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <ShieldCheck size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-white mb-3">White-Glove Service</h3>
-              <p className="text-muted-foreground leading-relaxed">A dedicated approach to real estate matching the premium nature of the properties we represent.</p>
+              <h3 className="font-display text-2xl text-white mb-3">Shërbim i Klasit të Parë</h3>
+              <p className="text-muted-foreground leading-relaxed">Një qasje e dedikuar në fushën e pasurive të paluajtshme që i përshtatet natyrës premium të pronave që përfaqësojmë.</p>
             </div>
           </div>
         </div>
@@ -136,14 +136,14 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
             <div>
-              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Latest Exclusives</h2>
-              <p className="text-muted-foreground text-lg max-w-xl">Explore our most recently listed masterpieces, hand-picked for the discerning buyer.</p>
+              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Pronat e Fundit</h2>
+              <p className="text-muted-foreground text-lg max-w-xl">Eksploroni kryeveprat tona të listuara së fundmi, të zgjedhura me kujdes për blerësin kërkues.</p>
             </div>
             <Link 
               href="/projects"
               className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
             >
-              View Portfolio
+              Shiko Të Gjitha Pronat
               <span className="w-8 h-[1px] bg-primary group-hover:bg-white transition-colors" />
             </Link>
           </div>
@@ -162,7 +162,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="text-center py-20 bg-card rounded-2xl border border-white/5">
-              <p className="text-muted-foreground text-lg">No featured projects currently available.</p>
+              <p className="text-muted-foreground text-lg">Nuk ka projekte të veçuara aktualisht.</p>
             </div>
           )}
         </div>

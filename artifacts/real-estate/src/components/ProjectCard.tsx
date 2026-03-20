@@ -13,15 +13,15 @@ export function ProjectCard({ project }: { project: Project }) {
   };
 
   const statusLabels = {
-    for_sale: "For Sale",
-    sold: "Sold",
-    rented: "Rented",
-    for_rent: "For Rent",
+    for_sale: "Në Shitje",
+    sold: "Shitur",
+    rented: "Dhënë me Qira",
+    for_rent: "Me Qira",
   };
 
   const formattedPrice = project.price 
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: project.currency || 'USD', maximumFractionDigits: 0 }).format(project.price)
-    : "Price on Request";
+    : "Çmimi sipas kërkesës";
 
   return (
     <Link href={`/projects/${project.id}`} className="group block h-full">
@@ -49,7 +49,7 @@ export function ProjectCard({ project }: { project: Project }) {
           {project.virtualTourUrl && (
             <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-[10px] font-bold text-white uppercase tracking-widest">360° Tour</span>
+              <span className="text-[10px] font-bold text-white uppercase tracking-widest">Tur 360°</span>
             </div>
           )}
           
@@ -83,13 +83,13 @@ export function ProjectCard({ project }: { project: Project }) {
             {project.bedrooms && (
               <div className="flex items-center gap-2 text-white/80">
                 <BedDouble size={16} className="text-primary" />
-                <span className="text-sm font-medium">{project.bedrooms} <span className="text-xs text-muted-foreground">Beds</span></span>
+                <span className="text-sm font-medium">{project.bedrooms} <span className="text-xs text-muted-foreground">Dh. Gjumi</span></span>
               </div>
             )}
             {project.bathrooms && (
               <div className="flex items-center gap-2 text-white/80">
                 <Bath size={16} className="text-primary" />
-                <span className="text-sm font-medium">{project.bathrooms} <span className="text-xs text-muted-foreground">Baths</span></span>
+                <span className="text-sm font-medium">{project.bathrooms} <span className="text-xs text-muted-foreground">Banjo</span></span>
               </div>
             )}
           </div>

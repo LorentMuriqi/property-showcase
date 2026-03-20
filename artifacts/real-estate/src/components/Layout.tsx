@@ -24,14 +24,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   const navLinks = [
-    { name: "Home", href: "/" },
-    { name: "Properties", href: "/projects" },
-    { name: "About Us", href: "/about" },
-    { name: "Contact", href: "/contact" },
+    { name: "Kryefaqja", href: "/" },
+    { name: "Prona", href: "/projects" },
+    { name: "Rreth Nesh", href: "/about" },
+    { name: "Kontakt", href: "/contact" },
   ];
 
   if (isAdmin) {
-    navLinks.push({ name: "Admin Dashboard", href: "/admin" });
+    navLinks.push({ name: "Paneli Administrativ", href: "/admin" });
   }
 
   return (
@@ -46,7 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:border-primary/50 transition-colors">
               <img 
-                src={`${import.meta.env.BASE_URL}images/logo.png`} 
+                src={`${import.meta.env.BASE_URL}images/logo.svg`} 
                 alt="Logo" 
                 className="w-6 h-6 object-contain"
                 onError={(e) => (e.currentTarget.style.display = 'none')}
@@ -75,14 +75,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onClick={logout}
                 className="text-sm font-medium tracking-wide uppercase text-destructive hover:text-red-400 transition-colors"
               >
-                Logout
+                Dalje
               </button>
             )}
             <Link 
               href="/contact"
               className="px-6 py-2.5 rounded-none border border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300 font-medium text-sm tracking-widest uppercase"
             >
-              Inquire
+              Na Kontaktoni
             </Link>
           </nav>
 
@@ -122,7 +122,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   onClick={logout}
                   className="font-display text-3xl text-destructive"
                 >
-                  Logout
+                  Dalje
                 </button>
               )}
             </nav>
@@ -157,7 +157,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
             
             <div>
-              <h4 className="font-display text-lg text-white mb-6">Contact</h4>
+              <h4 className="font-display text-lg text-white mb-6">Kontakt</h4>
               <ul className="space-y-4 text-muted-foreground">
                 <li className="flex items-start gap-3">
                   <MapPin size={18} className="text-primary mt-1 shrink-0" />
@@ -175,9 +175,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div>
-              <h4 className="font-display text-lg text-white mb-6">Quick Links</h4>
+              <h4 className="font-display text-lg text-white mb-6">Lidhje të Shpejta</h4>
               <ul className="space-y-3">
-                {navLinks.filter(l => !['Admin Dashboard'].includes(l.name)).map(link => (
+                {navLinks.filter(l => !['Paneli Administrativ'].includes(l.name)).map(link => (
                   <li key={link.href}>
                     <Link href={link.href} className="text-muted-foreground hover:text-primary transition-colors">
                       {link.name}
@@ -186,7 +186,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 ))}
                 <li>
                   <Link href="/admin" className="text-muted-foreground hover:text-primary transition-colors opacity-50">
-                    Agent Login
+                    Hyrja e Agjentit
                   </Link>
                 </li>
               </ul>
@@ -194,10 +194,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between text-sm text-muted-foreground/60">
-            <p>&copy; {new Date().getFullYear()} Aura Estates. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Aura Estates. Të gjitha të drejtat e rezervuara.</p>
             <div className="flex gap-6 mt-4 md:mt-0">
-              <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-              <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+              <a href="#" className="hover:text-white transition-colors">Politika e Privatësisë</a>
+              <a href="#" className="hover:text-white transition-colors">Kushtet e Shërbimit</a>
             </div>
           </div>
         </div>

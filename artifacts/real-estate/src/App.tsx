@@ -14,6 +14,7 @@ import Contact from "@/pages/Contact";
 import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminProjectForm from "@/pages/admin/AdminProjectForm";
+import AdminVirtualTour from "@/pages/admin/AdminVirtualTour";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/projects/new" component={AdminProjectForm} />
       <Route path="/admin/projects/:id/edit" component={AdminProjectForm} />
+      <Route path="/admin/projects/:id/virtual-tour" component={AdminVirtualTour} />
       
       <Route component={NotFound} />
     </Switch>

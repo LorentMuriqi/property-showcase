@@ -39,24 +39,24 @@ export default function About() {
           <div className="space-y-16">
             <div className="grid md:grid-cols-2 gap-12 items-center">
               <div>
-                <h2 className="font-display text-3xl text-primary mb-6">Our Philosophy</h2>
+                <h2 className="font-display text-3xl text-primary mb-6">Filozofia Jonë</h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  At Aura Estates, we believe that a home is more than a physical space—it is the ultimate expression of personal achievement and aesthetic sensibility. 
+                  Në Aura Estates, ne besojmë se një shtëpi është më shumë se një hapësirë fizike—është shprehja përfundimtare e arritjeve personale dhe ndjeshmërisë estetike. 
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  Founded on the principles of absolute discretion and uncompromising quality, we represent only the most exceptional properties across the globe.
+                  Të themeluar mbi parimet e diskrecionit absolut dhe cilësisë pa kompromis, ne përfaqësojmë vetëm pronat më të jashtëzakonshme në mbarë botën.
                 </p>
               </div>
               <div className="aspect-square bg-card rounded-2xl border border-white/5 p-8 flex flex-col justify-center text-center">
                 <span className="font-display text-6xl text-primary block mb-4">15+</span>
-                <span className="text-white tracking-widest uppercase text-sm">Years of Excellence</span>
+                <span className="text-white tracking-widest uppercase text-sm">Vite Ekselencë</span>
               </div>
             </div>
 
             <div className="border-t border-white/10 pt-16">
-              <h2 className="font-display text-3xl text-white mb-8 text-center">The Virtual Experience</h2>
+              <h2 className="font-display text-3xl text-white mb-8 text-center">Eksperienca Virtuale</h2>
               <p className="text-muted-foreground leading-relaxed text-center max-w-3xl mx-auto">
-                We pioneer the use of advanced 360° virtual tour technology, allowing discerning clients to explore magnificent properties from anywhere in the world with unprecedented realism. This digital-first approach ensures that global buyers can experience the true essence of a property before stepping foot on the grounds.
+                Ne jemi pionierë në përdorimin e teknologjisë së avancuar të tureve virtuale 360°, duke i lejuar klientëve kërkues të eksplorojnë prona madhështore nga kudo në botë me një realizëm të paprecedentë. Kjo qasje digjitale siguron që blerësit globalë të përjetojnë thelbin e vërtetë të një prone përpara se të shkelin fizikisht në të.
               </p>
             </div>
           </div>

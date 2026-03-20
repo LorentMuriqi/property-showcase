@@ -25,6 +25,36 @@ export interface ProjectImage {
   isPrimary: boolean;
 }
 
+export interface VirtualTourHotspot {
+  id: number;
+  fromSceneId: number;
+  toSceneId: number;
+  yaw: number;
+  pitch: number;
+  label?: string | null;
+}
+
+export interface VirtualTourScene {
+  id: number;
+  projectId: number;
+  title: string;
+  imageUrl: string;
+  thumbnailUrl?: string | null;
+  isDefault: boolean;
+  sortOrder: number;
+  positionX?: number | null;
+  positionY?: number | null;
+  pitchCorrection?: number | null;
+  yawCorrection?: number | null;
+  hotspots: VirtualTourHotspot[];
+}
+
+export interface VirtualTourData {
+  projectId: number;
+  scenes: VirtualTourScene[];
+  defaultSceneId?: number | null;
+}
+
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
 export const ProjectStatus = {
@@ -57,6 +87,7 @@ export interface Project {
   virtualTourEmbedCode?: string | null;
   virtualTourProvider?: string | null;
   images: ProjectImage[];
+  hasCustomVirtualTour: boolean;
   customFields?: ProjectCustomFields;
   createdAt: string;
   updatedAt: string;
@@ -150,24 +181,50 @@ export interface UpdateProjectRequest {
   customFields?: UpdateProjectRequestCustomFields;
 }
 
+export interface CreateSceneRequest {
+  title: string;
+  imageUrl: string;
+  thumbnailUrl?: string | null;
+  isDefault?: boolean;
+  sortOrder?: number;
+  positionX?: number | null;
+  positionY?: number | null;
+  pitchCorrection?: number | null;
+  yawCorrection?: number | null;
+}
+
+export interface UpdateSceneRequest {
+  title?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string | null;
+  isDefault?: boolean;
+  sortOrder?: number;
+  positionX?: number | null;
+  positionY?: number | null;
+  pitchCorrection?: number | null;
+  yawCorrection?: number | null;
+}
+
+export interface CreateHotspotRequest {
+  toSceneId: number;
+  yaw: number;
+  pitch: number;
+  label?: string | null;
+}
+
+export interface UpdateHotspotRequest {
+  toSceneId?: number;
+  yaw?: number;
+  pitch?: number;
+  label?: string | null;
+}
+
 export type ListProjectsParams = {
-  /**
-   * Filter by country
-   */
   country?: string;
-  /**
-   * Filter by city
-   */
   city?: string;
-  /**
-   * Search by title or description
-   */
   search?: string;
   page?: number;
   limit?: number;
-  /**
-   * Return only the most recent projects
-   */
   recent?: boolean;
 };
 

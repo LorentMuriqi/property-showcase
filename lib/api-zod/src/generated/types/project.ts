@@ -30,6 +30,7 @@ export interface Project {
   virtualTourEmbedCode?: string | null;
   virtualTourProvider?: string | null;
   images: ProjectImage[];
+  hasCustomVirtualTour: boolean;
   customFields?: ProjectCustomFields;
   createdAt: Date;
   updatedAt: Date;

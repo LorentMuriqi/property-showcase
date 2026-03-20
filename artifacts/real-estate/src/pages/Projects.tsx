@@ -47,8 +47,8 @@ export default function Projects() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="mb-12">
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Portfolio</h1>
-            <p className="text-muted-foreground text-lg">Browse our complete collection of luxury properties.</p>
+            <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Prona</h1>
+            <p className="text-muted-foreground text-lg">Shfletoni koleksionin tonë të plotë të pronave luksoze.</p>
           </div>
 
           <div className="flex flex-col lg:flex-row gap-8 items-start">
@@ -59,27 +59,27 @@ export default function Projects() {
               onClick={() => setShowFilters(!showFilters)}
             >
               <Filter size={20} />
-              {showFilters ? "Hide Filters" : "Show Filters"}
+              {showFilters ? "Fshih Filtrat" : "Shfaq Filtrat"}
             </button>
 
             {/* Sidebar Filters */}
             <div className={`w-full lg:w-80 shrink-0 space-y-8 ${showFilters ? 'block' : 'hidden lg:block'}`}>
               <div className="glass-panel p-6 rounded-2xl sticky top-24">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-display text-xl text-white">Filters</h3>
+                  <h3 className="font-display text-xl text-white">Filtrat</h3>
                   {(country || city || search) && (
                     <button onClick={clearFilters} className="text-sm text-primary hover:text-white flex items-center gap-1">
-                      <X size={14} /> Clear
+                      <X size={14} /> Pastro
                     </button>
                   )}
                 </div>
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">Search</label>
+                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">Kërko</label>
                     <input 
                       type="text"
-                      placeholder="Keywords..."
+                      placeholder="Fjalë kyçe..."
                       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -87,13 +87,13 @@ export default function Projects() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">Country</label>
+                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">Shteti</label>
                     <select 
                       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
                       value={country}
                       onChange={(e) => { setCountry(e.target.value); setCity(""); }}
                     >
-                      <option value="">All Countries</option>
+                      <option value="">Të Gjitha Shtetet</option>
                       {countries?.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -101,14 +101,14 @@ export default function Projects() {
                   </div>
 
                   <div className={!country ? 'opacity-50' : ''}>
-                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">City</label>
+                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">Qyteti</label>
                     <select 
                       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       disabled={!country}
                     >
-                      <option value="">All Cities</option>
+                      <option value="">Të Gjitha Qytetet</option>
                       {cities?.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -128,7 +128,7 @@ export default function Projects() {
                 </div>
               ) : data?.projects && data.projects.length > 0 ? (
                 <>
-                  <p className="text-muted-foreground mb-6">{data.total} properties found</p>
+                  <p className="text-muted-foreground mb-6">{data.total} prona të gjetura</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {data.projects.map((project) => (
                       <ProjectCard key={project.id} project={project} />
@@ -140,13 +140,13 @@ export default function Projects() {
                   <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-white/40">
                     <Search size={24} />
                   </div>
-                  <h3 className="font-display text-2xl text-white mb-2">No properties found</h3>
-                  <p className="text-muted-foreground">Try adjusting your search or filters.</p>
+                  <h3 className="font-display text-2xl text-white mb-2">Asnjë pronë nuk u gjet</h3>
+                  <p className="text-muted-foreground">Provoni të rregulloni kërkimin ose filtrat.</p>
                   <button 
                     onClick={clearFilters}
                     className="mt-6 px-6 py-2 border border-primary text-primary hover:bg-primary hover:text-background rounded-full transition-colors"
                   >
-                    Clear Filters
+                    Pastro Filtrat
                   </button>
                 </div>
               )}

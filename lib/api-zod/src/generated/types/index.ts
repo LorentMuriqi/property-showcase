@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./createHotspotRequest";
 export * from "./createProjectRequest";
 export * from "./createProjectRequestCustomFields";
 export * from "./createProjectRequestStatus";
+export * from "./createSceneRequest";
 export * from "./errorResponse";
 export * from "./healthStatus";
 export * from "./listCitiesParams";
@@ -20,6 +22,11 @@ export * from "./projectImageInput";
 export * from "./projectListResponse";
 export * from "./projectStatus";
 export * from "./successResponse";
+export * from "./updateHotspotRequest";
 export * from "./updateProjectRequest";
 export * from "./updateProjectRequestCustomFields";
 export * from "./updateProjectRequestStatus";
+export * from "./updateSceneRequest";
+export * from "./virtualTourData";
+export * from "./virtualTourHotspot";
+export * from "./virtualTourScene";

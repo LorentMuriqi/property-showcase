@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,25 +15,18 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Returns paginated list of projects with optional filters
- * @summary List all projects
+ * @summary Listo të gjitha projektet
  */
 export const listProjectsQueryPageDefault = 1;
 export const listProjectsQueryLimitDefault = 12;
 
 export const ListProjectsQueryParams = zod.object({
-  country: zod.coerce.string().optional().describe("Filter by country"),
-  city: zod.coerce.string().optional().describe("Filter by city"),
-  search: zod.coerce
-    .string()
-    .optional()
-    .describe("Search by title or description"),
+  country: zod.coerce.string().optional(),
+  city: zod.coerce.string().optional(),
+  search: zod.coerce.string().optional(),
   page: zod.coerce.number().default(listProjectsQueryPageDefault),
   limit: zod.coerce.number().default(listProjectsQueryLimitDefault),
-  recent: zod.coerce
-    .boolean()
-    .optional()
-    .describe("Return only the most recent projects"),
+  recent: zod.coerce.boolean().optional(),
 });
 
 export const ListProjectsResponse = zod.object({
@@ -67,6 +59,7 @@ export const ListProjectsResponse = zod.object({
           isPrimary: zod.boolean(),
         }),
       ),
+      hasCustomVirtualTour: zod.boolean(),
       customFields: zod.record(zod.string(), zod.unknown()).nullish(),
       createdAt: zod.date(),
       updatedAt: zod.date(),
@@ -79,7 +72,7 @@ export const ListProjectsResponse = zod.object({
 });
 
 /**
- * @summary Get a single project
+ * @summary Merr një projekt
  */
 export const GetProjectParams = zod.object({
   id: zod.coerce.number(),
@@ -113,13 +106,51 @@ export const GetProjectResponse = zod.object({
       isPrimary: zod.boolean(),
     }),
   ),
+  hasCustomVirtualTour: zod.boolean(),
   customFields: zod.record(zod.string(), zod.unknown()).nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
 
 /**
- * @summary Create a new project
+ * @summary Merr të dhënat e virtual tour për një projekt
+ */
+export const GetVirtualTourParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetVirtualTourResponse = zod.object({
+  projectId: zod.number(),
+  scenes: zod.array(
+    zod.object({
+      id: zod.number(),
+      projectId: zod.number(),
+      title: zod.string(),
+      imageUrl: zod.string(),
+      thumbnailUrl: zod.string().nullish(),
+      isDefault: zod.boolean(),
+      sortOrder: zod.number(),
+      positionX: zod.number().nullish(),
+      positionY: zod.number().nullish(),
+      pitchCorrection: zod.number().nullish(),
+      yawCorrection: zod.number().nullish(),
+      hotspots: zod.array(
+        zod.object({
+          id: zod.number(),
+          fromSceneId: zod.number(),
+          toSceneId: zod.number(),
+          yaw: zod.number(),
+          pitch: zod.number(),
+          label: zod.string().nullish(),
+        }),
+      ),
+    }),
+  ),
+  defaultSceneId: zod.number().nullish(),
+});
+
+/**
+ * @summary Krijo projekt të ri
  */
 export const CreateProjectBody = zod.object({
   title: zod.string(),
@@ -153,7 +184,7 @@ export const CreateProjectBody = zod.object({
 });
 
 /**
- * @summary Update a project
+ * @summary Përditëso projekt
  */
 export const UpdateProjectParams = zod.object({
   id: zod.coerce.number(),
@@ -218,13 +249,14 @@ export const UpdateProjectResponse = zod.object({
       isPrimary: zod.boolean(),
     }),
   ),
+  hasCustomVirtualTour: zod.boolean(),
   customFields: zod.record(zod.string(), zod.unknown()).nullish(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
 
 /**
- * @summary Delete a project
+ * @summary Fshi projekt
  */
 export const DeleteProjectParams = zod.object({
   id: zod.coerce.number(),
@@ -236,13 +268,136 @@ export const DeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary List all countries that have projects
+ * @summary Shto skenë 360° në virtual tour
+ */
+export const CreateVirtualTourSceneParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateVirtualTourSceneBody = zod.object({
+  title: zod.string(),
+  imageUrl: zod.string(),
+  thumbnailUrl: zod.string().nullish(),
+  isDefault: zod.boolean().optional(),
+  sortOrder: zod.number().optional(),
+  positionX: zod.number().nullish(),
+  positionY: zod.number().nullish(),
+  pitchCorrection: zod.number().nullish(),
+  yawCorrection: zod.number().nullish(),
+});
+
+/**
+ * @summary Përditëso skenë
+ */
+export const UpdateVirtualTourSceneParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateVirtualTourSceneBody = zod.object({
+  title: zod.string().optional(),
+  imageUrl: zod.string().optional(),
+  thumbnailUrl: zod.string().nullish(),
+  isDefault: zod.boolean().optional(),
+  sortOrder: zod.number().optional(),
+  positionX: zod.number().nullish(),
+  positionY: zod.number().nullish(),
+  pitchCorrection: zod.number().nullish(),
+  yawCorrection: zod.number().nullish(),
+});
+
+export const UpdateVirtualTourSceneResponse = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  title: zod.string(),
+  imageUrl: zod.string(),
+  thumbnailUrl: zod.string().nullish(),
+  isDefault: zod.boolean(),
+  sortOrder: zod.number(),
+  positionX: zod.number().nullish(),
+  positionY: zod.number().nullish(),
+  pitchCorrection: zod.number().nullish(),
+  yawCorrection: zod.number().nullish(),
+  hotspots: zod.array(
+    zod.object({
+      id: zod.number(),
+      fromSceneId: zod.number(),
+      toSceneId: zod.number(),
+      yaw: zod.number(),
+      pitch: zod.number(),
+      label: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Fshi skenë
+ */
+export const DeleteVirtualTourSceneParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteVirtualTourSceneResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+});
+
+/**
+ * @summary Shto hotspot lidhëse mes skenave
+ */
+export const CreateHotspotParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateHotspotBody = zod.object({
+  toSceneId: zod.number(),
+  yaw: zod.number(),
+  pitch: zod.number(),
+  label: zod.string().nullish(),
+});
+
+/**
+ * @summary Përditëso hotspot
+ */
+export const UpdateHotspotParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateHotspotBody = zod.object({
+  toSceneId: zod.number().optional(),
+  yaw: zod.number().optional(),
+  pitch: zod.number().optional(),
+  label: zod.string().nullish(),
+});
+
+export const UpdateHotspotResponse = zod.object({
+  id: zod.number(),
+  fromSceneId: zod.number(),
+  toSceneId: zod.number(),
+  yaw: zod.number(),
+  pitch: zod.number(),
+  label: zod.string().nullish(),
+});
+
+/**
+ * @summary Fshi hotspot
+ */
+export const DeleteHotspotParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteHotspotResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+});
+
+/**
+ * @summary Listo shtetet
  */
 export const ListCountriesResponseItem = zod.string();
 export const ListCountriesResponse = zod.array(ListCountriesResponseItem);
 
 /**
- * @summary List cities, optionally filtered by country
+ * @summary Listo qytetet
  */
 export const ListCitiesQueryParams = zod.object({
   country: zod.coerce.string().optional(),

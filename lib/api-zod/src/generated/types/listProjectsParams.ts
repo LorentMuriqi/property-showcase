@@ -7,22 +7,10 @@
  */
 
 export type ListProjectsParams = {
-  /**
-   * Filter by country
-   */
   country?: string;
-  /**
-   * Filter by city
-   */
   city?: string;
-  /**
-   * Search by title or description
-   */
   search?: string;
   page?: number;
   limit?: number;
-  /**
-   * Return only the most recent projects
-   */
   recent?: boolean;
 };

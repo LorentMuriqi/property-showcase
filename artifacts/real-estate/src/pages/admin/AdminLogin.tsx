@@ -16,8 +16,8 @@ export default function AdminLogin() {
       setLocation("/admin");
     } else {
       toast({
-        title: "Access Denied",
-        description: "Incorrect password provided.",
+        title: "Hyrja u Refuzua",
+        description: "Fjalëkalim i pasaktë.",
         variant: "destructive"
       });
     }
@@ -33,12 +33,12 @@ export default function AdminLogin() {
           <Shield size={32} />
         </div>
 
-        <h1 className="font-display text-3xl font-bold text-white text-center mb-2">Secure Gateway</h1>
-        <p className="text-muted-foreground text-center mb-8">Authorized personnel only.</p>
+        <h1 className="font-display text-3xl font-bold text-white text-center mb-2">Hyrja e Sigurt</h1>
+        <p className="text-muted-foreground text-center mb-8">Vetëm për personelin e autorizuar.</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-white/70 uppercase tracking-wider mb-2">Access Key</label>
+            <label className="block text-sm font-medium text-white/70 uppercase tracking-wider mb-2">Çelësi i Hyrjes</label>
             <input 
               type="password" 
               value={password}
@@ -52,7 +52,7 @@ export default function AdminLogin() {
             type="submit" 
             className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors"
           >
-            Authenticate
+            Hyr
           </button>
         </form>
         
@@ -60,7 +60,7 @@ export default function AdminLogin() {
           onClick={() => setLocation("/")}
           className="w-full mt-6 text-sm text-muted-foreground hover:text-white transition-colors"
         >
-          Return to public site
+          Kthehu në faqen publike
         </button>
       </div>
     </div>

@@ -17,7 +17,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CreateHotspotRequest,
   CreateProjectRequest,
+  CreateSceneRequest,
   ErrorResponse,
   HealthStatus,
   ListCitiesParams,
@@ -25,7 +27,12 @@ import type {
   Project,
   ProjectListResponse,
   SuccessResponse,
+  UpdateHotspotRequest,
   UpdateProjectRequest,
+  UpdateSceneRequest,
+  VirtualTourData,
+  VirtualTourHotspot,
+  VirtualTourScene,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -38,7 +45,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -114,8 +120,7 @@ export function useHealthCheck<
 }
 
 /**
- * Returns paginated list of projects with optional filters
- * @summary List all projects
+ * @summary Listo të gjitha projektet
  */
 export const getListProjectsUrl = (params?: ListProjectsParams) => {
   const normalizedParams = new URLSearchParams();
@@ -182,7 +187,7 @@ export type ListProjectsQueryResult = NonNullable<
 export type ListProjectsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List all projects
+ * @summary Listo të gjitha projektet
  */
 
 export function useListProjects<
@@ -209,7 +214,7 @@ export function useListProjects<
 }
 
 /**
- * @summary Get a single project
+ * @summary Merr një projekt
  */
 export const getGetProjectUrl = (id: number) => {
   return `/api/projects/${id}`;
@@ -269,7 +274,7 @@ export type GetProjectQueryResult = NonNullable<
 export type GetProjectQueryError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Get a single project
+ * @summary Merr një projekt
  */
 
 export function useGetProject<
@@ -296,7 +301,94 @@ export function useGetProject<
 }
 
 /**
- * @summary Create a new project
+ * @summary Merr të dhënat e virtual tour për një projekt
+ */
+export const getGetVirtualTourUrl = (id: number) => {
+  return `/api/projects/${id}/virtual-tour`;
+};
+
+export const getVirtualTour = async (
+  id: number,
+  options?: RequestInit,
+): Promise<VirtualTourData> => {
+  return customFetch<VirtualTourData>(getGetVirtualTourUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVirtualTourQueryKey = (id: number) => {
+  return [`/api/projects/${id}/virtual-tour`] as const;
+};
+
+export const getGetVirtualTourQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVirtualTour>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVirtualTour>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetVirtualTourQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getVirtualTour>>> = ({
+    signal,
+  }) => getVirtualTour(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVirtualTour>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVirtualTourQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVirtualTour>>
+>;
+export type GetVirtualTourQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Merr të dhënat e virtual tour për një projekt
+ */
+
+export function useGetVirtualTour<
+  TData = Awaited<ReturnType<typeof getVirtualTour>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVirtualTour>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVirtualTourQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Krijo projekt të ri
  */
 export const getCreateProjectUrl = () => {
   return `/api/admin/projects`;
@@ -359,7 +451,7 @@ export type CreateProjectMutationBody = BodyType<CreateProjectRequest>;
 export type CreateProjectMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Create a new project
+ * @summary Krijo projekt të ri
  */
 export const useCreateProject = <
   TError = ErrorType<ErrorResponse>,
@@ -382,7 +474,7 @@ export const useCreateProject = <
 };
 
 /**
- * @summary Update a project
+ * @summary Përditëso projekt
  */
 export const getUpdateProjectUrl = (id: number) => {
   return `/api/admin/projects/${id}`;
@@ -446,7 +538,7 @@ export type UpdateProjectMutationBody = BodyType<UpdateProjectRequest>;
 export type UpdateProjectMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Update a project
+ * @summary Përditëso projekt
  */
 export const useUpdateProject = <
   TError = ErrorType<ErrorResponse>,
@@ -469,7 +561,7 @@ export const useUpdateProject = <
 };
 
 /**
- * @summary Delete a project
+ * @summary Fshi projekt
  */
 export const getDeleteProjectUrl = (id: number) => {
   return `/api/admin/projects/${id}`;
@@ -530,7 +622,7 @@ export type DeleteProjectMutationResult = NonNullable<
 export type DeleteProjectMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Delete a project
+ * @summary Fshi projekt
  */
 export const useDeleteProject = <
   TError = ErrorType<ErrorResponse>,
@@ -553,7 +645,523 @@ export const useDeleteProject = <
 };
 
 /**
- * @summary List all countries that have projects
+ * @summary Shto skenë 360° në virtual tour
+ */
+export const getCreateVirtualTourSceneUrl = (id: number) => {
+  return `/api/admin/projects/${id}/virtual-tour/scenes`;
+};
+
+export const createVirtualTourScene = async (
+  id: number,
+  createSceneRequest: CreateSceneRequest,
+  options?: RequestInit,
+): Promise<VirtualTourScene> => {
+  return customFetch<VirtualTourScene>(getCreateVirtualTourSceneUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSceneRequest),
+  });
+};
+
+export const getCreateVirtualTourSceneMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createVirtualTourScene>>,
+    TError,
+    { id: number; data: BodyType<CreateSceneRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createVirtualTourScene>>,
+  TError,
+  { id: number; data: BodyType<CreateSceneRequest> },
+  TContext
+> => {
+  const mutationKey = ["createVirtualTourScene"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createVirtualTourScene>>,
+    { id: number; data: BodyType<CreateSceneRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createVirtualTourScene(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateVirtualTourSceneMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createVirtualTourScene>>
+>;
+export type CreateVirtualTourSceneMutationBody = BodyType<CreateSceneRequest>;
+export type CreateVirtualTourSceneMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Shto skenë 360° në virtual tour
+ */
+export const useCreateVirtualTourScene = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createVirtualTourScene>>,
+    TError,
+    { id: number; data: BodyType<CreateSceneRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createVirtualTourScene>>,
+  TError,
+  { id: number; data: BodyType<CreateSceneRequest> },
+  TContext
+> => {
+  return useMutation(getCreateVirtualTourSceneMutationOptions(options));
+};
+
+/**
+ * @summary Përditëso skenë
+ */
+export const getUpdateVirtualTourSceneUrl = (id: number) => {
+  return `/api/admin/virtual-tour/scenes/${id}`;
+};
+
+export const updateVirtualTourScene = async (
+  id: number,
+  updateSceneRequest: UpdateSceneRequest,
+  options?: RequestInit,
+): Promise<VirtualTourScene> => {
+  return customFetch<VirtualTourScene>(getUpdateVirtualTourSceneUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSceneRequest),
+  });
+};
+
+export const getUpdateVirtualTourSceneMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateVirtualTourScene>>,
+    TError,
+    { id: number; data: BodyType<UpdateSceneRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateVirtualTourScene>>,
+  TError,
+  { id: number; data: BodyType<UpdateSceneRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateVirtualTourScene"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateVirtualTourScene>>,
+    { id: number; data: BodyType<UpdateSceneRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateVirtualTourScene(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateVirtualTourSceneMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateVirtualTourScene>>
+>;
+export type UpdateVirtualTourSceneMutationBody = BodyType<UpdateSceneRequest>;
+export type UpdateVirtualTourSceneMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Përditëso skenë
+ */
+export const useUpdateVirtualTourScene = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateVirtualTourScene>>,
+    TError,
+    { id: number; data: BodyType<UpdateSceneRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateVirtualTourScene>>,
+  TError,
+  { id: number; data: BodyType<UpdateSceneRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateVirtualTourSceneMutationOptions(options));
+};
+
+/**
+ * @summary Fshi skenë
+ */
+export const getDeleteVirtualTourSceneUrl = (id: number) => {
+  return `/api/admin/virtual-tour/scenes/${id}`;
+};
+
+export const deleteVirtualTourScene = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDeleteVirtualTourSceneUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteVirtualTourSceneMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteVirtualTourScene>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteVirtualTourScene>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteVirtualTourScene"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteVirtualTourScene>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteVirtualTourScene(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteVirtualTourSceneMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteVirtualTourScene>>
+>;
+
+export type DeleteVirtualTourSceneMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Fshi skenë
+ */
+export const useDeleteVirtualTourScene = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteVirtualTourScene>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteVirtualTourScene>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteVirtualTourSceneMutationOptions(options));
+};
+
+/**
+ * @summary Shto hotspot lidhëse mes skenave
+ */
+export const getCreateHotspotUrl = (id: number) => {
+  return `/api/admin/virtual-tour/scenes/${id}/hotspots`;
+};
+
+export const createHotspot = async (
+  id: number,
+  createHotspotRequest: CreateHotspotRequest,
+  options?: RequestInit,
+): Promise<VirtualTourHotspot> => {
+  return customFetch<VirtualTourHotspot>(getCreateHotspotUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createHotspotRequest),
+  });
+};
+
+export const getCreateHotspotMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHotspot>>,
+    TError,
+    { id: number; data: BodyType<CreateHotspotRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createHotspot>>,
+  TError,
+  { id: number; data: BodyType<CreateHotspotRequest> },
+  TContext
+> => {
+  const mutationKey = ["createHotspot"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createHotspot>>,
+    { id: number; data: BodyType<CreateHotspotRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createHotspot(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateHotspotMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createHotspot>>
+>;
+export type CreateHotspotMutationBody = BodyType<CreateHotspotRequest>;
+export type CreateHotspotMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Shto hotspot lidhëse mes skenave
+ */
+export const useCreateHotspot = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHotspot>>,
+    TError,
+    { id: number; data: BodyType<CreateHotspotRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createHotspot>>,
+  TError,
+  { id: number; data: BodyType<CreateHotspotRequest> },
+  TContext
+> => {
+  return useMutation(getCreateHotspotMutationOptions(options));
+};
+
+/**
+ * @summary Përditëso hotspot
+ */
+export const getUpdateHotspotUrl = (id: number) => {
+  return `/api/admin/virtual-tour/hotspots/${id}`;
+};
+
+export const updateHotspot = async (
+  id: number,
+  updateHotspotRequest: UpdateHotspotRequest,
+  options?: RequestInit,
+): Promise<VirtualTourHotspot> => {
+  return customFetch<VirtualTourHotspot>(getUpdateHotspotUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateHotspotRequest),
+  });
+};
+
+export const getUpdateHotspotMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHotspot>>,
+    TError,
+    { id: number; data: BodyType<UpdateHotspotRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateHotspot>>,
+  TError,
+  { id: number; data: BodyType<UpdateHotspotRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateHotspot"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateHotspot>>,
+    { id: number; data: BodyType<UpdateHotspotRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateHotspot(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateHotspotMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateHotspot>>
+>;
+export type UpdateHotspotMutationBody = BodyType<UpdateHotspotRequest>;
+export type UpdateHotspotMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Përditëso hotspot
+ */
+export const useUpdateHotspot = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHotspot>>,
+    TError,
+    { id: number; data: BodyType<UpdateHotspotRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateHotspot>>,
+  TError,
+  { id: number; data: BodyType<UpdateHotspotRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateHotspotMutationOptions(options));
+};
+
+/**
+ * @summary Fshi hotspot
+ */
+export const getDeleteHotspotUrl = (id: number) => {
+  return `/api/admin/virtual-tour/hotspots/${id}`;
+};
+
+export const deleteHotspot = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDeleteHotspotUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteHotspotMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteHotspot>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteHotspot>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteHotspot"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteHotspot>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteHotspot(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteHotspotMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteHotspot>>
+>;
+
+export type DeleteHotspotMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Fshi hotspot
+ */
+export const useDeleteHotspot = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteHotspot>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteHotspot>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteHotspotMutationOptions(options));
+};
+
+/**
+ * @summary Listo shtetet
  */
 export const getListCountriesUrl = () => {
   return `/api/locations/countries`;
@@ -604,7 +1212,7 @@ export type ListCountriesQueryResult = NonNullable<
 export type ListCountriesQueryError = ErrorType<unknown>;
 
 /**
- * @summary List all countries that have projects
+ * @summary Listo shtetet
  */
 
 export function useListCountries<
@@ -628,7 +1236,7 @@ export function useListCountries<
 }
 
 /**
- * @summary List cities, optionally filtered by country
+ * @summary Listo qytetet
  */
 export const getListCitiesUrl = (params?: ListCitiesParams) => {
   const normalizedParams = new URLSearchParams();
@@ -695,7 +1303,7 @@ export type ListCitiesQueryResult = NonNullable<
 export type ListCitiesQueryError = ErrorType<unknown>;
 
 /**
- * @summary List cities, optionally filtered by country
+ * @summary Listo qytetet
  */
 
 export function useListCities<

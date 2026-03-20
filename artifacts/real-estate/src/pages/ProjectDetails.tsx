@@ -3,12 +3,17 @@ import { useParams } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
 import { ChevronLeft, ChevronRight, MapPin, Maximize, BedDouble, Bath, LayoutGrid, Calendar, Layers, CheckCircle2, Play, X } from "lucide-react";
 import { Layout } from "@/components/Layout";
-import { useGetProject } from "@workspace/api-client-react";
+import { useGetProject, useGetVirtualTour } from "@workspace/api-client-react";
+import { VirtualTour360 } from "@/components/VirtualTour360";
 
 export default function ProjectDetails() {
   const { id } = useParams();
   const { data: project, isLoading, error } = useGetProject(Number(id));
   
+  const { data: tourData } = useGetVirtualTour(Number(id), { 
+    query: { enabled: !!project?.hasCustomVirtualTour } 
+  });
+
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
 
@@ -21,7 +26,7 @@ export default function ProjectDetails() {
         <div className="min-h-screen pt-32 flex items-center justify-center">
           <div className="animate-pulse flex flex-col items-center">
             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-primary font-display tracking-widest uppercase">Loading Property</p>
+            <p className="text-primary font-display tracking-widest uppercase">Duke Ngarkuar Pronën</p>
           </div>
         </div>
       </Layout>
@@ -33,8 +38,8 @@ export default function ProjectDetails() {
       <Layout>
         <div className="min-h-screen pt-32 flex items-center justify-center text-center px-4">
           <div>
-            <h1 className="font-display text-4xl text-white mb-4">Property Not Found</h1>
-            <p className="text-muted-foreground">The requested property is unavailable or does not exist.</p>
+            <h1 className="font-display text-4xl text-white mb-4">Prona Nuk U Gjet</h1>
+            <p className="text-muted-foreground">Prona e kërkuar nuk është e disponueshme ose nuk ekziston.</p>
           </div>
         </div>
       </Layout>
@@ -43,9 +48,16 @@ export default function ProjectDetails() {
 
   const formattedPrice = project.price 
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: project.currency || 'USD', maximumFractionDigits: 0 }).format(project.price)
-    : "Price on Request";
+    : "Çmimi sipas kërkesës";
 
-  const hasVirtualTour = !!(project.virtualTourUrl || project.virtualTourEmbedCode);
+  const hasVirtualTour = !!(project.hasCustomVirtualTour || project.virtualTourUrl || project.virtualTourEmbedCode);
+
+  const statusLabels: Record<string, string> = {
+    for_sale: "Në Shitje",
+    sold: "Shitur",
+    rented: "Dhënë me Qira",
+    for_rent: "Me Qira",
+  };
 
   return (
     <Layout>
@@ -60,7 +72,7 @@ export default function ProjectDetails() {
                   <div className="flex-[0_0_100%] min-w-0 h-full relative" key={img.id || idx}>
                     <img 
                       src={img.url} 
-                      alt={img.caption || `${project.title} - Image ${idx + 1}`} 
+                      alt={img.caption || `${project.title} - Foto ${idx + 1}`} 
                       className="w-full h-full object-cover"
                     />
                     {img.caption && (
@@ -72,7 +84,7 @@ export default function ProjectDetails() {
                 ))
               ) : (
                 <div className="flex-[0_0_100%] flex items-center justify-center text-muted-foreground font-display text-xl">
-                  No images available
+                  Nuk ka foto të disponueshme
                 </div>
               )}
             </div>
@@ -95,7 +107,7 @@ export default function ProjectDetails() {
                 onClick={() => setShowVirtualTour(true)}
                 className="absolute top-6 right-6 px-6 py-3 rounded-full bg-primary/90 text-primary-foreground font-bold tracking-widest uppercase text-xs flex items-center gap-2 hover:bg-primary hover:scale-105 transition-all shadow-xl backdrop-blur-md"
               >
-                <Play size={14} className="fill-current" /> View 360° Tour
+                <Play size={14} className="fill-current" /> Hap Turin Virtual 360°
               </button>
             )}
           </div>
@@ -111,7 +123,7 @@ export default function ProjectDetails() {
             <div>
               <div className="flex items-center gap-4 mb-4">
                 <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-white/80">
-                  {project.status.replace('_', ' ')}
+                  {statusLabels[project.status] || project.status.replace('_', ' ')}
                 </span>
                 {project.propertyType && (
                   <span className="text-primary text-sm font-medium tracking-wide uppercase">
@@ -129,7 +141,7 @@ export default function ProjectDetails() {
             {/* Description */}
             {project.description && (
               <div>
-                <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">The Property</h3>
+                <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">Prona</h3>
                 <div className="prose prose-invert max-w-none text-muted-foreground leading-relaxed">
                   {project.description.split('\n').map((paragraph, i) => (
                     <p key={i}>{paragraph}</p>
@@ -141,7 +153,7 @@ export default function ProjectDetails() {
             {/* Custom Fields (Features) */}
             {project.customFields && Object.keys(project.customFields).length > 0 && (
               <div>
-                <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">Features & Amenities</h3>
+                <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">Karakteristikat dhe Lehtësitë</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {Object.entries(project.customFields).map(([key, value]) => (
                     <div key={key} className="flex items-start gap-3">
@@ -169,52 +181,52 @@ export default function ProjectDetails() {
                   <div className="bg-background/50 p-4 rounded-xl border border-white/5">
                     <Maximize size={20} className="text-primary mb-2" />
                     <span className="block text-white text-lg font-medium">{project.areaM2}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Sq Meters</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Metra Katrorë</span>
                   </div>
                 )}
                 {project.bedrooms && (
                   <div className="bg-background/50 p-4 rounded-xl border border-white/5">
                     <BedDouble size={20} className="text-primary mb-2" />
                     <span className="block text-white text-lg font-medium">{project.bedrooms}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Bedrooms</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Dhoma Gjumi</span>
                   </div>
                 )}
                 {project.bathrooms && (
                   <div className="bg-background/50 p-4 rounded-xl border border-white/5">
                     <Bath size={20} className="text-primary mb-2" />
                     <span className="block text-white text-lg font-medium">{project.bathrooms}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Bathrooms</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Banjo</span>
                   </div>
                 )}
                 {project.livingRooms && (
                   <div className="bg-background/50 p-4 rounded-xl border border-white/5">
                     <LayoutGrid size={20} className="text-primary mb-2" />
                     <span className="block text-white text-lg font-medium">{project.livingRooms}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Living R.</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Dh. Ndenjeje</span>
                   </div>
                 )}
                 {project.floors && (
                   <div className="bg-background/50 p-4 rounded-xl border border-white/5">
                     <Layers size={20} className="text-primary mb-2" />
                     <span className="block text-white text-lg font-medium">{project.floors}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Floors</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Kate</span>
                   </div>
                 )}
                 {project.yearBuilt && (
                   <div className="bg-background/50 p-4 rounded-xl border border-white/5">
                     <Calendar size={20} className="text-primary mb-2" />
                     <span className="block text-white text-lg font-medium">{project.yearBuilt}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Built</span>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Ndërtuar</span>
                   </div>
                 )}
               </div>
 
               <div className="space-y-4">
                 <button className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors">
-                  Schedule Viewing
+                  Planifiko një Vizitë
                 </button>
                 <button className="w-full py-4 bg-transparent border border-white/20 text-white font-bold tracking-widest uppercase text-sm rounded-xl hover:border-white transition-colors">
-                  Request Info
+                  Kërko Informacion
                 </button>
               </div>
             </div>
@@ -228,7 +240,7 @@ export default function ProjectDetails() {
         <div className="fixed inset-0 z-[100] bg-background flex flex-col">
           <div className="flex items-center justify-between p-4 glass-panel border-b border-white/10 z-10">
             <div className="flex items-center gap-3">
-              <span className="font-display font-bold text-white text-xl">360° Virtual Tour</span>
+              <span className="font-display font-bold text-white text-xl">Tur Virtual 360°</span>
               <span className="text-muted-foreground">|</span>
               <span className="text-primary truncate max-w-[200px] sm:max-w-none">{project.title}</span>
             </div>
@@ -240,7 +252,9 @@ export default function ProjectDetails() {
             </button>
           </div>
           <div className="flex-1 w-full bg-black relative">
-            {project.virtualTourEmbedCode ? (
+            {project.hasCustomVirtualTour && tourData ? (
+              <VirtualTour360 scenes={tourData.scenes} defaultSceneId={tourData.defaultSceneId} />
+            ) : project.virtualTourEmbedCode ? (
               <div 
                 className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full"
                 dangerouslySetInnerHTML={{ __html: project.virtualTourEmbedCode }} 

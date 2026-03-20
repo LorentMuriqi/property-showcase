@@ -13,13 +13,14 @@ tags:
     description: Real estate project operations
   - name: admin
     description: Admin operations
+  - name: virtual-tour
+    description: Virtual tour 360° operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -32,24 +33,20 @@ paths:
     get:
       operationId: listProjects
       tags: [projects]
-      summary: List all projects
-      description: Returns paginated list of projects with optional filters
+      summary: Listo të gjitha projektet
       parameters:
         - name: country
           in: query
           schema:
             type: string
-          description: Filter by country
         - name: city
           in: query
           schema:
             type: string
-          description: Filter by city
         - name: search
           in: query
           schema:
             type: string
-          description: Search by title or description
         - name: page
           in: query
           schema:
@@ -64,10 +61,9 @@ paths:
           in: query
           schema:
             type: boolean
-          description: Return only the most recent projects
       responses:
         "200":
-          description: List of projects
+          description: Lista e projekteve
           content:
             application/json:
               schema:
@@ -77,7 +73,7 @@ paths:
     get:
       operationId: getProject
       tags: [projects]
-      summary: Get a single project
+      summary: Merr një projekt
       parameters:
         - name: id
           in: path
@@ -86,13 +82,38 @@ paths:
             type: integer
       responses:
         "200":
-          description: Project details
+          description: Detajet e projektit
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Project"
         "404":
-          description: Not found
+          description: Nuk u gjet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}/virtual-tour:
+    get:
+      operationId: getVirtualTour
+      tags: [virtual-tour]
+      summary: Merr të dhënat e virtual tour për një projekt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Skenat dhe hotspot-et e virtual tour
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualTourData"
+        "404":
+          description: Nuk u gjet
           content:
             application/json:
               schema:
@@ -102,7 +123,7 @@ paths:
     post:
       operationId: createProject
       tags: [admin]
-      summary: Create a new project
+      summary: Krijo projekt të ri
       requestBody:
         required: true
         content:
@@ -111,13 +132,13 @@ paths:
               $ref: "#/components/schemas/CreateProjectRequest"
       responses:
         "201":
-          description: Created project
+          description: Projekti i krijuar
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Project"
         "400":
-          description: Validation error
+          description: Gabim validimi
           content:
             application/json:
               schema:
@@ -127,7 +148,7 @@ paths:
     put:
       operationId: updateProject
       tags: [admin]
-      summary: Update a project
+      summary: Përditëso projekt
       parameters:
         - name: id
           in: path
@@ -142,13 +163,13 @@ paths:
               $ref: "#/components/schemas/UpdateProjectRequest"
       responses:
         "200":
-          description: Updated project
+          description: Projekti i përditësuar
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Project"
         "404":
-          description: Not found
+          description: Nuk u gjet
           content:
             application/json:
               schema:
@@ -156,7 +177,7 @@ paths:
     delete:
       operationId: deleteProject
       tags: [admin]
-      summary: Delete a project
+      summary: Fshi projekt
       parameters:
         - name: id
           in: path
@@ -165,26 +186,160 @@ paths:
             type: integer
       responses:
         "200":
-          description: Deleted
+          description: Fshirë
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
         "404":
-          description: Not found
+          description: Nuk u gjet
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /admin/projects/{id}/virtual-tour/scenes:
+    post:
+      operationId: createVirtualTourScene
+      tags: [admin]
+      summary: Shto skenë 360° në virtual tour
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSceneRequest"
+      responses:
+        "201":
+          description: Skena e krijuar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualTourScene"
+
+  /admin/virtual-tour/scenes/{id}:
+    put:
+      operationId: updateVirtualTourScene
+      tags: [admin]
+      summary: Përditëso skenë
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSceneRequest"
+      responses:
+        "200":
+          description: Skena e përditësuar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualTourScene"
+    delete:
+      operationId: deleteVirtualTourScene
+      tags: [admin]
+      summary: Fshi skenë
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Fshirë
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/virtual-tour/scenes/{id}/hotspots:
+    post:
+      operationId: createHotspot
+      tags: [admin]
+      summary: Shto hotspot lidhëse mes skenave
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHotspotRequest"
+      responses:
+        "201":
+          description: Hotspot-i i krijuar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualTourHotspot"
+
+  /admin/virtual-tour/hotspots/{id}:
+    put:
+      operationId: updateHotspot
+      tags: [admin]
+      summary: Përditëso hotspot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHotspotRequest"
+      responses:
+        "200":
+          description: Hotspot-i i përditësuar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VirtualTourHotspot"
+    delete:
+      operationId: deleteHotspot
+      tags: [admin]
+      summary: Fshi hotspot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Fshirë
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /locations/countries:
     get:
       operationId: listCountries
       tags: [projects]
-      summary: List all countries that have projects
+      summary: Listo shtetet
       responses:
         "200":
-          description: List of countries
+          description: Lista e shteteve
           content:
             application/json:
               schema:
@@ -196,7 +351,7 @@ paths:
     get:
       operationId: listCities
       tags: [projects]
-      summary: List cities, optionally filtered by country
+      summary: Listo qytetet
       parameters:
         - name: country
           in: query
@@ -204,7 +359,7 @@ paths:
             type: string
       responses:
         "200":
-          description: List of cities
+          description: Lista e qyteteve
           content:
             application/json:
               schema:
@@ -257,6 +412,88 @@ components:
         - id
         - url
         - isPrimary
+
+    VirtualTourHotspot:
+      type: object
+      properties:
+        id:
+          type: integer
+        fromSceneId:
+          type: integer
+        toSceneId:
+          type: integer
+        yaw:
+          type: number
+        pitch:
+          type: number
+        label:
+          type: string
+          nullable: true
+      required:
+        - id
+        - fromSceneId
+        - toSceneId
+        - yaw
+        - pitch
+
+    VirtualTourScene:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        title:
+          type: string
+        imageUrl:
+          type: string
+        thumbnailUrl:
+          type: string
+          nullable: true
+        isDefault:
+          type: boolean
+        sortOrder:
+          type: integer
+        positionX:
+          type: number
+          nullable: true
+        positionY:
+          type: number
+          nullable: true
+        pitchCorrection:
+          type: number
+          nullable: true
+        yawCorrection:
+          type: number
+          nullable: true
+        hotspots:
+          type: array
+          items:
+            $ref: "#/components/schemas/VirtualTourHotspot"
+      required:
+        - id
+        - projectId
+        - title
+        - imageUrl
+        - isDefault
+        - sortOrder
+        - hotspots
+
+    VirtualTourData:
+      type: object
+      properties:
+        projectId:
+          type: integer
+        scenes:
+          type: array
+          items:
+            $ref: "#/components/schemas/VirtualTourScene"
+        defaultSceneId:
+          type: integer
+          nullable: true
+      required:
+        - projectId
+        - scenes
 
     Project:
       type: object
@@ -318,6 +555,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProjectImage"
+        hasCustomVirtualTour:
+          type: boolean
         customFields:
           type: object
           nullable: true
@@ -335,6 +574,7 @@ components:
         - city
         - status
         - images
+        - hasCustomVirtualTour
         - createdAt
         - updatedAt
 
@@ -504,3 +744,90 @@ components:
           type: object
           nullable: true
           additionalProperties: true
+
+    CreateSceneRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        imageUrl:
+          type: string
+        thumbnailUrl:
+          type: string
+          nullable: true
+        isDefault:
+          type: boolean
+        sortOrder:
+          type: integer
+        positionX:
+          type: number
+          nullable: true
+        positionY:
+          type: number
+          nullable: true
+        pitchCorrection:
+          type: number
+          nullable: true
+        yawCorrection:
+          type: number
+          nullable: true
+      required:
+        - title
+        - imageUrl
+
+    UpdateSceneRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        imageUrl:
+          type: string
+        thumbnailUrl:
+          type: string
+          nullable: true
+        isDefault:
+          type: boolean
+        sortOrder:
+          type: integer
+        positionX:
+          type: number
+          nullable: true
+        positionY:
+          type: number
+          nullable: true
+        pitchCorrection:
+          type: number
+          nullable: true
+        yawCorrection:
+          type: number
+          nullable: true
+
+    CreateHotspotRequest:
+      type: object
+      properties:
+        toSceneId:
+          type: integer
+        yaw:
+          type: number
+        pitch:
+          type: number
+        label:
+          type: string
+          nullable: true
+      required:
+        - toSceneId
+        - yaw
+        - pitch
+
+    UpdateHotspotRequest:
+      type: object
+      properties:
+        toSceneId:
+          type: integer
+        yaw:
+          type: number
+        pitch:
+          type: number
+        label:
+          type: string
+          nullable: true

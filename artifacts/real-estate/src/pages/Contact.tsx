@@ -8,8 +8,8 @@ export default function Contact() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     toast({
-      title: "Inquiry Received",
-      description: "One of our luxury property specialists will contact you shortly.",
+      title: "Kërkesa u Pranua",
+      description: "Një nga specialistët tanë të pronave të luksit do t'ju kontaktojë së shpejti.",
     });
     (e.target as HTMLFormElement).reset();
   };
@@ -20,9 +20,9 @@ export default function Contact() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="mb-16 text-center max-w-3xl mx-auto">
-            <h1 className="font-display text-5xl font-bold text-white mb-6">Private <span className="text-primary italic">Consultation</span></h1>
+            <h1 className="font-display text-5xl font-bold text-white mb-6"><span className="text-primary italic">Konsultim</span> Privat</h1>
             <p className="text-muted-foreground text-lg">
-              Connect with our dedicated advisors for a confidential discussion regarding your real estate portfolio.
+              Lidhuni me këshilltarët tanë të dedikuar për një diskutim konfidencial në lidhje me portofolin tuaj të pasurive të paluajtshme.
             </p>
           </div>
 
@@ -30,15 +30,15 @@ export default function Contact() {
             {/* Contact Info */}
             <div className="space-y-12">
               <div className="glass-panel p-10 rounded-2xl">
-                <h3 className="font-display text-2xl text-white mb-8">Global Headquarters</h3>
+                <h3 className="font-display text-2xl text-white mb-8">Selia Globale</h3>
                 <div className="space-y-8">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                       <MapPin size={24} />
                     </div>
                     <div>
-                      <h4 className="text-white font-medium mb-1">Office</h4>
-                      <p className="text-muted-foreground">100 Luxury Way, Suite 500<br/>Beverly Hills, CA 90210<br/>United States</p>
+                      <h4 className="text-white font-medium mb-1">Zyra</h4>
+                      <p className="text-muted-foreground">100 Luxury Way, Suite 500<br/>Beverly Hills, CA 90210<br/>Shtetet e Bashkuara</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
@@ -46,7 +46,7 @@ export default function Contact() {
                       <Phone size={24} />
                     </div>
                     <div>
-                      <h4 className="text-white font-medium mb-1">Direct Line</h4>
+                      <h4 className="text-white font-medium mb-1">Linja Direkte</h4>
                       <p className="text-muted-foreground">+1 (310) 555-0198</p>
                     </div>
                   </div>
@@ -55,7 +55,7 @@ export default function Contact() {
                       <Mail size={24} />
                     </div>
                     <div>
-                      <h4 className="text-white font-medium mb-1">Email</h4>
+                      <h4 className="text-white font-medium mb-1">Email-i</h4>
                       <p className="text-muted-foreground">discover@auraestates.com</p>
                     </div>
                   </div>
@@ -68,37 +68,37 @@ export default function Contact() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">First Name</label>
+                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Emri</label>
                     <input required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Last Name</label>
+                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mbiemri</label>
                     <input required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Email Address</label>
+                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
                   <input required type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Nature of Inquiry</label>
+                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Natyra e Kërkesës</label>
                   <select className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none">
-                    <option>Purchasing a property</option>
-                    <option>Selling a property</option>
-                    <option>Virtual Tour Services</option>
-                    <option>General Inquiry</option>
+                    <option>Blerje e një prone</option>
+                    <option>Shitje e një prone</option>
+                    <option>Shërbime të Turit Virtual</option>
+                    <option>Kërkesë e Përgjithshme</option>
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Message</label>
+                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mesazhi</label>
                   <textarea required rows={4} className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
                 </div>
 
                 <button type="submit" className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors mt-4">
-                  Submit Inquiry
+                  Dërgo Kërkesën
                 </button>
               </form>
             </div>
