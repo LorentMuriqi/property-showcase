@@ -29,6 +29,9 @@ export interface Project {
   virtualTourUrl?: string | null;
   virtualTourEmbedCode?: string | null;
   virtualTourProvider?: string | null;
+  contactCompany?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   images: ProjectImage[];
   hasCustomVirtualTour: boolean;
   customFields?: ProjectCustomFields;

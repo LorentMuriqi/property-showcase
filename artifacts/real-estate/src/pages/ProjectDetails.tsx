@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
-import { ChevronLeft, ChevronRight, MapPin, Maximize, BedDouble, Bath, LayoutGrid, Calendar, Layers, CheckCircle2, Play, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Maximize, BedDouble, Bath, LayoutGrid, Calendar, Layers, CheckCircle2, Play, X, Phone, Mail, Building2, ZoomIn } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { useGetProject, useGetVirtualTour } from "@workspace/api-client-react";
 import { VirtualTour360 } from "@/components/VirtualTour360";
@@ -16,9 +16,34 @@ export default function ProjectDetails() {
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
+
+  const openLightbox = (idx: number) => setLightboxIndex(idx);
+  const closeLightbox = () => setLightboxIndex(null);
+
+  const lightboxPrev = useCallback(() => {
+    if (lightboxIndex === null || !project?.images) return;
+    setLightboxIndex((lightboxIndex - 1 + project.images.length) % project.images.length);
+  }, [lightboxIndex, project]);
+
+  const lightboxNext = useCallback(() => {
+    if (lightboxIndex === null || !project?.images) return;
+    setLightboxIndex((lightboxIndex + 1) % project.images.length);
+  }, [lightboxIndex, project]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (lightboxIndex === null) return;
+      if (e.key === "ArrowLeft") lightboxPrev();
+      if (e.key === "ArrowRight") lightboxNext();
+      if (e.key === "Escape") closeLightbox();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [lightboxIndex, lightboxPrev, lightboxNext]);
 
   if (isLoading) {
     return (
@@ -59,22 +84,32 @@ export default function ProjectDetails() {
     for_rent: "Me Qira",
   };
 
+  const images = project.images || [];
+  const hasContact = !!(project.contactCompany || project.contactPhone || project.contactEmail);
+
   return (
     <Layout>
       <div className="bg-background pt-24 pb-32 min-h-screen">
         
         {/* Gallery Carousel */}
         <div className="relative w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 mb-12">
-          <div className="overflow-hidden rounded-2xl aspect-video md:aspect-[21/9] bg-card border border-white/5 shadow-2xl relative" ref={emblaRef}>
+          <div className="overflow-hidden rounded-2xl aspect-video md:aspect-[21/9] bg-card border border-white/5 shadow-2xl relative cursor-zoom-in" ref={emblaRef}>
             <div className="flex h-full">
-              {project.images && project.images.length > 0 ? (
-                project.images.map((img, idx) => (
-                  <div className="flex-[0_0_100%] min-w-0 h-full relative" key={img.id || idx}>
+              {images.length > 0 ? (
+                images.map((img, idx) => (
+                  <div
+                    className="flex-[0_0_100%] min-w-0 h-full relative group"
+                    key={img.id || idx}
+                    onClick={() => openLightbox(idx)}
+                  >
                     <img 
                       src={img.url} 
                       alt={img.caption || `${project.title} - Foto ${idx + 1}`} 
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                     />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                      <ZoomIn size={40} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                    </div>
                     {img.caption && (
                       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
                         <p className="text-white/90 text-sm font-medium">{img.caption}</p>
@@ -90,12 +125,18 @@ export default function ProjectDetails() {
             </div>
 
             {/* Carousel Controls */}
-            {project.images && project.images.length > 1 && (
+            {images.length > 1 && (
               <>
-                <button onClick={scrollPrev} className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10">
+                <button
+                  onClick={(e) => { e.stopPropagation(); scrollPrev(); }}
+                  className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10 z-10"
+                >
                   <ChevronLeft size={24} />
                 </button>
-                <button onClick={scrollNext} className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10">
+                <button
+                  onClick={(e) => { e.stopPropagation(); scrollNext(); }}
+                  className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10 z-10"
+                >
                   <ChevronRight size={24} />
                 </button>
               </>
@@ -104,13 +145,35 @@ export default function ProjectDetails() {
             {/* Virtual Tour Overlay Button */}
             {hasVirtualTour && (
               <button 
-                onClick={() => setShowVirtualTour(true)}
-                className="absolute top-6 right-6 px-6 py-3 rounded-full bg-primary/90 text-primary-foreground font-bold tracking-widest uppercase text-xs flex items-center gap-2 hover:bg-primary hover:scale-105 transition-all shadow-xl backdrop-blur-md"
+                onClick={(e) => { e.stopPropagation(); setShowVirtualTour(true); }}
+                className="absolute top-6 right-6 px-6 py-3 rounded-full bg-primary/90 text-primary-foreground font-bold tracking-widest uppercase text-xs flex items-center gap-2 hover:bg-primary hover:scale-105 transition-all shadow-xl backdrop-blur-md z-10"
               >
                 <Play size={14} className="fill-current" /> Hap Turin Virtual 360°
               </button>
             )}
+
+            {/* Photo counter */}
+            {images.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-medium z-10 pointer-events-none">
+                {images.length} foto
+              </div>
+            )}
           </div>
+
+          {/* Thumbnail strip */}
+          {images.length > 1 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+              {images.map((img, idx) => (
+                <button
+                  key={img.id || idx}
+                  onClick={() => { openLightbox(idx); emblaApi?.scrollTo(idx); }}
+                  className="flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors"
+                >
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Content Wrapper */}
@@ -171,71 +234,177 @@ export default function ProjectDetails() {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="sticky top-32 glass-panel rounded-2xl p-8">
-              <div className="text-4xl font-display text-primary mb-8 font-medium">
-                {formattedPrice}
+            <div className="sticky top-32 space-y-6">
+              <div className="glass-panel rounded-2xl p-8">
+                <div className="text-4xl font-display text-primary mb-8 font-medium">
+                  {formattedPrice}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  {project.areaM2 && (
+                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                      <Maximize size={20} className="text-primary mb-2" />
+                      <span className="block text-white text-lg font-medium">{project.areaM2}</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">Metra Katrorë</span>
+                    </div>
+                  )}
+                  {project.bedrooms && (
+                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                      <BedDouble size={20} className="text-primary mb-2" />
+                      <span className="block text-white text-lg font-medium">{project.bedrooms}</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">Dhoma Gjumi</span>
+                    </div>
+                  )}
+                  {project.bathrooms && (
+                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                      <Bath size={20} className="text-primary mb-2" />
+                      <span className="block text-white text-lg font-medium">{project.bathrooms}</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">Banjo</span>
+                    </div>
+                  )}
+                  {project.livingRooms && (
+                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                      <LayoutGrid size={20} className="text-primary mb-2" />
+                      <span className="block text-white text-lg font-medium">{project.livingRooms}</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">Dh. Ndenjeje</span>
+                    </div>
+                  )}
+                  {project.floors && (
+                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                      <Layers size={20} className="text-primary mb-2" />
+                      <span className="block text-white text-lg font-medium">{project.floors}</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">Kate</span>
+                    </div>
+                  )}
+                  {project.yearBuilt && (
+                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                      <Calendar size={20} className="text-primary mb-2" />
+                      <span className="block text-white text-lg font-medium">{project.yearBuilt}</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">Ndërtuar</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <button className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors">
+                    Planifiko një Vizitë
+                  </button>
+                  <button className="w-full py-4 bg-transparent border border-white/20 text-white font-bold tracking-widest uppercase text-sm rounded-xl hover:border-white transition-colors">
+                    Kërko Informacion
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                {project.areaM2 && (
-                  <div className="bg-background/50 p-4 rounded-xl border border-white/5">
-                    <Maximize size={20} className="text-primary mb-2" />
-                    <span className="block text-white text-lg font-medium">{project.areaM2}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Metra Katrorë</span>
+              {/* Contact Card */}
+              {hasContact && (
+                <div className="glass-panel rounded-2xl p-6 border border-primary/20">
+                  <h4 className="font-display text-lg text-primary mb-5 border-b border-white/10 pb-3 flex items-center gap-2">
+                    <Building2 size={18} /> Kërko Informacion
+                  </h4>
+                  <div className="space-y-4">
+                    {project.contactCompany && (
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Building2 size={16} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Kompania</p>
+                          <p className="text-white font-medium">{project.contactCompany}</p>
+                        </div>
+                      </div>
+                    )}
+                    {project.contactPhone && (
+                      <a
+                        href={`tel:${project.contactPhone}`}
+                        className="flex items-center gap-3 group"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
+                          <Phone size={16} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Telefoni</p>
+                          <p className="text-white group-hover:text-primary font-medium transition-colors">{project.contactPhone}</p>
+                        </div>
+                      </a>
+                    )}
+                    {project.contactEmail && (
+                      <a
+                        href={`mailto:${project.contactEmail}`}
+                        className="flex items-center gap-3 group"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
+                          <Mail size={16} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Email</p>
+                          <p className="text-white group-hover:text-primary font-medium transition-colors">{project.contactEmail}</p>
+                        </div>
+                      </a>
+                    )}
                   </div>
-                )}
-                {project.bedrooms && (
-                  <div className="bg-background/50 p-4 rounded-xl border border-white/5">
-                    <BedDouble size={20} className="text-primary mb-2" />
-                    <span className="block text-white text-lg font-medium">{project.bedrooms}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Dhoma Gjumi</span>
-                  </div>
-                )}
-                {project.bathrooms && (
-                  <div className="bg-background/50 p-4 rounded-xl border border-white/5">
-                    <Bath size={20} className="text-primary mb-2" />
-                    <span className="block text-white text-lg font-medium">{project.bathrooms}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Banjo</span>
-                  </div>
-                )}
-                {project.livingRooms && (
-                  <div className="bg-background/50 p-4 rounded-xl border border-white/5">
-                    <LayoutGrid size={20} className="text-primary mb-2" />
-                    <span className="block text-white text-lg font-medium">{project.livingRooms}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Dh. Ndenjeje</span>
-                  </div>
-                )}
-                {project.floors && (
-                  <div className="bg-background/50 p-4 rounded-xl border border-white/5">
-                    <Layers size={20} className="text-primary mb-2" />
-                    <span className="block text-white text-lg font-medium">{project.floors}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Kate</span>
-                  </div>
-                )}
-                {project.yearBuilt && (
-                  <div className="bg-background/50 p-4 rounded-xl border border-white/5">
-                    <Calendar size={20} className="text-primary mb-2" />
-                    <span className="block text-white text-lg font-medium">{project.yearBuilt}</span>
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Ndërtuar</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                <button className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors">
-                  Planifiko një Vizitë
-                </button>
-                <button className="w-full py-4 bg-transparent border border-white/20 text-white font-bold tracking-widest uppercase text-sm rounded-xl hover:border-white transition-colors">
-                  Kërko Informacion
-                </button>
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
       </div>
 
-      {/* Virtual Tour Fullscreen Modal */}
+      {/* ── Lightbox ─────────────────────────────────────────────── */}
+      {lightboxIndex !== null && images.length > 0 && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center"
+          onClick={closeLightbox}
+        >
+          {/* Close */}
+          <button
+            onClick={closeLightbox}
+            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
+          >
+            <X size={22} />
+          </button>
+
+          {/* Counter */}
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-10">
+            {lightboxIndex + 1} / {images.length}
+          </div>
+
+          {/* Image */}
+          <img
+            src={images[lightboxIndex].url}
+            alt={images[lightboxIndex].caption || `${project.title} - Foto ${lightboxIndex + 1}`}
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Caption */}
+          {images[lightboxIndex].caption && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm">
+              {images[lightboxIndex].caption}
+            </div>
+          )}
+
+          {/* Arrows */}
+          {images.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); lightboxPrev(); }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10"
+              >
+                <ChevronLeft size={28} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); lightboxNext(); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10"
+              >
+                <ChevronRight size={28} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Virtual Tour Fullscreen Modal ─────────────────────────── */}
       {showVirtualTour && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col">
           <div className="flex items-center justify-between p-4 glass-panel border-b border-white/10 z-10">

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
-import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, Link as LinkIcon, Code } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, Link as LinkIcon, Code, Building2, Phone, Mail } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useGetProject, useCreateProject, useUpdateProject } from "@workspace/api-client-react";
 import type { CreateProjectRequest } from "@workspace/api-client-react";
@@ -197,6 +197,47 @@ export default function AdminProjectForm() {
                   className="w-full font-mono text-sm bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-primary/80 focus:outline-none focus:border-primary resize-none"
                   {...register("virtualTourEmbedCode")}
                   placeholder="<iframe src='...' allowfullscreen></iframe>"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Info */}
+          <div className="glass-panel p-6 md:p-8 rounded-2xl space-y-6 border-l-4 border-l-primary/60">
+            <h2 className="font-display text-xl text-primary border-b border-white/10 pb-4 flex items-center gap-2">
+              <Building2 size={20} /> Kontakti i Kompanisë (Kërko Informacion)
+            </h2>
+            <p className="text-sm text-muted-foreground">Këto të dhëna do shfaqen tek seksioni "Kërko Informacion" në faqen e pronës.</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                  <Building2 size={14} /> Emri i Kompanisë
+                </label>
+                <input
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  {...register("contactCompany")}
+                  placeholder="P.sh., Aura Estates SH.P.K."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                  <Phone size={14} /> Numri i Telefonit
+                </label>
+                <input
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  {...register("contactPhone")}
+                  placeholder="+355 69 123 4567"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                  <Mail size={14} /> Adresa Email
+                </label>
+                <input
+                  type="email"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  {...register("contactEmail")}
+                  placeholder="info@kompania.al"
                 />
               </div>
             </div>

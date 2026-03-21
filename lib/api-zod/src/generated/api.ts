@@ -51,6 +51,9 @@ export const ListProjectsResponse = zod.object({
       virtualTourUrl: zod.string().nullish(),
       virtualTourEmbedCode: zod.string().nullish(),
       virtualTourProvider: zod.string().nullish(),
+      contactCompany: zod.string().nullish(),
+      contactPhone: zod.string().nullish(),
+      contactEmail: zod.string().nullish(),
       images: zod.array(
         zod.object({
           id: zod.number(),
@@ -98,6 +101,9 @@ export const GetProjectResponse = zod.object({
   virtualTourUrl: zod.string().nullish(),
   virtualTourEmbedCode: zod.string().nullish(),
   virtualTourProvider: zod.string().nullish(),
+  contactCompany: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
   images: zod.array(
     zod.object({
       id: zod.number(),
@@ -171,6 +177,9 @@ export const CreateProjectBody = zod.object({
   virtualTourUrl: zod.string().nullish(),
   virtualTourEmbedCode: zod.string().nullish(),
   virtualTourProvider: zod.string().nullish(),
+  contactCompany: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
   images: zod
     .array(
       zod.object({
@@ -209,6 +218,9 @@ export const UpdateProjectBody = zod.object({
   virtualTourUrl: zod.string().nullish(),
   virtualTourEmbedCode: zod.string().nullish(),
   virtualTourProvider: zod.string().nullish(),
+  contactCompany: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
   images: zod
     .array(
       zod.object({
@@ -241,6 +253,9 @@ export const UpdateProjectResponse = zod.object({
   virtualTourUrl: zod.string().nullish(),
   virtualTourEmbedCode: zod.string().nullish(),
   virtualTourProvider: zod.string().nullish(),
+  contactCompany: zod.string().nullish(),
+  contactPhone: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
   images: zod.array(
     zod.object({
       id: zod.number(),

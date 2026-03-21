@@ -86,6 +86,9 @@ export interface Project {
   virtualTourUrl?: string | null;
   virtualTourEmbedCode?: string | null;
   virtualTourProvider?: string | null;
+  contactCompany?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   images: ProjectImage[];
   hasCustomVirtualTour: boolean;
   customFields?: ProjectCustomFields;
@@ -140,6 +143,9 @@ export interface CreateProjectRequest {
   virtualTourUrl?: string | null;
   virtualTourEmbedCode?: string | null;
   virtualTourProvider?: string | null;
+  contactCompany?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   images?: ProjectImageInput[];
   customFields?: CreateProjectRequestCustomFields;
 }
@@ -177,6 +183,9 @@ export interface UpdateProjectRequest {
   virtualTourUrl?: string | null;
   virtualTourEmbedCode?: string | null;
   virtualTourProvider?: string | null;
+  contactCompany?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   images?: ProjectImageInput[];
   customFields?: UpdateProjectRequestCustomFields;
 }

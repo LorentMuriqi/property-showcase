@@ -551,6 +551,15 @@ components:
         virtualTourProvider:
           type: string
           nullable: true
+        contactCompany:
+          type: string
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+        contactEmail:
+          type: string
+          nullable: true
         images:
           type: array
           items:
@@ -668,6 +677,15 @@ components:
         virtualTourProvider:
           type: string
           nullable: true
+        contactCompany:
+          type: string
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+        contactEmail:
+          type: string
+          nullable: true
         images:
           type: array
           items:
@@ -734,6 +752,15 @@ components:
           type: string
           nullable: true
         virtualTourProvider:
+          type: string
+          nullable: true
+        contactCompany:
+          type: string
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+        contactEmail:
           type: string
           nullable: true
         images:
