@@ -17,6 +17,7 @@ export default function ProjectDetails() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
 
   const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
@@ -36,14 +37,17 @@ export default function ProjectDetails() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (lightboxIndex !== null) closeLightbox();
+        else if (showContactModal) setShowContactModal(false);
+      }
       if (lightboxIndex === null) return;
       if (e.key === "ArrowLeft") lightboxPrev();
       if (e.key === "ArrowRight") lightboxNext();
-      if (e.key === "Escape") closeLightbox();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [lightboxIndex, lightboxPrev, lightboxNext]);
+  }, [lightboxIndex, lightboxPrev, lightboxNext, showContactModal]);
 
   if (isLoading) {
     return (
@@ -289,66 +293,103 @@ export default function ProjectDetails() {
                   <button className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors">
                     Planifiko një Vizitë
                   </button>
-                  <button className="w-full py-4 bg-transparent border border-white/20 text-white font-bold tracking-widest uppercase text-sm rounded-xl hover:border-white transition-colors">
-                    Kërko Informacion
+                  <button
+                    onClick={() => setShowContactModal(true)}
+                    className="w-full py-4 bg-transparent border border-white/20 text-white font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Phone size={16} /> Kërko Informacion
                   </button>
                 </div>
               </div>
-
-              {/* Contact Card */}
-              {hasContact && (
-                <div className="glass-panel rounded-2xl p-6 border border-primary/20">
-                  <h4 className="font-display text-lg text-primary mb-5 border-b border-white/10 pb-3 flex items-center gap-2">
-                    <Building2 size={18} /> Kërko Informacion
-                  </h4>
-                  <div className="space-y-4">
-                    {project.contactCompany && (
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Building2 size={16} className="text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Kompania</p>
-                          <p className="text-white font-medium">{project.contactCompany}</p>
-                        </div>
-                      </div>
-                    )}
-                    {project.contactPhone && (
-                      <a
-                        href={`tel:${project.contactPhone}`}
-                        className="flex items-center gap-3 group"
-                      >
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
-                          <Phone size={16} className="text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Telefoni</p>
-                          <p className="text-white group-hover:text-primary font-medium transition-colors">{project.contactPhone}</p>
-                        </div>
-                      </a>
-                    )}
-                    {project.contactEmail && (
-                      <a
-                        href={`mailto:${project.contactEmail}`}
-                        className="flex items-center gap-3 group"
-                      >
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
-                          <Mail size={16} className="text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Email</p>
-                          <p className="text-white group-hover:text-primary font-medium transition-colors">{project.contactEmail}</p>
-                        </div>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* ── Contact Modal ────────────────────────────────────────── */}
+      {showContactModal && (
+        <div
+          className="fixed inset-0 z-[150] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
+          onClick={() => setShowContactModal(false)}
+        >
+          <div
+            className="relative w-full max-w-md glass-panel rounded-2xl p-8 border border-primary/30 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-display text-2xl text-white flex items-center gap-2">
+                <Building2 size={22} className="text-primary" /> Kërko Informacion
+              </h3>
+              <button
+                onClick={() => setShowContactModal(false)}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-muted-foreground text-sm mb-6">
+              Kontaktoni agjentin për pronën:<br />
+              <span className="text-white font-medium">{project.title}</span>
+            </p>
+
+            {hasContact ? (
+              <div className="space-y-4">
+                {project.contactCompany && (
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                    <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                      <Building2 size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Kompania</p>
+                      <p className="text-white font-semibold text-lg">{project.contactCompany}</p>
+                    </div>
+                  </div>
+                )}
+
+                {project.contactPhone && (
+                  <a
+                    href={`tel:${project.contactPhone}`}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
+                      <Phone size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Telefoni</p>
+                      <p className="text-white group-hover:text-primary font-semibold text-lg transition-colors">{project.contactPhone}</p>
+                    </div>
+                  </a>
+                )}
+
+                {project.contactEmail && (
+                  <a
+                    href={`mailto:${project.contactEmail}`}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
+                      <Mail size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Email</p>
+                      <p className="text-white group-hover:text-primary font-semibold text-lg transition-colors">{project.contactEmail}</p>
+                    </div>
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                  <Phone size={24} className="text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">Informacioni i kontaktit nuk është vendosur ende nga agjenti.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Lightbox ─────────────────────────────────────────────── */}
       {lightboxIndex !== null && images.length > 0 && (
