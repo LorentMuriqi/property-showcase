@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Filter, X } from "lucide-react";
+import { Filter, X, Search } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
-import { useListProjects, useListCountries, useListCities } from "@workspace/api-client-react";
+import { supabase } from "@/lib/supabase";
 
 export default function Projects() {
   const [location] = useLocation();
@@ -14,15 +14,10 @@ export default function Projects() {
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: countries } = useListCountries();
-  const { data: cities } = useListCities({ country: country || undefined }, { query: { enabled: !!country } });
-  
-  const { data, isLoading } = useListProjects({
-    country: country || undefined,
-    city: city || undefined,
-    search: search || undefined,
-    limit: 50,
-  });
+  const [projects, setProjects] = useState<any[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Update URL silently when filters change
   useEffect(() => {
