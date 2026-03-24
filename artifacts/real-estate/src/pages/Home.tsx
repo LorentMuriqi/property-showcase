@@ -1,20 +1,75 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Search, Building2, Map, ShieldCheck } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
-import { useListProjects, useListCountries, useListCities } from "@workspace/api-client-react";
+import { supabase } from "@/lib/supabase";
 
 export default function Home() {
-  const [_, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   const [search, setSearch] = useState("");
 
-  const { data: countries } = useListCountries();
-  const { data: cities } = useListCities({ country: country || undefined }, { query: { enabled: !!country } });
-  const { data: recentProjects, isLoading } = useListProjects({ limit: 6, recent: true });
+  const [countries, setCountries] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [recentProjects, setRecentProjects] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRecentProjects = async () => {
+      setIsLoading(true);
+
+      const { data, error } = await supabase
+        .from("properties")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (error) {
+        console.error("Fetch recent properties error:", error);
+        setRecentProjects([]);
+      } else {
+        setRecentProjects(data || []);
+      }
+
+      setIsLoading(false);
+    };
+
+    fetchRecentProjects();
+  }, []);
+
+  useEffect(() => {
+    const fetchFilters = async () => {
+      const { data, error } = await supabase.from("properties").select("country, city");
+
+      if (error) {
+        console.error("Fetch filters error:", error);
+        return;
+      }
+
+      const allCountries = [...new Set((data || []).map((item) => item.country).filter(Boolean))] as string[];
+      setCountries(allCountries);
+
+      if (country) {
+        const filteredCities = [
+          ...new Set(
+            (data || [])
+              .filter((item) => item.country === country)
+              .map((item) => item.city)
+              .filter(Boolean)
+          ),
+        ] as string[];
+
+        setCities(filteredCities);
+      } else {
+        setCities([]);
+      }
+    };
+
+    fetchFilters();
+  }, [country]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,17 +77,16 @@ export default function Home() {
     if (country) params.append("country", country);
     if (city) params.append("city", city);
     if (search) params.append("search", search);
-    setLocation(`/projects?${params.toString()}`);
+    setLocation(`/projects${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
   return (
     <Layout>
-      {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center justify-center pt-20">
         <div className="absolute inset-0 z-0">
-          <img 
-            src={`${import.meta.env.BASE_URL}images/hero-bg.png`} 
-            alt="Luxury Mansion" 
+          <img
+            src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
+            alt="Luxury Mansion"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-background/70 mix-blend-multiply" />
@@ -46,43 +100,55 @@ export default function Home() {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-              Zbulo <br/><span className="text-gold-gradient italic">Pronën Tënde të Ëndrrave</span>
+              Zbulo <br />
+              <span className="text-gold-gradient italic">Pronën Tënde të Ëndrrave</span>
             </h1>
             <p className="text-lg md:text-xl text-white/80 font-light mb-12 max-w-2xl mx-auto">
-              Prona ekskluzive, ture virtuale mahnitëse dhe përvoja të pashembullta në fushën e pasurive të paluajtshme luksoze.
+              Prona ekskluzive, ture virtuale mahnitëse dhe përvoja të pashembullta në fushën e
+              pasurive të paluajtshme luksoze.
             </p>
 
-            {/* Search Box */}
-            <form 
+            <form
               onSubmit={handleSearch}
               className="glass-panel rounded-2xl p-2 max-w-4xl mx-auto flex flex-col md:flex-row gap-2"
             >
-              <select 
+              <select
                 className="w-full md:w-auto flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
                 value={country}
-                onChange={(e) => { setCountry(e.target.value); setCity(""); }}
+                onChange={(e) => {
+                  setCountry(e.target.value);
+                  setCity("");
+                }}
               >
-                <option value="" className="bg-card text-white">Të Gjitha Shtetet</option>
-                {countries?.map(c => (
-                  <option key={c} value={c} className="bg-card text-white">{c}</option>
+                <option value="" className="bg-card text-white">
+                  Të Gjitha Shtetet
+                </option>
+                {countries.map((c) => (
+                  <option key={c} value={c} className="bg-card text-white">
+                    {c}
+                  </option>
                 ))}
               </select>
 
-              <select 
+              <select
                 className="w-full md:w-auto flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer disabled:opacity-50"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 disabled={!country}
               >
-                <option value="" className="bg-card text-white">Të Gjitha Qytetet</option>
-                {cities?.map(c => (
-                  <option key={c} value={c} className="bg-card text-white">{c}</option>
+                <option value="" className="bg-card text-white">
+                  Të Gjitha Qytetet
+                </option>
+                {cities.map((c) => (
+                  <option key={c} value={c} className="bg-card text-white">
+                    {c}
+                  </option>
                 ))}
               </select>
 
               <div className="w-full md:w-auto flex-[1.5] relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
-                <input 
+                <input
                   type="text"
                   placeholder="Fjalë kyçe, emri i pronës..."
                   className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-primary"
@@ -91,7 +157,7 @@ export default function Home() {
                 />
               </div>
 
-              <button 
+              <button
                 type="submit"
                 className="w-full md:w-auto px-8 py-4 bg-primary text-primary-foreground font-bold tracking-wider uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors"
               >
@@ -102,7 +168,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features */}
       <section className="py-24 bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
@@ -111,35 +176,48 @@ export default function Home() {
                 <Map size={32} strokeWidth={1.5} />
               </div>
               <h3 className="font-display text-2xl text-white mb-3">Ture Virtuale 360°</h3>
-              <p className="text-muted-foreground leading-relaxed">Eksperienconi pronat sikur të ishit aty. Turet tona virtuale të integruara ofrojnë një shëtitje reale të pakrahasueshme.</p>
+              <p className="text-muted-foreground leading-relaxed">
+                Eksperienconi pronat sikur të ishit aty. Turet tona virtuale të integruara ofrojnë
+                një shëtitje reale të pakrahasueshme.
+              </p>
             </div>
             <div className="text-center group">
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Building2 size={32} strokeWidth={1.5} />
               </div>
               <h3 className="font-display text-2xl text-white mb-3">Portofol i Përzgjedhur</h3>
-              <p className="text-muted-foreground leading-relaxed">Përftoni akses në një koleksion ekskluziv të pronave rezidenciale dhe komerciale më të kërkuara në botë.</p>
+              <p className="text-muted-foreground leading-relaxed">
+                Përftoni akses në një koleksion ekskluziv të pronave rezidenciale dhe komerciale më
+                të kërkuara në botë.
+              </p>
             </div>
             <div className="text-center group">
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <ShieldCheck size={32} strokeWidth={1.5} />
               </div>
               <h3 className="font-display text-2xl text-white mb-3">Shërbim i Klasit të Parë</h3>
-              <p className="text-muted-foreground leading-relaxed">Një qasje e dedikuar në fushën e pasurive të paluajtshme që i përshtatet natyrës premium të pronave që përfaqësojmë.</p>
+              <p className="text-muted-foreground leading-relaxed">
+                Një qasje e dedikuar në fushën e pasurive të paluajtshme që i përshtatet natyrës
+                premium të pronave që përfaqësojmë.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Recent Projects */}
       <section className="py-32 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
             <div>
-              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Pronat e Fundit</h2>
-              <p className="text-muted-foreground text-lg max-w-xl">Eksploroni kryeveprat tona të listuara së fundmi, të zgjedhura me kujdes për blerësin kërkues.</p>
+              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">
+                Pronat e Fundit
+              </h2>
+              <p className="text-muted-foreground text-lg max-w-xl">
+                Eksploroni kryeveprat tona të listuara së fundmi, të zgjedhura me kujdes për
+                blerësin kërkues.
+              </p>
             </div>
-            <Link 
+            <Link
               href="/projects"
               className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
             >
@@ -154,15 +232,17 @@ export default function Home() {
                 <div key={i} className="animate-pulse bg-card rounded-2xl h-[400px]" />
               ))}
             </div>
-          ) : recentProjects?.projects && recentProjects.projects.length > 0 ? (
+          ) : recentProjects.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {recentProjects.projects.map((project) => (
+              {recentProjects.map((project) => (
                 <ProjectCard key={project.id} project={project} />
               ))}
             </div>
           ) : (
             <div className="text-center py-20 bg-card rounded-2xl border border-white/5">
-              <p className="text-muted-foreground text-lg">Nuk ka projekte të veçuara aktualisht.</p>
+              <p className="text-muted-foreground text-lg">
+                Nuk ka projekte të veçuara aktualisht.
+              </p>
             </div>
           )}
         </div>
