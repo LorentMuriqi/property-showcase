@@ -47,12 +47,14 @@ export default function AdminProjectForm() {
 
   const { register, control, handleSubmit, reset, watch, setValue } = useForm<any>({
     defaultValues: {
+      status: "for_sale",
+      images: [{ url: "", caption: "", isPrimary: true }],
+      customFields: {},
       title: "",
       description: "",
       country: "",
       city: "",
       address: "",
-      status: "for_sale",
       price: "",
       currency: "",
       areaM2: "",
@@ -67,8 +69,6 @@ export default function AdminProjectForm() {
       contactCompany: "",
       contactPhone: "",
       contactEmail: "",
-      images: [{ url: "", caption: "", isPrimary: true }],
-      customFields: {},
     },
   });
 
@@ -89,7 +89,7 @@ export default function AdminProjectForm() {
         .eq("id", id)
         .single();
 
-      if (error) {
+      if (error || !data) {
         console.error("Fetch property error:", error);
         toast({
           title: "Gabim",
@@ -109,7 +109,7 @@ export default function AdminProjectForm() {
 
   useEffect(() => {
     if (isEditing && projectToEdit) {
-      const formData = {
+      reset({
         title: projectToEdit.title || "",
         description: projectToEdit.description || "",
         country: projectToEdit.country || "",
@@ -118,26 +118,32 @@ export default function AdminProjectForm() {
         status: projectToEdit.status || "for_sale",
         price: projectToEdit.price ?? "",
         currency: projectToEdit.currency || "",
-        areaM2: projectToEdit.area_m2 ?? "",
-        propertyType: projectToEdit.property_type || "",
+        areaM2: projectToEdit.area_m2 ?? projectToEdit.areaM2 ?? "",
+        propertyType: projectToEdit.property_type ?? projectToEdit.propertyType ?? "",
         bedrooms: projectToEdit.bedrooms ?? "",
         bathrooms: projectToEdit.bathrooms ?? "",
-        livingRooms: projectToEdit.living_rooms ?? "",
+        livingRooms: projectToEdit.living_rooms ?? projectToEdit.livingRooms ?? "",
         floors: projectToEdit.floors ?? "",
-        yearBuilt: projectToEdit.year_built ?? "",
-        virtualTourUrl: projectToEdit.virtual_tour_url || "",
-        virtualTourEmbedCode: projectToEdit.virtual_tour_embed_code || "",
-        contactCompany: projectToEdit.contact_company || "",
-        contactPhone: projectToEdit.contact_phone || "",
-        contactEmail: projectToEdit.contact_email || "",
+        yearBuilt: projectToEdit.year_built ?? projectToEdit.yearBuilt ?? "",
+        virtualTourUrl:
+          projectToEdit.virtual_tour_url ?? projectToEdit.virtualTourUrl ?? "",
+        virtualTourEmbedCode:
+          projectToEdit.virtual_tour_embed_code ??
+          projectToEdit.virtualTourEmbedCode ??
+          "",
+        contactCompany:
+          projectToEdit.contact_company ?? projectToEdit.contactCompany ?? "",
+        contactPhone:
+          projectToEdit.contact_phone ?? projectToEdit.contactPhone ?? "",
+        contactEmail:
+          projectToEdit.contact_email ?? projectToEdit.contactEmail ?? "",
         images:
           Array.isArray(projectToEdit.images) && projectToEdit.images.length > 0
             ? projectToEdit.images
             : [{ url: "", caption: "", isPrimary: true }],
-        customFields: {},
-      };
-
-      reset(formData);
+        customFields:
+          projectToEdit.custom_fields ?? projectToEdit.customFields ?? {},
+      });
     }
   }, [projectToEdit, isEditing, reset]);
 
@@ -189,11 +195,15 @@ export default function AdminProjectForm() {
         contact_phone: data.contactPhone || "",
         contact_email: data.contactEmail || "",
         images: cleanedImages,
+        custom_fields: data.customFields || {},
         location: [data.city, data.country].filter(Boolean).join(", "),
       };
 
       if (isEditing) {
-        const { error } = await supabase.from("properties").update(payload).eq("id", id);
+        const { error } = await supabase
+          .from("properties")
+          .update(payload)
+          .eq("id", id);
 
         if (error) throw error;
 
@@ -225,10 +235,7 @@ export default function AdminProjectForm() {
     }
   };
 
-  if (isEditing && isLoading) {
-    return <div className="p-8 text-white">Loading...</div>;
-  }
-
+  if (isEditing && isLoading) return <div className="p-8 text-white">Loading...</div>;
   if (!isAdmin) return null;
 
   return (
@@ -256,7 +263,8 @@ export default function AdminProjectForm() {
           disabled={isSaving}
           className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors disabled:opacity-50"
         >
-          <Save size={18} /> {isSaving ? "Duke ruajtur..." : isEditing ? "Ruaj" : "Publiko"}
+          <Save size={18} />{" "}
+          {isSaving ? "Duke ruajtur..." : isEditing ? "Ruaj" : "Publiko"}
         </button>
       </div>
 
@@ -332,8 +340,8 @@ export default function AdminProjectForm() {
               Eksperienca Virtuale (Tur 360°)
             </h2>
             <p className="text-sm text-muted-foreground">
-              Ofroni një link direkt për turin OSE kod embed (iframe) nga ofrues si Kuula,
-              Matterport etj.
+              Ofroni një link direkt për turin OSE kod embed (iframe) nga ofrues si
+              Kuula, Matterport etj.
             </p>
 
             <div className="space-y-6">
