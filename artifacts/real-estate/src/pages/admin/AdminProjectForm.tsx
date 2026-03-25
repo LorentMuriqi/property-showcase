@@ -191,31 +191,30 @@ export default function AdminProjectForm() {
         }
       });
 
-      const payload = {
-        title: data.title || "",
-        description: data.description || "",
-        country: data.country || "",
-        city: data.city || "",
-        address: data.address || "",
-        status: data.status || "for_sale",
-        price: data.price,
-        currency: data.currency || "",
-        area_m2: data.areaM2,
-        property_type: data.propertyType || "",
-        bedrooms: data.bedrooms,
-        bathrooms: data.bathrooms,
-        living_rooms: data.livingRooms,
-        floors: data.floors,
-        year_built: data.yearBuilt,
-        virtual_tour_url: data.virtualTourUrl || "",
-        virtual_tour_embed_code: data.virtualTourEmbedCode || "",
-        contact_company: data.contactCompany || "",
-        contact_phone: data.contactPhone || "",
-        contact_email: data.contactEmail || "",
-        images: cleanedImages,
-        custom_fields: data.customFields || {},
-        location: [data.city, data.country].filter(Boolean).join(", "),
-      };
+const payload = {
+  title: data.title || "",
+  description: data.description || "",
+  country: data.country || "",
+  city: data.city || "",
+  address: data.address || "",
+  status: data.status || "for_sale",
+  price: data.price,
+  currency: data.currency || "",
+  area_m2: data.areaM2,
+  property_type: data.propertyType || "",
+  bedrooms: data.bedrooms,
+  bathrooms: data.bathrooms,
+  living_rooms: data.livingRooms,
+  floors: data.floors,
+  year_built: data.yearBuilt,
+  virtual_tour_url: data.virtualTourUrl || "",
+  virtual_tour_embed_code: data.virtualTourEmbedCode || "",
+  contact_company: data.contactCompany || "",
+  contact_phone: data.contactPhone || "",
+  contact_email: data.contactEmail || "",
+  images: cleanedImages,
+  location: [data.city, data.country].filter(Boolean).join(", "),
+};
 
       if (isEditing) {
         const { error } = await supabase
