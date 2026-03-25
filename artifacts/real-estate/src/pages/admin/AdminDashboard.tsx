@@ -136,6 +136,9 @@ export default function AdminDashboard() {
   };
 
   const handlePause = async (project: any) => {
+	  if (!confirm(`A jeni i sigurt që dëshironi ta pezulloni "${project.title}"?`)) {
+		return;
+		}
     try {
       setActionId(project.id);
 
@@ -167,6 +170,9 @@ export default function AdminDashboard() {
   };
 
   const handleExpire = async (project: any) => {
+	  if (!confirm(`A jeni i sigurt që dëshironi ta skadoni "${project.title}"?`)) {
+		return;
+		}
     try {
       setActionId(project.id);
 
@@ -199,6 +205,9 @@ export default function AdminDashboard() {
   };
 
   const handleResume = async (project: any) => {
+	  if (!confirm(`A jeni i sigurt që dëshironi ta riaktivizoni "${project.title}"?`)) {
+		return;
+		}
     try {
       setActionId(project.id);
 
