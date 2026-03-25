@@ -34,6 +34,7 @@ export default function AdminProjectForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const isEditing = !!id;
+  const numericId = id ? Number(id) : null;
   const { toast } = useToast();
 
   const [projectToEdit, setProjectToEdit] = useState<any | null>(null);
@@ -80,14 +81,18 @@ export default function AdminProjectForm() {
 
   useEffect(() => {
     const fetchProject = async () => {
+<<<<<<< HEAD
       if (authLoading || !isAdmin || !isEditing || !id) return;
+=======
+      if (authLoading || !isAdmin || !isEditing || !numericId) return;
+>>>>>>> 7664624 (fix project details with supabase uuid)
 
       setIsLoading(true);
 
       const { data, error } = await supabase
         .from("properties")
         .select("*")
-        .eq("id", id)
+        .eq("id", numericId)
         .single();
 
       if (error || !data) {
@@ -106,7 +111,11 @@ export default function AdminProjectForm() {
     };
 
     fetchProject();
+<<<<<<< HEAD
   }, [authLoading, isAdmin, id, isEditing, setLocation, toast]);
+=======
+  }, [authLoading, isAdmin, isEditing, numericId, setLocation, toast]);
+>>>>>>> 7664624 (fix project details with supabase uuid)
 
   useEffect(() => {
     if (isEditing && projectToEdit) {
@@ -126,6 +135,7 @@ export default function AdminProjectForm() {
         livingRooms: projectToEdit.living_rooms ?? projectToEdit.livingRooms ?? "",
         floors: projectToEdit.floors ?? "",
         yearBuilt: projectToEdit.year_built ?? projectToEdit.yearBuilt ?? "",
+<<<<<<< HEAD
         virtualTourUrl:
           projectToEdit.virtual_tour_url ?? projectToEdit.virtualTourUrl ?? "",
         virtualTourEmbedCode:
@@ -138,12 +148,24 @@ export default function AdminProjectForm() {
           projectToEdit.contact_phone ?? projectToEdit.contactPhone ?? "",
         contactEmail:
           projectToEdit.contact_email ?? projectToEdit.contactEmail ?? "",
+=======
+        virtualTourUrl: projectToEdit.virtual_tour_url ?? projectToEdit.virtualTourUrl ?? "",
+        virtualTourEmbedCode:
+          projectToEdit.virtual_tour_embed_code ?? projectToEdit.virtualTourEmbedCode ?? "",
+        contactCompany: projectToEdit.contact_company ?? projectToEdit.contactCompany ?? "",
+        contactPhone: projectToEdit.contact_phone ?? projectToEdit.contactPhone ?? "",
+        contactEmail: projectToEdit.contact_email ?? projectToEdit.contactEmail ?? "",
+>>>>>>> 7664624 (fix project details with supabase uuid)
         images:
           Array.isArray(projectToEdit.images) && projectToEdit.images.length > 0
             ? projectToEdit.images
             : [{ url: "", caption: "", isPrimary: true }],
+<<<<<<< HEAD
         customFields:
           projectToEdit.custom_fields ?? projectToEdit.customFields ?? {},
+=======
+        customFields: projectToEdit.custom_fields ?? projectToEdit.customFields ?? {},
+>>>>>>> 7664624 (fix project details with supabase uuid)
       });
     }
   }, [projectToEdit, isEditing, reset]);
@@ -200,23 +222,29 @@ export default function AdminProjectForm() {
         location: [data.city, data.country].filter(Boolean).join(", "),
       };
 
+<<<<<<< HEAD
       if (isEditing) {
         const { error } = await supabase.from("properties").update(payload).eq("id", id);
-        if (error) throw error;
+=======
+      if (isEditing && numericId) {
+        const { error } = await supabase
+          .from("properties")
+          .update(payload)
+          .eq("id", numericId);
 
-        toast({
-          title: "Sukses",
-          description: "Prona u përditësua me sukses.",
-        });
+>>>>>>> 7664624 (fix project details with supabase uuid)
+        if (error) throw error;
       } else {
         const { error } = await supabase.from("properties").insert([payload]);
         if (error) throw error;
-
-        toast({
-          title: "Sukses",
-          description: "Prona u krijua me sukses.",
-        });
       }
+
+      toast({
+        title: "Sukses",
+        description: isEditing
+          ? "Prona u përditësua me sukses."
+          : "Prona u krijua me sukses.",
+      });
 
       setLocation("/admin");
     } catch (error: any) {
@@ -238,6 +266,7 @@ export default function AdminProjectForm() {
   if (!isAdmin) return null;
 
   return (
+<<<<<<< HEAD
     <div className="min-h-screen bg-background text-foreground pb-24">
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 md:p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -273,5 +302,8 @@ export default function AdminProjectForm() {
         </form>
       </main>
     </div>
+=======
+    // UI i njëjtë siç e ke
+>>>>>>> 7664624 (fix project details with supabase uuid)
   );
 }
