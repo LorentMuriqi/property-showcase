@@ -31,7 +31,14 @@ export default function Projects() {
     const fetchProjects = async () => {
       setIsLoading(true);
 
-      let query = supabase.from("properties").select("*");
+      const nowIso = new Date().toISOString();
+
+      let query = supabase
+        .from("properties")
+        .select("*")
+        .eq("listing_status", "active")
+        .eq("is_paused", false)
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
 
       if (country) {
         query = query.eq("country", country);
@@ -41,9 +48,10 @@ export default function Projects() {
         query = query.eq("city", city);
       }
 
-      if (search) {
+      if (search.trim()) {
+        const safeSearch = search.trim().replace(/,/g, " ");
         query = query.or(
-          `title.ilike.%${search}%,description.ilike.%${search}%,location.ilike.%${search}%`
+          `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`
         );
       }
 
@@ -64,7 +72,14 @@ export default function Projects() {
 
   useEffect(() => {
     const fetchFilters = async () => {
-      const { data, error } = await supabase.from("properties").select("country, city");
+      const nowIso = new Date().toISOString();
+
+      const { data, error } = await supabase
+        .from("properties")
+        .select("country, city")
+        .eq("listing_status", "active")
+        .eq("is_paused", false)
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
 
       if (error) {
         console.error("Supabase filter fetch error:", error);

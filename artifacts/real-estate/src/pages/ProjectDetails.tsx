@@ -171,10 +171,15 @@ export default function ProjectDetails() {
       setIsLoading(true);
       setFetchError(false);
 
+      const nowIso = new Date().toISOString();
+
       const { data, error } = await supabase
         .from("properties")
         .select("*")
         .eq("id", id)
+        .eq("listing_status", "active")
+        .eq("is_paused", false)
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
         .single();
 
       if (!isMounted) return;
@@ -260,7 +265,6 @@ export default function ProjectDetails() {
   return (
     <Layout>
       <div className="bg-background pt-24 pb-32 min-h-screen">
-        {/* Gallery Carousel */}
         <div className="relative w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 mb-12">
           <div
             className="overflow-hidden rounded-2xl aspect-video md:aspect-[21/9] bg-card border border-white/5 shadow-2xl relative cursor-zoom-in"
@@ -361,9 +365,7 @@ export default function ProjectDetails() {
           )}
         </div>
 
-        {/* Content Wrapper */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-16">
-          {/* Main Info */}
           <div className="lg:col-span-2 space-y-12">
             <div>
               <div className="flex items-center gap-4 mb-4">
@@ -435,7 +437,6 @@ export default function ProjectDetails() {
               )}
           </div>
 
-          {/* Sidebar */}
           <div className="lg:col-span-1">
             <div className="sticky top-32 space-y-6">
               <div className="glass-panel rounded-2xl p-8">
@@ -534,7 +535,6 @@ export default function ProjectDetails() {
         </div>
       </div>
 
-      {/* Contact Modal */}
       {showContactModal && (
         <div
           className="fixed inset-0 z-[150] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
@@ -632,7 +632,6 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* Lightbox */}
       {lightboxIndex !== null && images.length > 0 && (
         <div
           className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center"
@@ -690,7 +689,6 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* Virtual Tour Fullscreen Modal */}
       {showVirtualTour && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col">
           <div className="flex items-center justify-between p-4 glass-panel border-b border-white/10 z-10">

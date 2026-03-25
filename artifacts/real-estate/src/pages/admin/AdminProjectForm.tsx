@@ -77,6 +77,7 @@ export default function AdminProjectForm() {
       contactCompany: "",
       contactPhone: "",
       contactEmail: "",
+      activeDays: 30,
     },
   });
 
@@ -155,8 +156,7 @@ export default function AdminProjectForm() {
           Array.isArray(projectToEdit.images) && projectToEdit.images.length > 0
             ? projectToEdit.images
             : [{ url: "", caption: "", isPrimary: true }],
-        customFields:
-          projectToEdit.custom_fields ?? projectToEdit.customFields ?? {},
+        activeDays: projectToEdit.active_days ?? 30,
       });
     }
   }, [projectToEdit, isEditing, reset]);
@@ -177,6 +177,7 @@ export default function AdminProjectForm() {
         "livingRooms",
         "floors",
         "yearBuilt",
+        "activeDays",
       ];
 
       numericFields.forEach((field) => {
@@ -191,35 +192,53 @@ export default function AdminProjectForm() {
         }
       });
 
-const payload = {
-  title: data.title || "",
-  description: data.description || "",
-  country: data.country || "",
-  city: data.city || "",
-  address: data.address || "",
-  status: data.status || "for_sale",
-  price: data.price,
-  currency: data.currency || "",
-  area_m2: data.areaM2,
-  property_type: data.propertyType || "",
-  bedrooms: data.bedrooms,
-  bathrooms: data.bathrooms,
-  living_rooms: data.livingRooms,
-  floors: data.floors,
-  year_built: data.yearBuilt,
-  virtual_tour_url: data.virtualTourUrl || "",
-  virtual_tour_embed_code: data.virtualTourEmbedCode || "",
-  contact_company: data.contactCompany || "",
-  contact_phone: data.contactPhone || "",
-  contact_email: data.contactEmail || "",
-  images: cleanedImages,
-  location: [data.city, data.country].filter(Boolean).join(", "),
-};
+      const nowIso = new Date().toISOString();
+      const expiresAt =
+        data.activeDays && data.activeDays > 0
+          ? new Date(Date.now() + data.activeDays * 24 * 60 * 60 * 1000).toISOString()
+          : null;
+
+      const payload = {
+        title: data.title || "",
+        description: data.description || "",
+        country: data.country || "",
+        city: data.city || "",
+        address: data.address || "",
+        status: data.status || "for_sale",
+        price: data.price,
+        currency: data.currency || "",
+        area_m2: data.areaM2,
+        property_type: data.propertyType || "",
+        bedrooms: data.bedrooms,
+        bathrooms: data.bathrooms,
+        living_rooms: data.livingRooms,
+        floors: data.floors,
+        year_built: data.yearBuilt,
+        virtual_tour_url: data.virtualTourUrl || "",
+        virtual_tour_embed_code: data.virtualTourEmbedCode || "",
+        contact_company: data.contactCompany || "",
+        contact_phone: data.contactPhone || "",
+        contact_email: data.contactEmail || "",
+        images: cleanedImages,
+        location: [data.city, data.country].filter(Boolean).join(", "),
+        active_days: data.activeDays,
+      };
 
       if (isEditing) {
+        const updatePayload: any = { ...payload };
+
+        if (projectToEdit?.listing_status === "expired" || projectToEdit?.listing_status === "paused") {
+          updatePayload.listing_status = "active";
+          updatePayload.is_paused = false;
+          updatePayload.published_at = nowIso;
+          updatePayload.expires_at = expiresAt;
+        } else if (data.activeDays) {
+          updatePayload.expires_at = expiresAt;
+        }
+
         const { error } = await supabase
           .from("properties")
-          .update(payload)
+          .update(updatePayload)
           .eq("id", id);
 
         if (error) throw error;
@@ -229,7 +248,15 @@ const payload = {
           description: "Prona u përditësua me sukses.",
         });
       } else {
-        const { error } = await supabase.from("properties").insert([payload]);
+        const insertPayload = {
+          ...payload,
+          listing_status: "active",
+          is_paused: false,
+          published_at: nowIso,
+          expires_at: expiresAt,
+        };
+
+        const { error } = await supabase.from("properties").insert([insertPayload]);
 
         if (error) throw error;
 
@@ -325,6 +352,23 @@ const payload = {
                   <option value="rented">Dhënë me Qira</option>
                   <option value="for_rent">Me Qira</option>
                 </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                label="Aktiv për sa ditë"
+                type="number"
+                min="1"
+                {...register("activeDays")}
+              />
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/70 uppercase tracking-wider">
+                  Shënim
+                </label>
+                <div className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white/60">
+                  Pas skadimit, projekti largohet nga faqja publike dhe mbetet vetëm në admin si “Skaduar”.
+                </div>
               </div>
             </div>
 
