@@ -81,11 +81,8 @@ export default function AdminProjectForm() {
 
   useEffect(() => {
     const fetchProject = async () => {
-<<<<<<< HEAD
-      if (authLoading || !isAdmin || !isEditing || !id) return;
-=======
+
       if (authLoading || !isAdmin || !isEditing || !numericId) return;
->>>>>>> 7664624 (fix project details with supabase uuid)
 
       setIsLoading(true);
 
