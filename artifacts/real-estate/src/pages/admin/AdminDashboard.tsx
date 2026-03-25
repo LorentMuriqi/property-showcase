@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 
 type AdminListingStatus = "active" | "paused" | "expired";
+type SortMode = "default" | "expiry_asc" | "expiry_desc";
 
 function getComputedListingStatus(project: any): AdminListingStatus {
   if (project.is_paused) return "paused";
@@ -35,6 +36,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionId, setActionId] = useState<string | number | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("default");
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -255,6 +257,29 @@ export default function AdminDashboard() {
     [],
   );
 
+  const getSortedProjects = () => {
+    const copy = [...projects];
+
+    if (sortMode === "default") {
+      return copy;
+    }
+
+    return copy.sort((a, b) => {
+      const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
+      const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
+
+      if (sortMode === "expiry_asc") {
+        return aTime - bTime;
+      }
+
+      if (sortMode === "expiry_desc") {
+        return bTime - aTime;
+      }
+
+      return 0;
+    });
+  };
+
   if (authLoading) {
     return <div className="min-h-screen bg-background" />;
   }
@@ -336,13 +361,25 @@ export default function AdminDashboard() {
                   <tr className="bg-black/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="p-4 font-medium">Prona</th>
                     <th className="p-4 font-medium">Çmimi</th>
-                    <th className="p-4 font-medium">Statusi</th>
+                    <th
+                      className="p-4 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                      onClick={() => {
+                        setSortMode((prev) => {
+                          if (prev === "default") return "expiry_asc";
+                          if (prev === "expiry_asc") return "expiry_desc";
+                          return "default";
+                        });
+                      }}
+                      title="Kliko për renditje sipas skadimit"
+                    >
+                      Statusi
+                    </th>
                     <th className="p-4 font-medium">Data e Skadimit</th>
                     <th className="p-4 font-medium text-right">Veprimet</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {projects.map((project) => {
+                  {getSortedProjects().map((project) => {
                     const listingStatus = getComputedListingStatus(project);
                     const meta = statusMeta[listingStatus];
 
