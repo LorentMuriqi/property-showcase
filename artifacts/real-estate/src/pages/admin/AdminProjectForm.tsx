@@ -348,8 +348,8 @@ export default function AdminProjectForm() {
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
                 >
                   <option value="for_sale">Në Shitje</option>
-                  <option value="sold">Shitur</option>
-                  <option value="rented">Dhënë me Qira</option>
+                  //<option value="sold">Shitur</option>
+                  //<option value="rented">Dhënë me Qira</option>
                   <option value="for_rent">Me Qira</option>
                 </select>
               </div>
