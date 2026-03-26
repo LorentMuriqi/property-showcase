@@ -46,7 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:border-primary/50 transition-colors">
               <img 
-                src={`${import.meta.env.BASE_URL}images/logo.png`} 
+                src={`${import.meta.env.BASE_URL}images/logo.svg`} 
                 alt="Logo" 
                 className="w-6 h-6 object-contain"
                 onError={(e) => (e.currentTarget.style.display = 'none')}
