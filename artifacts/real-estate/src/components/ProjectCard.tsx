@@ -13,8 +13,8 @@ export function ProjectCard({ project }: { project: any }) {
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
-    sold: "Shitur",
-    rented: "Dhënë me Qira",
+    //sold: "Shitur",
+    //rented: "Dhënë me Qira",
     for_rent: "Me Qira",
   };
 
@@ -24,7 +24,7 @@ export function ProjectCard({ project }: { project: any }) {
         currency: project.currency || "USD",
         maximumFractionDigits: 0,
       }).format(project.price)
-    : "Çmimi sipas kërkesës";
+    : "Çmimi sipas marrëveshjes";
 
   return (
     <Link href={`/projects/${project.id}`} className="group block h-full">
