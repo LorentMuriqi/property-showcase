@@ -86,6 +86,7 @@ export default function AdminVirtualTour() {
   const [targetSceneId, setTargetSceneId] = useState<number | "">("");
   const [hotspotLabel, setHotspotLabel] = useState("");
   const [viewerError, setViewerError] = useState("");
+  const [isPlacingHotspot, setIsPlacingHotspot] = useState(false);
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -97,6 +98,14 @@ export default function AdminVirtualTour() {
       setLocation("/admin/login");
     }
   }, [authLoading, isAdmin, setLocation]);
+
+  const removeTempHotspotMarker = () => {
+    if (!editorViewerRef.current) return;
+    const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
+    if (markersPlugin?.getMarker("temp-new-hotspot")) {
+      markersPlugin.removeMarker("temp-new-hotspot");
+    }
+  };
 
   const refreshTour = async () => {
     if (!projectId) return;
@@ -134,7 +143,6 @@ export default function AdminVirtualTour() {
     }
 
     const sceneIds = (scenesData || []).map((scene) => scene.id);
-
     const hotspotsMap = new Map<number, Hotspot[]>();
 
     if (sceneIds.length > 0) {
@@ -340,66 +348,94 @@ export default function AdminVirtualTour() {
     }
   };
 
-const handleAddHotspot = async () => {
-  if (!selectedScene || !clickCoords || targetSceneId === "") {
-    toast({
-      title: "Gabim",
-      description: "Kliko në panoramë dhe zgjidh skenën destinacion.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  try {
-    const { data: insertedHotspot, error } = await supabase
-      .from("virtual_tour_hotspots")
-      .insert({
-        scene_id: selectedScene.id,
-        to_scene_id: Number(targetSceneId),
-        yaw: clickCoords.yaw,
-        pitch: clickCoords.pitch,
-        label: hotspotLabel.trim() || null,
-      })
-      .select("*")
-      .single();
-
-    if (error) throw error;
-
-    // update lokal që hotspot-i i ri të shtohet menjëherë pa humbur skenën aktive
-    setScenes((prev) =>
-      prev.map((scene) =>
-        scene.id === selectedScene.id
-          ? {
-              ...scene,
-              hotspots: [...scene.hotspots, insertedHotspot as Hotspot],
-            }
-          : scene,
-      ),
-    );
-
-    // hiq vetëm pikën e përkohshme që të mund të klikosh menjëherë për hotspot tjetër
-    setClickCoords(null);
-
-    if (editorViewerRef.current) {
-      const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
-      if (markersPlugin?.getMarker("temp-new-hotspot")) {
-        markersPlugin.removeMarker("temp-new-hotspot");
-      }
+  const handleStartHotspotPlacement = () => {
+    if (!selectedScene) {
+      toast({
+        title: "Gabim",
+        description: "Zgjidh fillimisht një skenë.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    // mos i reset target/label që të shtosh disa hotspot-e shpejt
+    if (targetSceneId === "") {
+      toast({
+        title: "Gabim",
+        description: "Zgjidh skenën destinacion përpara vendosjes së hotspot-it.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPlacingHotspot(true);
+    setClickCoords(null);
+    removeTempHotspotMarker();
+
     toast({
-      title: "Sukses",
-      description: "Hotspot-i u shtua. Kliko përsëri në panoramë për hotspot tjetër.",
+      title: "Vendos hotspot-in",
+      description: "Kliko në panoramë aty ku dëshiron të vendoset hotspot-i.",
     });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Shtimi i hotspot-it dështoi.",
-      variant: "destructive",
-    });
-  }
-};
+  };
+
+  const handleCancelHotspotPlacement = () => {
+    setIsPlacingHotspot(false);
+    setClickCoords(null);
+    removeTempHotspotMarker();
+  };
+
+  const handleAddHotspot = async () => {
+    if (!selectedScene || !clickCoords || targetSceneId === "") {
+      toast({
+        title: "Gabim",
+        description: "Zgjidh një pikë dhe një skenë destinacioni.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { data: insertedHotspot, error } = await supabase
+        .from("virtual_tour_hotspots")
+        .insert({
+          scene_id: selectedScene.id,
+          to_scene_id: Number(targetSceneId),
+          yaw: clickCoords.yaw,
+          pitch: clickCoords.pitch,
+          label: hotspotLabel.trim() || null,
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === selectedScene.id
+            ? {
+                ...scene,
+                hotspots: [...scene.hotspots, insertedHotspot as Hotspot],
+              }
+            : scene,
+        ),
+      );
+
+      setClickCoords(null);
+      removeTempHotspotMarker();
+      setIsPlacingHotspot(true);
+
+      toast({
+        title: "Sukses",
+        description:
+          "Hotspot-i u shtua. Kliko përsëri në panoramë për hotspot tjetër në të njëjtën skenë.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Shtimi i hotspot-it dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDeleteHotspot = async (hotspotId: number) => {
     if (!confirm("A dëshironi ta fshini këtë hotspot?")) return;
@@ -414,12 +450,18 @@ const handleAddHotspot = async () => {
 
       if (error) throw error;
 
-      toast({ title: "Sukses", description: "Hotspot-i u fshi." });
-      await refreshTour();
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === currentSceneId
+            ? {
+                ...scene,
+                hotspots: scene.hotspots.filter((hotspot) => hotspot.id !== hotspotId),
+              }
+            : scene,
+        ),
+      );
 
-      if (currentSceneId) {
-        setSelectedSceneId(currentSceneId);
-      }
+      toast({ title: "Sukses", description: "Hotspot-i u fshi." });
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -451,6 +493,9 @@ const handleAddHotspot = async () => {
     if (!selectedScene || !editorContainerRef.current) return;
 
     setViewerError("");
+    setClickCoords(null);
+    setIsPlacingHotspot(false);
+    removeTempHotspotMarker();
 
     if (editorViewerRef.current) {
       editorViewerRef.current.destroy();
@@ -504,6 +549,8 @@ const handleAddHotspot = async () => {
       });
 
       viewer.addEventListener("click", ({ data }: any) => {
+        if (!isPlacingHotspot) return;
+
         setClickCoords({ yaw: data.yaw, pitch: data.pitch });
 
         if (markersPlugin.getMarker("temp-new-hotspot")) {
@@ -516,15 +563,37 @@ const handleAddHotspot = async () => {
           latitude: data.pitch,
           html: `
             <div style="
-              width: 20px;
-              height: 20px;
+              width: 24px;
+              height: 24px;
               border-radius: 9999px;
               background: #ef4444;
               border: 3px solid white;
-              box-shadow: 0 0 0 10px rgba(239,68,68,.15);
-            "></div>
+              box-shadow: 0 0 0 10px rgba(239,68,68,.18);
+              position: relative;
+            ">
+              <div style="
+                position:absolute;
+                top:50%;
+                left:50%;
+                width:2px;
+                height:28px;
+                background:white;
+                transform:translate(-50%, -50%);
+                opacity:.9;
+              "></div>
+              <div style="
+                position:absolute;
+                top:50%;
+                left:50%;
+                width:28px;
+                height:2px;
+                background:white;
+                transform:translate(-50%, -50%);
+                opacity:.9;
+              "></div>
+            </div>
           `,
-          tooltip: "Hotspot i ri",
+          tooltip: "Pozicioni i hotspot-it të ri",
         });
       });
 
@@ -546,7 +615,7 @@ const handleAddHotspot = async () => {
       }
       editorViewerRef.current = null;
     };
-  }, [selectedScene, scenes]);
+  }, [selectedScene, scenes, isPlacingHotspot]);
 
   const virtualTourNodes = useMemo(() => {
     return scenes.map((scene) => ({
@@ -740,7 +809,8 @@ const handleAddHotspot = async () => {
                   2. Editor i Hotspot-eve
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Kliko në panoramë për të vendosur një pikë lidhëse. Një skenë mund të ketë shumë hotspot-e.
+                  Një skenë mund të ketë shumë hotspot-e. Zgjidh destinacionin, kliko “Vendos Hotspot”
+                  dhe pastaj kliko në panoramë aty ku dëshiron ta vendosësh.
                 </p>
               </div>
             </div>
@@ -757,100 +827,111 @@ const handleAddHotspot = async () => {
                   <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
                     <div ref={editorContainerRef} className="w-full h-full" />
                     <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-						Kliko në panoramë për hotspot të ri. Mund të shtosh disa hotspot-e në të njëjtën skenë.
-					</div>
+                      {isPlacingHotspot
+                        ? "Kliko në panoramë për të vendosur hotspot-in e ri"
+                        : "Zgjidh destinacionin dhe kliko “Vendos Hotspot”"}
+                    </div>
                   </div>
                 </div>
 
-                {clickCoords && (
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-                    <h3 className="text-white font-medium flex items-center gap-2">
-                      <Link2 size={16} /> Lidhje e re
-                    </h3>
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
+                  <h3 className="text-white font-medium flex items-center gap-2">
+                    <Link2 size={16} /> Shto hotspot të ri
+                  </h3>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                          Skena destinacion
-                        </label>
-                        <select
-                          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
-                          value={targetSceneId}
-                          onChange={(e) => setTargetSceneId(Number(e.target.value))}
-                        >
-                          <option value="" disabled>
-                            Zgjidh skenën
-                          </option>
-                          {scenes
-                            .filter((scene) => scene.id !== selectedScene.id)
-                            .map((scene) => (
-                              <option key={scene.id} value={scene.id}>
-                                {scene.title}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                          Etiketa
-                        </label>
-                        <input
-                          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
-                          value={hotspotLabel}
-                          onChange={(e) => setHotspotLabel(e.target.value)}
-                          placeholder="P.sh. Shko në korridor"
-                        />
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                        Skena destinacion
+                      </label>
+                      <select
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                        value={targetSceneId}
+                        onChange={(e) =>
+                          setTargetSceneId(e.target.value ? Number(e.target.value) : "")
+                        }
+                      >
+                        <option value="">Zgjidh skenën</option>
+                        {scenes
+                          .filter((scene) => scene.id !== selectedScene.id)
+                          .map((scene) => (
+                            <option key={scene.id} value={scene.id}>
+                              {scene.title}
+                            </option>
+                          ))}
+                      </select>
                     </div>
 
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <span>
-                          <strong className="text-white">Pozicioni yaw:</strong>{" "}
-                          {clickCoords.yaw.toFixed(3)}
-                        </span>
-                        <span>
-                          <strong className="text-white">Pozicioni pitch:</strong>{" "}
-                          {clickCoords.pitch.toFixed(3)}
-                        </span>
-                        <span>
-                          <strong className="text-white">Target:</strong>{" "}
-                          {targetSceneId === ""
-                            ? "Pa zgjedhur"
-                            : scenes.find((scene) => scene.id === Number(targetSceneId))?.title ||
-                              "Pa zgjedhur"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleAddHotspot}
-                        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold"
-                      >
-                        Ruaj Hotspot
-                      </button>
-                      <button
-                        onClick={() => {
-                          setClickCoords(null);
-                          setTargetSceneId("");
-                          setHotspotLabel("");
-
-                          if (editorViewerRef.current) {
-                            const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
-                            if (markersPlugin?.getMarker("temp-new-hotspot")) {
-                              markersPlugin.removeMarker("temp-new-hotspot");
-                            }
-                          }
-                        }}
-                        className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
-                      >
-                        Anulo
-                      </button>
+                    <div>
+                      <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                        Etiketa
+                      </label>
+                      <input
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                        value={hotspotLabel}
+                        onChange={(e) => setHotspotLabel(e.target.value)}
+                        placeholder="P.sh. Shko në korridor"
+                      />
                     </div>
                   </div>
-                )}
+
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <span>
+                        <strong className="text-white">Status:</strong>{" "}
+                        {isPlacingHotspot
+                          ? clickCoords
+                            ? "Pozicioni u zgjodh"
+                            : "Duke pritur klikimin në panoramë"
+                          : "Joaktiv"}
+                      </span>
+                      <span>
+                        <strong className="text-white">Yaw/Pitch:</strong>{" "}
+                        {clickCoords
+                          ? `${clickCoords.yaw.toFixed(3)} / ${clickCoords.pitch.toFixed(3)}`
+                          : "Pa zgjedhur"}
+                      </span>
+                      <span>
+                        <strong className="text-white">Target:</strong>{" "}
+                        {targetSceneId === ""
+                          ? "Pa zgjedhur"
+                          : scenes.find((scene) => scene.id === Number(targetSceneId))?.title ||
+                            "Pa zgjedhur"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {!isPlacingHotspot ? (
+                      <button
+                        onClick={handleStartHotspotPlacement}
+                        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold"
+                      >
+                        Vendos Hotspot
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={handleAddHotspot}
+                          disabled={!clickCoords}
+                          className={`px-4 py-2 rounded-xl font-semibold ${
+                            clickCoords
+                              ? "bg-primary text-black"
+                              : "bg-white/10 text-white/50 cursor-not-allowed"
+                          }`}
+                        >
+                          Ruaj Hotspot
+                        </button>
+                        <button
+                          onClick={handleCancelHotspotPlacement}
+                          className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                        >
+                          Anulo
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -863,36 +944,38 @@ const handleAddHotspot = async () => {
                 ) : (
                   <div className="space-y-3">
                     {[...selectedScene.hotspots]
-					.sort((a, b) => b.id - a.id)
-					.map((hotspot) => {
-                      const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
+                      .sort((a, b) => b.id - a.id)
+                      .map((hotspot) => {
+                        const target = scenes.find(
+                          (scene) => scene.id === hotspot.to_scene_id,
+                        );
 
-                      return (
-                        <div
-                          key={hotspot.id}
-                          className="rounded-xl border border-white/5 bg-black/25 p-3 flex items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0">
-                            <div className="text-sm text-white font-medium truncate">
-                              {target?.title || "Skenë e panjohur"}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {hotspot.label || "Pa etiketë"}
-                            </div>
-                            <div className="text-[11px] text-white/50 mt-1">
-                              yaw {hotspot.yaw.toFixed(3)} / pitch {hotspot.pitch.toFixed(3)}
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => handleDeleteHotspot(hotspot.id)}
-                            className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                        return (
+                          <div
+                            key={hotspot.id}
+                            className="rounded-xl border border-white/5 bg-black/25 p-3 flex items-center justify-between gap-3"
                           >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <div className="min-w-0">
+                              <div className="text-sm text-white font-medium truncate">
+                                {target?.title || "Skenë e panjohur"}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {hotspot.label || "Pa etiketë"}
+                              </div>
+                              <div className="text-[11px] text-white/50 mt-1">
+                                yaw {hotspot.yaw.toFixed(3)} / pitch {hotspot.pitch.toFixed(3)}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleDeleteHotspot(hotspot.id)}
+                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
