@@ -55,6 +55,15 @@ type Project = {
   title: string;
 };
 
+type HotspotFormState = {
+  id: number;
+  scene_id: number;
+  to_scene_id: number | "";
+  label: string;
+  yaw: number;
+  pitch: number;
+};
+
 export default function AdminVirtualTour() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -88,10 +97,16 @@ export default function AdminVirtualTour() {
   const [viewerError, setViewerError] = useState("");
   const [isPlacingHotspot, setIsPlacingHotspot] = useState(false);
 
+  const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
+  const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
+  const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] = useState(false);
+
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
+  const isPlacingHotspotRef = useRef(false);
+  const isEditingHotspotPlacementRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -99,17 +114,25 @@ export default function AdminVirtualTour() {
     }
   }, [authLoading, isAdmin, setLocation]);
 
+  useEffect(() => {
+    isPlacingHotspotRef.current = isPlacingHotspot;
+  }, [isPlacingHotspot]);
+
+  useEffect(() => {
+    isEditingHotspotPlacementRef.current = isEditingHotspotPlacement;
+  }, [isEditingHotspotPlacement]);
+
   const renderEditorHotspots = (
     viewer: Viewer,
     scene: Scene,
     allScenes: Scene[],
     tempCoords?: { yaw: number; pitch: number } | null,
+    editingCoords?: { yaw: number; pitch: number } | null,
   ) => {
     const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
     if (!markersPlugin) return;
 
     const existingMarkers = markersPlugin.getMarkers?.() || [];
-
     existingMarkers.forEach((marker: any) => {
       markersPlugin.removeMarker(marker.id);
     });
@@ -117,17 +140,19 @@ export default function AdminVirtualTour() {
     scene.hotspots.forEach((hotspot) => {
       const target = allScenes.find((s) => s.id === hotspot.to_scene_id);
 
+      const isCurrentlyEditing = editingHotspot?.id === hotspot.id;
+
       markersPlugin.addMarker({
         id: `hs-${hotspot.id}`,
-        longitude: hotspot.yaw,
-        latitude: hotspot.pitch,
+        longitude: isCurrentlyEditing && editingCoords ? editingCoords.yaw : hotspot.yaw,
+        latitude: isCurrentlyEditing && editingCoords ? editingCoords.pitch : hotspot.pitch,
         html: `
           <div style="
             width: 42px;
             height: 42px;
             border-radius: 9999px;
-            background: rgba(0,0,0,0.55);
-            border: 3px solid #d4af37;
+            background: ${isCurrentlyEditing ? "rgba(239,68,68,0.75)" : "rgba(0,0,0,0.55)"};
+            border: 3px solid ${isCurrentlyEditing ? "#ffffff" : "#d4af37"};
             display:flex;
             align-items:center;
             justify-content:center;
@@ -328,6 +353,19 @@ export default function AdminVirtualTour() {
     setIsSceneModalOpen(true);
   };
 
+const openEditHotspot = (hotspot: Hotspot) => {
+  setEditingHotspot({
+    id: hotspot.id,
+    scene_id: hotspot.scene_id,
+    to_scene_id: hotspot.to_scene_id,
+    label: hotspot.label || "",
+    yaw: hotspot.yaw,
+    pitch: hotspot.pitch,
+  });
+  setIsEditingHotspotPlacement(false);
+  setIsEditHotspotModalOpen(true);
+};
+
   const handleSaveScene = async () => {
     try {
       if (!sceneForm.title.trim() || !sceneForm.imageUrl.trim()) {
@@ -510,7 +548,6 @@ export default function AdminVirtualTour() {
       );
 
       setClickCoords(null);
-      removeTempHotspotMarker();
       setIsPlacingHotspot(true);
 
       toast({
@@ -522,6 +559,78 @@ export default function AdminVirtualTour() {
       toast({
         title: "Gabim",
         description: error.message || "Shtimi i hotspot-it dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStartEditHotspotPlacement = () => {
+    if (!editingHotspot) return;
+
+    setIsEditingHotspotPlacement(true);
+
+    toast({
+      title: "Ndrysho pozicionin",
+      description: "Kliko në panoramë për të zgjedhur vendin e ri të hotspot-it.",
+    });
+  };
+
+  const handleSaveEditedHotspot = async () => {
+    if (!editingHotspot || editingHotspot.to_scene_id === "") {
+      toast({
+        title: "Gabim",
+        description: "Zgjidh skenën destinacion.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("virtual_tour_hotspots")
+        .update({
+          to_scene_id: Number(editingHotspot.to_scene_id),
+          label: editingHotspot.label.trim() || null,
+          yaw: editingHotspot.yaw,
+          pitch: editingHotspot.pitch,
+        })
+        .eq("id", editingHotspot.id);
+
+      if (error) throw error;
+
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === selectedSceneId
+            ? {
+                ...scene,
+                hotspots: scene.hotspots.map((hotspot) =>
+                  hotspot.id === editingHotspot.id
+                    ? {
+                        ...hotspot,
+                        to_scene_id: Number(editingHotspot.to_scene_id),
+                        label: editingHotspot.label.trim() || null,
+                        yaw: editingHotspot.yaw,
+                        pitch: editingHotspot.pitch,
+                      }
+                    : hotspot,
+                ),
+              }
+            : scene,
+        ),
+      );
+
+      setIsEditingHotspotPlacement(false);
+      setIsEditHotspotModalOpen(false);
+      setEditingHotspot(null);
+
+      toast({
+        title: "Sukses",
+        description: "Hotspot-i u përditësua.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Përditësimi i hotspot-it dështoi.",
         variant: "destructive",
       });
     }
@@ -551,6 +660,12 @@ export default function AdminVirtualTour() {
         ),
       );
 
+      if (editingHotspot?.id === hotspotId) {
+        setIsEditHotspotModalOpen(false);
+        setEditingHotspot(null);
+        setIsEditingHotspotPlacement(false);
+      }
+
       toast({ title: "Sukses", description: "Hotspot-i u fshi." });
     } catch (error: any) {
       toast({
@@ -579,7 +694,6 @@ export default function AdminVirtualTour() {
     }
   };
 
-  // Viewer init - vetëm kur ndryshon skena
   useEffect(() => {
     if (!selectedScene || !editorContainerRef.current) return;
 
@@ -606,12 +720,6 @@ export default function AdminVirtualTour() {
 
       editorViewerRef.current = viewer;
 
-      viewer.addEventListener("click", ({ data }: any) => {
-        if (!isPlacingHotspot) return;
-
-        setClickCoords({ yaw: data.yaw, pitch: data.pitch });
-      });
-
       viewer.addEventListener("panorama-error", () => {
         setViewerError(
           "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
@@ -632,20 +740,27 @@ export default function AdminVirtualTour() {
     };
   }, [selectedSceneId]);
 
-  // Mbaj ref të përditësuar për isPlacingHotspot
-  const isPlacingHotspotRef = useRef(false);
-
-  useEffect(() => {
-    isPlacingHotspotRef.current = isPlacingHotspot;
-  }, [isPlacingHotspot]);
-
-  // Rebind click handler kur ndryshon viewer ose selectedScene
   useEffect(() => {
     const viewer = editorViewerRef.current;
     if (!viewer) return;
 
     const handleViewerClick = ({ data }: any) => {
+      if (isEditingHotspotPlacementRef.current && editingHotspot) {
+        setEditingHotspot((prev) =>
+          prev
+            ? {
+                ...prev,
+                yaw: data.yaw,
+                pitch: data.pitch,
+              }
+            : prev,
+        );
+        setIsEditingHotspotPlacement(false);
+        return;
+      }
+
       if (!isPlacingHotspotRef.current) return;
+
       setClickCoords({ yaw: data.yaw, pitch: data.pitch });
     };
 
@@ -654,14 +769,19 @@ export default function AdminVirtualTour() {
     return () => {
       viewer.removeEventListener("click", handleViewerClick);
     };
-  }, [selectedSceneId]);
+  }, [selectedSceneId, editingHotspot]);
 
-  // Render markers kur ndryshojnë hotspot-et ose temp click
-  useEffect(() => {
-    if (!editorViewerRef.current || !selectedScene) return;
+useEffect(() => {
+  if (!editorViewerRef.current || !selectedScene) return;
 
-    renderEditorHotspots(editorViewerRef.current, selectedScene, scenes, clickCoords);
-  }, [selectedScene, scenes, clickCoords]);
+  renderEditorHotspots(
+    editorViewerRef.current,
+    selectedScene,
+    scenes,
+    clickCoords,
+    editingHotspot ? { yaw: editingHotspot.yaw, pitch: editingHotspot.pitch } : null,
+  );
+}, [selectedScene, scenes, clickCoords, editingHotspot]);
 
   const virtualTourNodes = useMemo(() => {
     return scenes.map((scene) => ({
@@ -873,7 +993,9 @@ export default function AdminVirtualTour() {
                   <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
                     <div ref={editorContainerRef} className="w-full h-full" />
                     <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-                      {isPlacingHotspot
+                      {isEditingHotspotPlacement
+                        ? "Kliko në panoramë për të zgjedhur pozicionin e ri të hotspot-it"
+                        : isPlacingHotspot
                         ? "Kliko në panoramë për të vendosur hotspot-in e ri"
                         : "Zgjidh destinacionin dhe kliko “Vendos Hotspot”"}
                     </div>
@@ -1013,12 +1135,23 @@ export default function AdminVirtualTour() {
                               </div>
                             </div>
 
-                            <button
-                              onClick={() => handleDeleteHotspot(hotspot.id)}
-                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openEditHotspot(hotspot)}
+                                className="p-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary"
+                                title="Edito hotspot-in"
+                              >
+                                <Edit size={14} />
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteHotspot(hotspot.id)}
+                                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                                title="Fshi hotspot-in"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -1281,6 +1414,131 @@ export default function AdminVirtualTour() {
               className="px-4 py-2 bg-primary text-black font-bold text-sm rounded-lg"
             >
               Ruaj Skenën
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isEditHotspotModalOpen}
+        onOpenChange={(open) => {
+          setIsEditHotspotModalOpen(open);
+          if (!open) {
+            setEditingHotspot(null);
+            setIsEditingHotspotPlacement(false);
+          }
+        }}
+      >
+        <DialogContent className="bg-card border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle>Edito Hotspot-in</DialogTitle>
+          </DialogHeader>
+
+          {editingHotspot && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Skena destinacion
+                </label>
+                <select
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                  value={editingHotspot.to_scene_id}
+                  onChange={(e) =>
+                    setEditingHotspot((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            to_scene_id: e.target.value ? Number(e.target.value) : "",
+                          }
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="">Zgjidh skenën</option>
+                  {scenes
+                    .filter((scene) => scene.id !== selectedSceneId)
+                    .map((scene) => (
+                      <option key={scene.id} value={scene.id}>
+                        {scene.title}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Etiketa
+                </label>
+                <input
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                  value={editingHotspot.label}
+                  onChange={(e) =>
+                    setEditingHotspot((prev) =>
+                      prev ? { ...prev, label: e.target.value } : prev,
+                    )
+                  }
+                  placeholder="P.sh. Shko në korridor"
+                />
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <span>
+                    <strong className="text-white">Pozicioni:</strong>{" "}
+                    {editingHotspot.yaw.toFixed(3)} / {editingHotspot.pitch.toFixed(3)}
+                  </span>
+                  <span>
+                    <strong className="text-white">Statusi:</strong>{" "}
+                    {isEditingHotspotPlacement
+                      ? "Duke pritur klikim në panoramë"
+                      : "Gati për ruajtje"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {!isEditingHotspotPlacement ? (
+                  <button
+                    onClick={handleStartEditHotspotPlacement}
+                    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                  >
+                    Ndrysho vendin në foto
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsEditingHotspotPlacement(false)}
+                    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                  >
+                    Anulo ndryshimin e vendit
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleDeleteHotspot(editingHotspot.id)}
+                  className="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                >
+                  Fshi Hotspot-in
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+            <button
+              onClick={() => {
+                setIsEditHotspotModalOpen(false);
+                setEditingHotspot(null);
+                setIsEditingHotspotPlacement(false);
+              }}
+              className="px-4 py-2 text-sm hover:bg-white/5 rounded-lg"
+            >
+              Anulo
+            </button>
+            <button
+              onClick={handleSaveEditedHotspot}
+              className="px-4 py-2 bg-primary text-black font-bold text-sm rounded-lg"
+            >
+              Ruaj Ndryshimet
             </button>
           </div>
         </DialogContent>
