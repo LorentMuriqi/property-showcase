@@ -498,25 +498,16 @@ export default function AdminVirtualTour() {
 
       if (error) throw error;
 
-      setScenes((prev) => {
-        const updatedScenes = prev.map((scene) =>
+      setScenes((prev) =>
+        prev.map((scene) =>
           scene.id === selectedScene.id
             ? {
                 ...scene,
                 hotspots: [...scene.hotspots, insertedHotspot as Hotspot],
               }
             : scene,
-        );
-
-        if (editorViewerRef.current) {
-          const updatedSelectedScene = updatedScenes.find((s) => s.id === selectedScene.id);
-          if (updatedSelectedScene) {
-            renderEditorHotspots(editorViewerRef.current, updatedSelectedScene, updatedScenes, null);
-          }
-        }
-
-        return updatedScenes;
-      });
+        ),
+      );
 
       setClickCoords(null);
       removeTempHotspotMarker();
@@ -588,13 +579,13 @@ export default function AdminVirtualTour() {
     }
   };
 
+  // Viewer init - vetëm kur ndryshon skena
   useEffect(() => {
     if (!selectedScene || !editorContainerRef.current) return;
 
     setViewerError("");
     setClickCoords(null);
     setIsPlacingHotspot(false);
-    removeTempHotspotMarker();
 
     if (editorViewerRef.current) {
       editorViewerRef.current.destroy();
@@ -615,19 +606,10 @@ export default function AdminVirtualTour() {
 
       editorViewerRef.current = viewer;
 
-      renderEditorHotspots(viewer, selectedScene, scenes, null);
-
-      const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
-
       viewer.addEventListener("click", ({ data }: any) => {
         if (!isPlacingHotspot) return;
 
         setClickCoords({ yaw: data.yaw, pitch: data.pitch });
-
-        renderEditorHotspots(viewer!, selectedScene, scenes, {
-          yaw: data.yaw,
-          pitch: data.pitch,
-        });
       });
 
       viewer.addEventListener("panorama-error", () => {
@@ -648,7 +630,38 @@ export default function AdminVirtualTour() {
       }
       editorViewerRef.current = null;
     };
-  }, [selectedScene, scenes, isPlacingHotspot]);
+  }, [selectedSceneId]);
+
+  // Mbaj ref të përditësuar për isPlacingHotspot
+  const isPlacingHotspotRef = useRef(false);
+
+  useEffect(() => {
+    isPlacingHotspotRef.current = isPlacingHotspot;
+  }, [isPlacingHotspot]);
+
+  // Rebind click handler kur ndryshon viewer ose selectedScene
+  useEffect(() => {
+    const viewer = editorViewerRef.current;
+    if (!viewer) return;
+
+    const handleViewerClick = ({ data }: any) => {
+      if (!isPlacingHotspotRef.current) return;
+      setClickCoords({ yaw: data.yaw, pitch: data.pitch });
+    };
+
+    viewer.addEventListener("click", handleViewerClick);
+
+    return () => {
+      viewer.removeEventListener("click", handleViewerClick);
+    };
+  }, [selectedSceneId]);
+
+  // Render markers kur ndryshojnë hotspot-et ose temp click
+  useEffect(() => {
+    if (!editorViewerRef.current || !selectedScene) return;
+
+    renderEditorHotspots(editorViewerRef.current, selectedScene, scenes, clickCoords);
+  }, [selectedScene, scenes, clickCoords]);
 
   const virtualTourNodes = useMemo(() => {
     return scenes.map((scene) => ({
