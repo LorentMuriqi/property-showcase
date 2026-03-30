@@ -720,7 +720,14 @@ const openEditHotspot = (hotspot: Hotspot) => {
   };
 
   useEffect(() => {
-    if (!selectedScene || !editorContainerRef.current) return;
+    if (
+  !selectedScene ||
+  !editorContainerRef.current ||
+  !selectedScene.image_url ||
+  String(selectedScene.image_url).trim() === ""
+) {
+  return;
+}
 
     setViewerError("");
     setClickCoords(null);
@@ -808,13 +815,21 @@ useEffect(() => {
   );
 }, [selectedScene, scenes, clickCoords, editingHotspot]);
 
-  const virtualTourNodes = useMemo(() => {
-    return scenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.image_url,
-      name: scene.title,
-      thumbnail: scene.thumbnail_url || scene.image_url,
-      links: scene.hotspots.map((hotspot) => ({
+const virtualTourNodes = useMemo(() => {
+  const validScenes = scenes.filter(
+    (scene) => scene.image_url && String(scene.image_url).trim() !== "",
+  );
+
+  const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
+
+  return validScenes.map((scene) => ({
+    id: String(scene.id),
+    panorama: scene.image_url,
+    name: scene.title,
+    thumbnail: scene.thumbnail_url || scene.image_url,
+    links: scene.hotspots
+      .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
+      .map((hotspot) => ({
         nodeId: String(hotspot.to_scene_id),
         position: {
           yaw: hotspot.yaw,
@@ -822,23 +837,44 @@ useEffect(() => {
         },
         name:
           hotspot.label ||
-          scenes.find((target) => target.id === hotspot.to_scene_id)?.title ||
+          validScenes.find((target) => Number(target.id) === Number(hotspot.to_scene_id))
+            ?.title ||
           "Lidhje",
       })),
-    }));
-  }, [scenes]);
+  }));
+}, [scenes]);
 
   useEffect(() => {
-    if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
+  if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
 
-    if (previewViewerRef.current) {
-      previewViewerRef.current.destroy();
-      previewViewerRef.current = null;
-    }
+  if (previewViewerRef.current) {
+    previewViewerRef.current.destroy();
+    previewViewerRef.current = null;
+  }
 
-    const defaultScene = scenes.find((scene) => scene.is_default) || scenes[0];
+  const validNodeIds = new Set(virtualTourNodes.map((node) => node.id));
 
-    const viewer = new Viewer({
+  const defaultScene =
+    scenes.find(
+      (scene) =>
+        scene.is_default &&
+        scene.image_url &&
+        String(scene.image_url).trim() !== "" &&
+        validNodeIds.has(String(scene.id)),
+    ) ||
+    scenes.find(
+      (scene) =>
+        scene.image_url &&
+        String(scene.image_url).trim() !== "" &&
+        validNodeIds.has(String(scene.id)),
+    );
+
+  if (!defaultScene) return;
+
+  let viewer: Viewer | null = null;
+
+  try {
+    viewer = new Viewer({
       container: previewContainerRef.current,
       navbar: ["zoom", "move", "fullscreen"],
       plugins: [
@@ -855,12 +891,17 @@ useEffect(() => {
     });
 
     previewViewerRef.current = viewer;
+  } catch (error) {
+    console.error("Preview viewer init error:", error);
+  }
 
-    return () => {
+  return () => {
+    if (viewer) {
       viewer.destroy();
-      previewViewerRef.current = null;
-    };
-  }, [virtualTourNodes, scenes]);
+    }
+    previewViewerRef.current = null;
+  };
+}, [virtualTourNodes, scenes]);
 
   if (authLoading) {
     return <div className="min-h-screen bg-background" />;
