@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft,
@@ -64,7 +64,7 @@ type HotspotFormState = {
   pitch: number;
 };
 
-const HOTSPOT_HTML = `
+const NORMAL_HOTSPOT_HTML = `
   <div style="
     width: 42px;
     height: 42px;
@@ -85,7 +85,7 @@ const HOTSPOT_HTML = `
   </div>
 `;
 
-const ACTIVE_HOTSPOT_HTML = `
+const EDITING_HOTSPOT_HTML = `
   <div style="
     width: 42px;
     height: 42px;
@@ -140,6 +140,17 @@ const TEMP_HOTSPOT_HTML = `
   </div>
 `;
 
+const toNumber = (value: any, fallback = 0) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const toNullableNumber = (value: any) => {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
 export default function AdminVirtualTour() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -182,100 +193,11 @@ export default function AdminVirtualTour() {
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
 
-  const selectedSceneRef = useRef<Scene | null>(null);
-  const scenesRef = useRef<Scene[]>([]);
-  const isPlacingHotspotRef = useRef(false);
-  const isEditingHotspotPlacementRef = useRef(false);
-  const clickCoordsRef = useRef<{ yaw: number; pitch: number } | null>(null);
-  const editingHotspotRef = useRef<HotspotFormState | null>(null);
-
-  const toNumber = (value: any, fallback = 0) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-
-  const toNullableNumber = (value: any) => {
-    if (value === null || value === undefined || value === "") return null;
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  };
-
   useEffect(() => {
     if (!authLoading && !isAdmin) {
       setLocation("/admin/login");
     }
   }, [authLoading, isAdmin, setLocation]);
-
-  useEffect(() => {
-    selectedSceneRef.current = selectedScene;
-  }, [selectedScene]);
-
-  useEffect(() => {
-    scenesRef.current = scenes;
-  }, [scenes]);
-
-  useEffect(() => {
-    isPlacingHotspotRef.current = isPlacingHotspot;
-  }, [isPlacingHotspot]);
-
-  useEffect(() => {
-    isEditingHotspotPlacementRef.current = isEditingHotspotPlacement;
-  }, [isEditingHotspotPlacement]);
-
-  useEffect(() => {
-    clickCoordsRef.current = clickCoords;
-  }, [clickCoords]);
-
-  useEffect(() => {
-    editingHotspotRef.current = editingHotspot;
-  }, [editingHotspot]);
-
-  const renderEditorMarkers = useCallback(() => {
-    const viewer = editorViewerRef.current;
-    const scene = selectedSceneRef.current;
-    if (!viewer || !scene) return;
-
-    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
-    if (!markersPlugin) return;
-
-    const existingMarkers = markersPlugin.getMarkers?.() || [];
-    existingMarkers.forEach((marker: any) => {
-      markersPlugin.removeMarker(marker.id);
-    });
-
-    scene.hotspots.forEach((hotspot) => {
-      const target = scenesRef.current.find((s) => Number(s.id) === Number(hotspot.to_scene_id));
-      const isEditingThis = editingHotspotRef.current?.id === hotspot.id;
-
-      markersPlugin.addMarker({
-        id: `hs-${hotspot.id}`,
-        longitude: isEditingThis ? editingHotspotRef.current!.yaw : hotspot.yaw,
-        latitude: isEditingThis ? editingHotspotRef.current!.pitch : hotspot.pitch,
-        html: isEditingThis ? ACTIVE_HOTSPOT_HTML : HOTSPOT_HTML,
-        tooltip: hotspot.label || target?.title || "Lidhje",
-      });
-    });
-
-    if (isPlacingHotspotRef.current && clickCoordsRef.current) {
-      markersPlugin.addMarker({
-        id: "temp-new-hotspot",
-        longitude: clickCoordsRef.current.yaw,
-        latitude: clickCoordsRef.current.pitch,
-        html: TEMP_HOTSPOT_HTML,
-        tooltip: "Pozicioni i hotspot-it të ri",
-      });
-    }
-
-    if (isEditingHotspotPlacementRef.current && editingHotspotRef.current) {
-      markersPlugin.addMarker({
-        id: "temp-edit-hotspot",
-        longitude: editingHotspotRef.current.yaw,
-        latitude: editingHotspotRef.current.pitch,
-        html: TEMP_HOTSPOT_HTML,
-        tooltip: "Pozicioni i ri i hotspot-it",
-      });
-    }
-  }, []);
 
   const refreshTour = async () => {
     if (!projectId) return;
@@ -441,6 +363,8 @@ export default function AdminVirtualTour() {
       pitch: hotspot.pitch,
     });
     setIsEditingHotspotPlacement(false);
+    setIsPlacingHotspot(false);
+    setClickCoords(null);
     setIsEditHotspotModalOpen(true);
   };
 
@@ -576,13 +500,12 @@ export default function AdminVirtualTour() {
     setIsEditHotspotModalOpen(false);
     setEditingHotspot(null);
     setIsEditingHotspotPlacement(false);
-
-    setIsPlacingHotspot(true);
     setClickCoords(null);
+    setIsPlacingHotspot(true);
 
     toast({
       title: "Vendos hotspot-in",
-      description: "Kliko në panoramë. Mund të riklikosh disa herë derisa ta vendosësh saktë.",
+      description: "Kliko në panoramë. Mund të riklikosh derisa ta vendosësh saktë.",
     });
   };
 
@@ -815,9 +738,48 @@ export default function AdminVirtualTour() {
       });
 
       editorViewerRef.current = viewer;
+      const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
+
+      const existingMarkers = markersPlugin.getMarkers?.() || [];
+      existingMarkers.forEach((marker: any) => {
+        markersPlugin.removeMarker(marker.id);
+      });
+
+      selectedScene.hotspots.forEach((hotspot) => {
+        const target = scenes.find((s) => Number(s.id) === Number(hotspot.to_scene_id));
+        const isEditingThis = editingHotspot?.id === hotspot.id;
+
+        markersPlugin.addMarker({
+          id: `hs-${hotspot.id}`,
+          longitude: isEditingThis ? editingHotspot!.yaw : hotspot.yaw,
+          latitude: isEditingThis ? editingHotspot!.pitch : hotspot.pitch,
+          html: isEditingThis ? EDITING_HOTSPOT_HTML : NORMAL_HOTSPOT_HTML,
+          tooltip: hotspot.label || target?.title || "Lidhje",
+        });
+      });
+
+      if (isPlacingHotspot && clickCoords) {
+        markersPlugin.addMarker({
+          id: "temp-new-hotspot",
+          longitude: clickCoords.yaw,
+          latitude: clickCoords.pitch,
+          html: TEMP_HOTSPOT_HTML,
+          tooltip: "Pozicioni i hotspot-it të ri",
+        });
+      }
+
+      if (isEditingHotspotPlacement && editingHotspot) {
+        markersPlugin.addMarker({
+          id: "temp-edit-hotspot",
+          longitude: editingHotspot.yaw,
+          latitude: editingHotspot.pitch,
+          html: TEMP_HOTSPOT_HTML,
+          tooltip: "Pozicioni i ri i hotspot-it",
+        });
+      }
 
       viewer.addEventListener("click", ({ data }: any) => {
-        if (isEditingHotspotPlacementRef.current && editingHotspotRef.current) {
+        if (isEditingHotspotPlacement && editingHotspot) {
           setEditingHotspot((prev) =>
             prev
               ? {
@@ -830,7 +792,7 @@ export default function AdminVirtualTour() {
           return;
         }
 
-        if (!isPlacingHotspotRef.current) return;
+        if (!isPlacingHotspot) return;
 
         setClickCoords({ yaw: data.yaw, pitch: data.pitch });
       });
@@ -840,10 +802,6 @@ export default function AdminVirtualTour() {
           "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
         );
       });
-
-      setTimeout(() => {
-        renderEditorMarkers();
-      }, 50);
     } catch (error) {
       console.error("Viewer init error:", error);
       setViewerError(
@@ -857,11 +815,14 @@ export default function AdminVirtualTour() {
       }
       editorViewerRef.current = null;
     };
-  }, [selectedScene?.id, selectedScene?.image_url, renderEditorMarkers]);
-
-  useEffect(() => {
-    renderEditorMarkers();
-  }, [scenes, clickCoords, isPlacingHotspot, editingHotspot, isEditingHotspotPlacement, renderEditorMarkers]);
+  }, [
+    selectedScene,
+    scenes,
+    clickCoords,
+    isPlacingHotspot,
+    editingHotspot,
+    isEditingHotspotPlacement,
+  ]);
 
   const virtualTourNodes = useMemo(() => {
     const validScenes = scenes.filter(
