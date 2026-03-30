@@ -96,6 +96,7 @@ export default function AdminVirtualTour() {
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
   const editorMarkersPluginRef = useRef<any>(null);
+  const hotspotMarkerIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -110,23 +111,32 @@ export default function AdminVirtualTour() {
     }
   }, []);
 
+  const clearRenderedHotspotMarkers = useCallback(() => {
+    const markersPlugin = editorMarkersPluginRef.current;
+    if (!markersPlugin) return;
+
+    hotspotMarkerIdsRef.current.forEach((id) => {
+      if (markersPlugin.getMarker?.(id)) {
+        markersPlugin.removeMarker(id);
+      }
+    });
+
+    hotspotMarkerIdsRef.current = [];
+  }, []);
+
   const renderSceneHotspots = useCallback(
     (scene: Scene | null, allScenes: Scene[]) => {
       const markersPlugin = editorMarkersPluginRef.current;
       if (!markersPlugin || !scene) return;
 
-      const existingMarkers = markersPlugin.getMarkers?.() || [];
-      existingMarkers.forEach((marker: any) => {
-        if (marker.id !== "temp-new-hotspot") {
-          markersPlugin.removeMarker(marker.id);
-        }
-      });
+      clearRenderedHotspotMarkers();
 
       scene.hotspots.forEach((hotspot) => {
+        const markerId = `hs-${hotspot.id}`;
         const target = allScenes.find((item) => item.id === hotspot.to_scene_id);
 
         markersPlugin.addMarker({
-          id: `hs-${hotspot.id}`,
+          id: markerId,
           longitude: hotspot.yaw,
           latitude: hotspot.pitch,
           html: `
@@ -150,9 +160,11 @@ export default function AdminVirtualTour() {
           `,
           tooltip: hotspot.label || target?.title || "Lidhje",
         });
+
+        hotspotMarkerIdsRef.current.push(markerId);
       });
     },
-    [],
+    [clearRenderedHotspotMarkers],
   );
 
   const refreshTour = async () => {
@@ -544,7 +556,7 @@ export default function AdminVirtualTour() {
     setClickCoords(null);
     setIsPlacingHotspot(false);
     setPlacementCount(0);
-    removeTempHotspotMarker();
+    hotspotMarkerIdsRef.current = [];
 
     if (editorViewerRef.current) {
       editorViewerRef.current.destroy();
@@ -576,7 +588,7 @@ export default function AdminVirtualTour() {
 
         setClickCoords({ yaw: data.yaw, pitch: data.pitch });
 
-        if (markersPlugin.getMarker("temp-new-hotspot")) {
+        if (markersPlugin.getMarker?.("temp-new-hotspot")) {
           markersPlugin.removeMarker("temp-new-hotspot");
         }
 
@@ -638,6 +650,7 @@ export default function AdminVirtualTour() {
       }
       editorViewerRef.current = null;
       editorMarkersPluginRef.current = null;
+      hotspotMarkerIdsRef.current = [];
     };
   }, [selectedSceneId]);
 
@@ -945,7 +958,7 @@ export default function AdminVirtualTour() {
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white/75 flex items-start gap-2">
                     <CircleDot size={14} className="mt-0.5 text-primary shrink-0" />
                     <span>
-                      Modaliteti i vendosjes tani qëndron aktiv edhe pasi ruan një hotspot, që të mund të shtosh disa hotspot-e rresht në të njëjtën foto pa rifilluar procesin.
+                      Modaliteti i vendosjes qëndron aktiv edhe pasi ruan një hotspot, që të mund të shtosh disa hotspot-e rresht në të njëjtën foto.
                     </span>
                   </div>
 
