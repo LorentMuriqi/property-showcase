@@ -51,7 +51,7 @@ type Hotspot = {
 };
 
 type Project = {
-  id: number;
+  id: string;
   title: string;
 };
 
@@ -85,7 +85,7 @@ export default function AdminVirtualTour() {
   const [clickCoords, setClickCoords] = useState<{ yaw: number; pitch: number } | null>(null);
   const [targetSceneId, setTargetSceneId] = useState<number | "">("");
   const [hotspotLabel, setHotspotLabel] = useState("");
-  const [viewerError, setViewerError] = useState("")
+  const [viewerError, setViewerError] = useState("");
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -100,6 +100,8 @@ export default function AdminVirtualTour() {
 
   const refreshTour = async () => {
     if (!projectId) return;
+
+    const currentSelectedSceneId = selectedSceneId;
 
     const { data: projectData, error: projectError } = await supabase
       .from("properties")
@@ -133,7 +135,7 @@ export default function AdminVirtualTour() {
 
     const sceneIds = (scenesData || []).map((scene) => scene.id);
 
-    let hotspotsMap = new Map<number, Hotspot[]>();
+    const hotspotsMap = new Map<number, Hotspot[]>();
 
     if (sceneIds.length > 0) {
       const { data: hotspotsData, error: hotspotsError } = await supabase
@@ -173,18 +175,24 @@ export default function AdminVirtualTour() {
     setProject(projectData || null);
     setScenes(normalizedScenes);
 
-    if (!selectedSceneId && normalizedScenes.length > 0) {
-      const defaultScene = normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
-      setSelectedSceneId(defaultScene.id);
+    if (normalizedScenes.length === 0) {
+      setSelectedSceneId(null);
+      return;
     }
 
-    if (selectedSceneId) {
-      const stillExists = normalizedScenes.some((scene) => scene.id === selectedSceneId);
-      if (!stillExists) {
-        const defaultScene = normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0] || null;
-        setSelectedSceneId(defaultScene?.id ?? null);
+    if (currentSelectedSceneId) {
+      const existingSelected = normalizedScenes.find(
+        (scene) => scene.id === currentSelectedSceneId,
+      );
+      if (existingSelected) {
+        setSelectedSceneId(existingSelected.id);
+        return;
       }
     }
+
+    const defaultScene =
+      normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
+    setSelectedSceneId(defaultScene.id);
   };
 
   useEffect(() => {
@@ -289,7 +297,11 @@ export default function AdminVirtualTour() {
       await supabase.from("virtual_tour_hotspots").delete().eq("scene_id", sceneId);
       await supabase.from("virtual_tour_hotspots").delete().eq("to_scene_id", sceneId);
 
-      const { error } = await supabase.from("virtual_tour_scenes").delete().eq("id", sceneId);
+      const { error } = await supabase
+        .from("virtual_tour_scenes")
+        .delete()
+        .eq("id", sceneId);
+
       if (error) throw error;
 
       toast({ title: "Sukses", description: "Skena u fshi." });
@@ -349,11 +361,16 @@ export default function AdminVirtualTour() {
 
       if (error) throw error;
 
+      const currentSceneId = selectedScene.id;
+
       toast({ title: "Sukses", description: "Hotspot-i u shtua." });
+
       setClickCoords(null);
       setTargetSceneId("");
       setHotspotLabel("");
+
       await refreshTour();
+      setSelectedSceneId(currentSceneId);
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -367,6 +384,8 @@ export default function AdminVirtualTour() {
     if (!confirm("A dëshironi ta fshini këtë hotspot?")) return;
 
     try {
+      const currentSceneId = selectedSceneId;
+
       const { error } = await supabase
         .from("virtual_tour_hotspots")
         .delete()
@@ -376,6 +395,10 @@ export default function AdminVirtualTour() {
 
       toast({ title: "Sukses", description: "Hotspot-i u fshi." });
       await refreshTour();
+
+      if (currentSceneId) {
+        setSelectedSceneId(currentSceneId);
+      }
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -389,7 +412,11 @@ export default function AdminVirtualTour() {
     try {
       const { error } = await supabase
         .from("virtual_tour_scenes")
-        .update({ position_x: x, position_y: y, updated_at: new Date().toISOString() })
+        .update({
+          position_x: x,
+          position_y: y,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", sceneId);
 
       if (error) throw error;
@@ -399,106 +426,106 @@ export default function AdminVirtualTour() {
     }
   };
 
-useEffect(() => {
-  if (!selectedScene || !editorContainerRef.current) return;
+  useEffect(() => {
+    if (!selectedScene || !editorContainerRef.current) return;
 
-  setViewerError("");
+    setViewerError("");
 
-  if (editorViewerRef.current) {
-    editorViewerRef.current.destroy();
-    editorViewerRef.current = null;
-  }
-
-  let viewer: Viewer | null = null;
-
-  try {
-    viewer = new Viewer({
-      container: editorContainerRef.current,
-      panorama: selectedScene.image_url,
-      navbar: ["zoom", "move", "fullscreen"],
-      defaultYaw: 0,
-      defaultPitch: 0,
-      plugins: [[MarkersPlugin, {}]],
-    });
-
-    editorViewerRef.current = viewer;
-
-    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
-
-    selectedScene.hotspots.forEach((hotspot) => {
-      const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
-
-      markersPlugin.addMarker({
-        id: `hs-${hotspot.id}`,
-        longitude: hotspot.yaw,
-        latitude: hotspot.pitch,
-        html: `
-          <div style="
-            width: 42px;
-            height: 42px;
-            border-radius: 9999px;
-            background: rgba(0,0,0,0.55);
-            border: 3px solid #d4af37;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            color:white;
-            font-size:12px;
-            font-weight:700;
-            box-shadow:0 8px 20px rgba(0,0,0,.35);
-            cursor:pointer;
-          ">
-            ↗
-          </div>
-        `,
-        tooltip: hotspot.label || target?.title || "Lidhje",
-      });
-    });
-
-    viewer.addEventListener("click", ({ data }: any) => {
-      setClickCoords({ yaw: data.yaw, pitch: data.pitch });
-
-      if (markersPlugin.getMarker("temp-new-hotspot")) {
-        markersPlugin.removeMarker("temp-new-hotspot");
-      }
-
-      markersPlugin.addMarker({
-        id: "temp-new-hotspot",
-        longitude: data.yaw,
-        latitude: data.pitch,
-        html: `
-          <div style="
-            width: 20px;
-            height: 20px;
-            border-radius: 9999px;
-            background: #ef4444;
-            border: 3px solid white;
-            box-shadow: 0 0 0 10px rgba(239,68,68,.15);
-          "></div>
-        `,
-        tooltip: "Hotspot i ri",
-      });
-    });
-
-    viewer.addEventListener("panorama-error", () => {
-      setViewerError(
-        "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën."
-      );
-    });
-  } catch (error) {
-    console.error("Viewer init error:", error);
-    setViewerError(
-      "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën."
-    );
-  }
-
-  return () => {
-    if (viewer) {
-      viewer.destroy();
+    if (editorViewerRef.current) {
+      editorViewerRef.current.destroy();
+      editorViewerRef.current = null;
     }
-    editorViewerRef.current = null;
-  };
-}, [selectedScene, scenes]);
+
+    let viewer: Viewer | null = null;
+
+    try {
+      viewer = new Viewer({
+        container: editorContainerRef.current,
+        panorama: selectedScene.image_url,
+        navbar: ["zoom", "move", "fullscreen"],
+        defaultYaw: 0,
+        defaultPitch: 0,
+        plugins: [[MarkersPlugin, {}]],
+      });
+
+      editorViewerRef.current = viewer;
+
+      const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
+
+      selectedScene.hotspots.forEach((hotspot) => {
+        const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
+
+        markersPlugin.addMarker({
+          id: `hs-${hotspot.id}`,
+          longitude: hotspot.yaw,
+          latitude: hotspot.pitch,
+          html: `
+            <div style="
+              width: 42px;
+              height: 42px;
+              border-radius: 9999px;
+              background: rgba(0,0,0,0.55);
+              border: 3px solid #d4af37;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              color:white;
+              font-size:12px;
+              font-weight:700;
+              box-shadow:0 8px 20px rgba(0,0,0,.35);
+              cursor:pointer;
+            ">
+              ↗
+            </div>
+          `,
+          tooltip: hotspot.label || target?.title || "Lidhje",
+        });
+      });
+
+      viewer.addEventListener("click", ({ data }: any) => {
+        setClickCoords({ yaw: data.yaw, pitch: data.pitch });
+
+        if (markersPlugin.getMarker("temp-new-hotspot")) {
+          markersPlugin.removeMarker("temp-new-hotspot");
+        }
+
+        markersPlugin.addMarker({
+          id: "temp-new-hotspot",
+          longitude: data.yaw,
+          latitude: data.pitch,
+          html: `
+            <div style="
+              width: 20px;
+              height: 20px;
+              border-radius: 9999px;
+              background: #ef4444;
+              border: 3px solid white;
+              box-shadow: 0 0 0 10px rgba(239,68,68,.15);
+            "></div>
+          `,
+          tooltip: "Hotspot i ri",
+        });
+      });
+
+      viewer.addEventListener("panorama-error", () => {
+        setViewerError(
+          "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
+        );
+      });
+    } catch (error) {
+      console.error("Viewer init error:", error);
+      setViewerError(
+        "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
+      );
+    }
+
+    return () => {
+      if (viewer) {
+        viewer.destroy();
+      }
+      editorViewerRef.current = null;
+    };
+  }, [selectedScene, scenes]);
 
   const virtualTourNodes = useMemo(() => {
     return scenes.map((scene) => ({
@@ -513,7 +540,9 @@ useEffect(() => {
           pitch: hotspot.pitch,
         },
         name:
-          hotspot.label || scenes.find((target) => target.id === hotspot.to_scene_id)?.title || "Lidhje",
+          hotspot.label ||
+          scenes.find((target) => target.id === hotspot.to_scene_id)?.title ||
+          "Lidhje",
       })),
     }));
   }, [scenes]);
@@ -615,7 +644,9 @@ useEffect(() => {
                   <div
                     key={scene.id}
                     className={`rounded-2xl overflow-hidden border bg-card ${
-                      selectedSceneId === scene.id ? "border-primary ring-2 ring-primary/20" : "border-white/10"
+                      selectedSceneId === scene.id
+                        ? "border-primary ring-2 ring-primary/20"
+                        : "border-white/10"
                     }`}
                   >
                     <div className="aspect-[2/1] bg-black relative">
@@ -634,7 +665,9 @@ useEffect(() => {
                     <div className="p-4 space-y-3">
                       <div>
                         <h3 className="text-white font-medium truncate">{scene.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-1">Renditja: {scene.sort_order}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Renditja: {scene.sort_order}
+                        </p>
                       </div>
 
                       <button
@@ -686,27 +719,27 @@ useEffect(() => {
                   2. Editor i Hotspot-eve
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Kliko në panoramë për të vendosur një pikë lidhëse.
+                  Kliko në panoramë për të vendosur një pikë lidhëse. Një skenë mund të ketë shumë hotspot-e.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
-<div className="space-y-3">
-  {viewerError && (
-    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
-      {viewerError}
-    </div>
-  )}
+                <div className="space-y-3">
+                  {viewerError && (
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                      {viewerError}
+                    </div>
+                  )}
 
-  <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
-    <div ref={editorContainerRef} className="w-full h-full" />
-    <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-      Kliko për hotspot të ri
-    </div>
-  </div>
-</div>
+                  <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
+                    <div ref={editorContainerRef} className="w-full h-full" />
+                    <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
+                      Kliko saktë aty ku dëshiron hotspot-in
+                    </div>
+                  </div>
+                </div>
 
                 {clickCoords && (
                   <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
@@ -750,6 +783,26 @@ useEffect(() => {
                       </div>
                     </div>
 
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <span>
+                          <strong className="text-white">Pozicioni yaw:</strong>{" "}
+                          {clickCoords.yaw.toFixed(3)}
+                        </span>
+                        <span>
+                          <strong className="text-white">Pozicioni pitch:</strong>{" "}
+                          {clickCoords.pitch.toFixed(3)}
+                        </span>
+                        <span>
+                          <strong className="text-white">Target:</strong>{" "}
+                          {targetSceneId === ""
+                            ? "Pa zgjedhur"
+                            : scenes.find((scene) => scene.id === Number(targetSceneId))?.title ||
+                              "Pa zgjedhur"}
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="flex gap-2">
                       <button
                         onClick={handleAddHotspot}
@@ -762,6 +815,13 @@ useEffect(() => {
                           setClickCoords(null);
                           setTargetSceneId("");
                           setHotspotLabel("");
+
+                          if (editorViewerRef.current) {
+                            const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
+                            if (markersPlugin?.getMarker("temp-new-hotspot")) {
+                              markersPlugin.removeMarker("temp-new-hotspot");
+                            }
+                          }
                         }}
                         className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
                       >
@@ -776,7 +836,9 @@ useEffect(() => {
                 <h3 className="text-white font-medium mb-4">Hotspot-et ekzistuese</h3>
 
                 {selectedScene.hotspots.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">Nuk ka hotspot-e për këtë skenë.</p>
+                  <p className="text-sm text-muted-foreground italic">
+                    Nuk ka hotspot-e për këtë skenë.
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {selectedScene.hotspots.map((hotspot) => {
@@ -793,6 +855,9 @@ useEffect(() => {
                             </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {hotspot.label || "Pa etiketë"}
+                            </div>
+                            <div className="text-[11px] text-white/50 mt-1">
+                              yaw {hotspot.yaw.toFixed(3)} / pitch {hotspot.pitch.toFixed(3)}
                             </div>
                           </div>
 
@@ -837,7 +902,10 @@ useEffect(() => {
                   .slice()
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((scene) => (
-                    <div key={scene.id} className="rounded-xl overflow-hidden border border-white/10 bg-white/5">
+                    <div
+                      key={scene.id}
+                      className="rounded-xl overflow-hidden border border-white/10 bg-white/5"
+                    >
                       <div className="aspect-[4/3] bg-black">
                         <img
                           src={scene.thumbnail_url || scene.image_url}
@@ -858,7 +926,9 @@ useEffect(() => {
         <div className="glass-panel p-6 rounded-2xl">
           <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
             <div>
-              <h2 className="font-display text-xl text-primary font-bold">4. Plani i Katit (Opsionale)</h2>
+              <h2 className="font-display text-xl text-primary font-bold">
+                4. Plani i Katit (Opsionale)
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Zvarrit pikat për të vendosur skenat në hartë.
               </p>
@@ -869,7 +939,8 @@ useEffect(() => {
             <div
               className="flex-1 max-w-[700px] aspect-[4/3] bg-white/5 border-2 border-white/10 rounded-2xl relative overflow-hidden"
               style={{
-                backgroundImage: "radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)",
+                backgroundImage:
+                  "radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)",
                 backgroundSize: "20px 20px",
               }}
             >
@@ -888,15 +959,25 @@ useEffect(() => {
                     draggable
                     title={scene.title}
                     className={`absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-move shadow-lg z-10 ${
-                      isSet ? "bg-primary text-black" : "bg-white/50 text-black border-2 border-dashed border-white"
+                      isSet
+                        ? "bg-primary text-black"
+                        : "bg-white/50 text-black border-2 border-dashed border-white"
                     }`}
                     style={{ left: `${x}%`, top: `${y}%` }}
                     onDragEnd={(e) => {
-                      const rect = (e.currentTarget.parentElement as HTMLElement)?.getBoundingClientRect();
+                      const rect = (
+                        e.currentTarget.parentElement as HTMLElement
+                      )?.getBoundingClientRect();
                       if (!rect) return;
 
-                      const nx = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-                      const ny = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+                      const nx = Math.max(
+                        0,
+                        Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
+                      );
+                      const ny = Math.max(
+                        0,
+                        Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
+                      );
                       handleUpdateScenePosition(scene.id, nx, ny);
                     }}
                   >
@@ -913,7 +994,10 @@ useEffect(() => {
                   .slice()
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((scene) => (
-                    <div key={scene.id} className="flex items-center gap-3 rounded-xl bg-black/20 p-2.5 border border-white/5">
+                    <div
+                      key={scene.id}
+                      className="flex items-center gap-3 rounded-xl bg-black/20 p-2.5 border border-white/5"
+                    >
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
                         {scene.thumbnail_url || scene.image_url ? (
                           <img
@@ -930,7 +1014,10 @@ useEffect(() => {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{scene.title}</p>
                         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <Move size={11} /> {scene.position_x != null && scene.position_y != null ? "Pozicionuar" : "Pa pozicion"}
+                          <Move size={11} />{" "}
+                          {scene.position_x != null && scene.position_y != null
+                            ? "Pozicionuar"
+                            : "Pa pozicion"}
                         </p>
                       </div>
                     </div>
@@ -944,48 +1031,69 @@ useEffect(() => {
       <Dialog open={isSceneModalOpen} onOpenChange={setIsSceneModalOpen}>
         <DialogContent className="bg-card border-white/10 text-white">
           <DialogHeader>
-            <DialogTitle>{editingSceneId ? "Edito Skenën" : "Shto Skenë të Re"}</DialogTitle>
+            <DialogTitle>
+              {editingSceneId ? "Edito Skenën" : "Shto Skenë të Re"}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">Titulli *</label>
+              <label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Titulli *
+              </label>
               <input
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
                 value={sceneForm.title}
-                onChange={(e) => setSceneForm((prev) => ({ ...prev, title: e.target.value }))}
+                onChange={(e) =>
+                  setSceneForm((prev) => ({ ...prev, title: e.target.value }))
+                }
                 placeholder="P.sh. Salla e ndenjes"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">URL e panoramës 360° *</label>
+              <label className="text-xs uppercase tracking-wider text-muted-foreground">
+                URL e panoramës 360° *
+              </label>
               <input
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
                 value={sceneForm.imageUrl}
-                onChange={(e) => setSceneForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
+                onChange={(e) =>
+                  setSceneForm((prev) => ({ ...prev, imageUrl: e.target.value }))
+                }
                 placeholder="https://..."
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">Thumbnail URL</label>
+              <label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Thumbnail URL
+              </label>
               <input
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
                 value={sceneForm.thumbnailUrl}
-                onChange={(e) => setSceneForm((prev) => ({ ...prev, thumbnailUrl: e.target.value }))}
+                onChange={(e) =>
+                  setSceneForm((prev) => ({ ...prev, thumbnailUrl: e.target.value }))
+                }
                 placeholder="https://..."
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wider text-muted-foreground">Renditja</label>
+                <label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Renditja
+                </label>
                 <input
                   type="number"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
                   value={sceneForm.sortOrder}
-                  onChange={(e) => setSceneForm((prev) => ({ ...prev, sortOrder: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setSceneForm((prev) => ({
+                      ...prev,
+                      sortOrder: Number(e.target.value),
+                    }))
+                  }
                 />
               </div>
 
@@ -994,10 +1102,17 @@ useEffect(() => {
                   id="scene-default"
                   type="checkbox"
                   checked={sceneForm.isDefault}
-                  onChange={(e) => setSceneForm((prev) => ({ ...prev, isDefault: e.target.checked }))}
+                  onChange={(e) =>
+                    setSceneForm((prev) => ({
+                      ...prev,
+                      isDefault: e.target.checked,
+                    }))
+                  }
                   className="accent-primary"
                 />
-                <label htmlFor="scene-default" className="text-sm">Skena fillestare</label>
+                <label htmlFor="scene-default" className="text-sm">
+                  Skena fillestare
+                </label>
               </div>
             </div>
           </div>
