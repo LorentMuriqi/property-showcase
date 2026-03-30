@@ -157,6 +157,15 @@ importers:
 
   .:
     dependencies:
+      '@photo-sphere-viewer/core':
+        specifier: ^5.14.1
+        version: 5.14.1
+      '@photo-sphere-viewer/markers-plugin':
+        specifier: ^5.14.1
+        version: 5.14.1(@photo-sphere-viewer/core@5.14.1)
+      '@photo-sphere-viewer/virtual-tour-plugin':
+        specifier: ^5.14.1
+        version: 5.14.1(@photo-sphere-viewer/core@5.14.1)
       '@supabase/supabase-js':
         specifier: ^2.99.3
         version: 2.99.3
