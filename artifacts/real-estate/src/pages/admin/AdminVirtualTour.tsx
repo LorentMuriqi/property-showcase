@@ -30,7 +30,7 @@ import {
 
 type Scene = {
   id: number;
-  property_id: number;
+  property_id: string;
   title: string;
   image_url: string;
   thumbnail_url: string | null;
@@ -59,7 +59,7 @@ export default function AdminVirtualTour() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { id } = useParams();
-  const projectId = Number(id);
+  const projectId = id as string;
   const { toast } = useToast();
 
   const [project, setProject] = useState<Project | null>(null);
