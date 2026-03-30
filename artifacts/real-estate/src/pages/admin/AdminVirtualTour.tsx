@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft,
@@ -11,6 +11,8 @@ import {
   Link2,
   Image as ImageIcon,
   Move,
+  CheckCircle2,
+  CircleDot,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
@@ -87,11 +89,13 @@ export default function AdminVirtualTour() {
   const [hotspotLabel, setHotspotLabel] = useState("");
   const [viewerError, setViewerError] = useState("");
   const [isPlacingHotspot, setIsPlacingHotspot] = useState(false);
+  const [placementCount, setPlacementCount] = useState(0);
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
+  const editorMarkersPluginRef = useRef<any>(null);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -99,13 +103,57 @@ export default function AdminVirtualTour() {
     }
   }, [authLoading, isAdmin, setLocation]);
 
-  const removeTempHotspotMarker = () => {
-    if (!editorViewerRef.current) return;
-    const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
-    if (markersPlugin?.getMarker("temp-new-hotspot")) {
+  const removeTempHotspotMarker = useCallback(() => {
+    const markersPlugin = editorMarkersPluginRef.current;
+    if (markersPlugin?.getMarker?.("temp-new-hotspot")) {
       markersPlugin.removeMarker("temp-new-hotspot");
     }
-  };
+  }, []);
+
+  const renderSceneHotspots = useCallback(
+    (scene: Scene | null, allScenes: Scene[]) => {
+      const markersPlugin = editorMarkersPluginRef.current;
+      if (!markersPlugin || !scene) return;
+
+      const existingMarkers = markersPlugin.getMarkers?.() || [];
+      existingMarkers.forEach((marker: any) => {
+        if (marker.id !== "temp-new-hotspot") {
+          markersPlugin.removeMarker(marker.id);
+        }
+      });
+
+      scene.hotspots.forEach((hotspot) => {
+        const target = allScenes.find((item) => item.id === hotspot.to_scene_id);
+
+        markersPlugin.addMarker({
+          id: `hs-${hotspot.id}`,
+          longitude: hotspot.yaw,
+          latitude: hotspot.pitch,
+          html: `
+            <div style="
+              width: 42px;
+              height: 42px;
+              border-radius: 9999px;
+              background: linear-gradient(135deg, rgba(212,175,55,0.96), rgba(255,235,160,0.96));
+              border: 3px solid rgba(255,255,255,0.92);
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              color:#111;
+              font-size:13px;
+              font-weight:800;
+              box-shadow:0 10px 30px rgba(0,0,0,.35);
+              cursor:pointer;
+            ">
+              ↗
+            </div>
+          `,
+          tooltip: hotspot.label || target?.title || "Lidhje",
+        });
+      });
+    },
+    [],
+  );
 
   const refreshTour = async () => {
     if (!projectId) return;
@@ -420,13 +468,13 @@ export default function AdminVirtualTour() {
       );
 
       setClickCoords(null);
+      setPlacementCount((prev) => prev + 1);
       removeTempHotspotMarker();
-      setIsPlacingHotspot(true);
 
       toast({
         title: "Sukses",
         description:
-          "Hotspot-i u shtua. Kliko përsëri në panoramë për hotspot tjetër në të njëjtën skenë.",
+          "Hotspot-i u shtua. Tani mund të klikosh përsëri në panoramë për hotspot-in tjetër.",
       });
     } catch (error: any) {
       toast({
@@ -495,11 +543,13 @@ export default function AdminVirtualTour() {
     setViewerError("");
     setClickCoords(null);
     setIsPlacingHotspot(false);
+    setPlacementCount(0);
     removeTempHotspotMarker();
 
     if (editorViewerRef.current) {
       editorViewerRef.current.destroy();
       editorViewerRef.current = null;
+      editorMarkersPluginRef.current = null;
     }
 
     let viewer: Viewer | null = null;
@@ -517,36 +567,9 @@ export default function AdminVirtualTour() {
       editorViewerRef.current = viewer;
 
       const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
+      editorMarkersPluginRef.current = markersPlugin;
 
-      selectedScene.hotspots.forEach((hotspot) => {
-        const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
-
-        markersPlugin.addMarker({
-          id: `hs-${hotspot.id}`,
-          longitude: hotspot.yaw,
-          latitude: hotspot.pitch,
-          html: `
-            <div style="
-              width: 42px;
-              height: 42px;
-              border-radius: 9999px;
-              background: rgba(0,0,0,0.55);
-              border: 3px solid #d4af37;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              color:white;
-              font-size:12px;
-              font-weight:700;
-              box-shadow:0 8px 20px rgba(0,0,0,.35);
-              cursor:pointer;
-            ">
-              ↗
-            </div>
-          `,
-          tooltip: hotspot.label || target?.title || "Lidhje",
-        });
-      });
+      renderSceneHotspots(selectedScene, scenes);
 
       viewer.addEventListener("click", ({ data }: any) => {
         if (!isPlacingHotspot) return;
@@ -614,8 +637,14 @@ export default function AdminVirtualTour() {
         viewer.destroy();
       }
       editorViewerRef.current = null;
+      editorMarkersPluginRef.current = null;
     };
-  }, [selectedScene, scenes, isPlacingHotspot]);
+  }, [selectedSceneId]);
+
+  useEffect(() => {
+    if (!selectedScene) return;
+    renderSceneHotspots(selectedScene, scenes);
+  }, [selectedScene, scenes, renderSceneHotspots]);
 
   const virtualTourNodes = useMemo(() => {
     return scenes.map((scene) => ({
@@ -676,6 +705,11 @@ export default function AdminVirtualTour() {
   }
 
   if (!isAdmin) return null;
+
+  const selectedTargetScene =
+    targetSceneId === ""
+      ? null
+      : scenes.find((scene) => scene.id === Number(targetSceneId)) || null;
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
@@ -828,16 +862,26 @@ export default function AdminVirtualTour() {
                     <div ref={editorContainerRef} className="w-full h-full" />
                     <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                       {isPlacingHotspot
-                        ? "Kliko në panoramë për të vendosur hotspot-in e ri"
-                        : "Zgjidh destinacionin dhe kliko “Vendos Hotspot”"}
+                        ? clickCoords
+                          ? "Pozicioni u zgjodh — kliko ‘Ruaj Hotspot’ ose zgjidh pikë tjetër"
+                          : "Kliko në panoramë për të vendosur hotspot-in e ri"
+                        : "Zgjidh destinacionin dhe kliko ‘Vendos Hotspot’"}
                     </div>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-                  <h3 className="text-white font-medium flex items-center gap-2">
-                    <Link2 size={16} /> Shto hotspot të ri
-                  </h3>
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <h3 className="text-white font-medium flex items-center gap-2">
+                      <Link2 size={16} /> Shto hotspot të ri
+                    </h3>
+
+                    {placementCount > 0 && isPlacingHotspot && (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs text-emerald-300">
+                        <CheckCircle2 size={14} /> {placementCount} hotspot{placementCount > 1 ? "-e" : ""} u shtuan në këtë sesion
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -893,12 +937,16 @@ export default function AdminVirtualTour() {
                       </span>
                       <span>
                         <strong className="text-white">Target:</strong>{" "}
-                        {targetSceneId === ""
-                          ? "Pa zgjedhur"
-                          : scenes.find((scene) => scene.id === Number(targetSceneId))?.title ||
-                            "Pa zgjedhur"}
+                        {selectedTargetScene ? selectedTargetScene.title : "Pa zgjedhur"}
                       </span>
                     </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white/75 flex items-start gap-2">
+                    <CircleDot size={14} className="mt-0.5 text-primary shrink-0" />
+                    <span>
+                      Modaliteti i vendosjes tani qëndron aktiv edhe pasi ruan një hotspot, që të mund të shtosh disa hotspot-e rresht në të njëjtën foto pa rifilluar procesin.
+                    </span>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -926,7 +974,7 @@ export default function AdminVirtualTour() {
                           onClick={handleCancelHotspotPlacement}
                           className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
                         >
-                          Anulo
+                          Mbyll Modalitetin
                         </button>
                       </>
                     )}
@@ -935,7 +983,12 @@ export default function AdminVirtualTour() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <h3 className="text-white font-medium mb-4">Hotspot-et ekzistuese</h3>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="text-white font-medium">Hotspot-et ekzistuese</h3>
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                    {selectedScene.hotspots.length}
+                  </span>
+                </div>
 
                 {selectedScene.hotspots.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">
