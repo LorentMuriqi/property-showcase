@@ -1,6 +1,6 @@
 import PropertyVirtualTourViewer from "@/components/PropertyVirtualTourViewer";
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
 import {
   ChevronLeft,
@@ -104,7 +104,6 @@ function normalizeProject(raw: any): ProjectType {
 
 export default function ProjectDetails() {
   const { id } = useParams();
-  const [, setLocation] = useLocation();
 
   const [project, setProject] = useState<ProjectType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -246,8 +245,11 @@ export default function ProjectDetails() {
 
   const hasVirtualTour = !!(
     project.hasCustomVirtualTour ||
+    project.has_custom_virtual_tour ||
     project.virtualTourUrl ||
-    project.virtualTourEmbedCode
+    project.virtual_tour_url ||
+    project.virtualTourEmbedCode ||
+    project.virtual_tour_embed_code
   );
 
   const statusLabels: Record<string, string> = {
@@ -329,15 +331,17 @@ export default function ProjectDetails() {
               </>
             )}
 
-<button
-  onClick={(e) => {
-    e.stopPropagation();
-    setShowVirtualTour(true);
-  }}
-  className="absolute top-6 right-6 px-6 py-3 rounded-full bg-primary/90 text-primary-foreground font-bold tracking-widest uppercase text-xs flex items-center gap-2 hover:bg-primary hover:scale-105 transition-all shadow-xl backdrop-blur-md z-10"
->
-  <Play size={14} className="fill-current" /> Hap Turin Virtual 360°
-</button>
+            {hasVirtualTour && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVirtualTour(true);
+                }}
+                className="absolute top-6 right-6 px-6 py-3 rounded-full bg-primary/90 text-primary-foreground font-bold tracking-widest uppercase text-xs flex items-center gap-2 hover:bg-primary hover:scale-105 transition-all shadow-xl backdrop-blur-md z-10"
+              >
+                <Play size={14} className="fill-current" /> Hap Turin Virtual 360°
+              </button>
+            )}
 
             {images.length > 1 && (
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-medium z-10 pointer-events-none">
@@ -688,40 +692,36 @@ export default function ProjectDetails() {
         </div>
       )}
 
-{showVirtualTour && (
-  <div className="fixed inset-0 z-[100] bg-background flex flex-col">
-    
-    {/* Header */}
-    <div className="flex items-center justify-between p-4 glass-panel border-b border-white/10 z-10">
-      <div className="flex items-center gap-3">
-        <span className="font-display font-bold text-white text-xl">
-          Tur Virtual 360°
-        </span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-primary truncate">
-          {project.title}
-        </span>
-      </div>
+      {showVirtualTour && (
+        <div className="fixed inset-0 z-[100] bg-background flex flex-col">
+          <div className="flex items-center justify-between p-4 glass-panel border-b border-white/10 z-10">
+            <div className="flex items-center gap-3">
+              <span className="font-display font-bold text-white text-xl">
+                Tur Virtual 360°
+              </span>
+              <span className="text-muted-foreground">|</span>
+              <span className="text-primary truncate">
+                {project.title}
+              </span>
+            </div>
 
-      <button
-        onClick={() => setShowVirtualTour(false)}
-        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
-      >
-        <X size={20} />
-      </button>
-    </div>
+            <button
+              onClick={() => setShowVirtualTour(false)}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
-    {/* NEW PROFESSIONAL TOUR */}
-    <div className="flex-1 p-4 overflow-auto">
-      <PropertyVirtualTourViewer 
-  propertyId={project.id as any}
-  fallbackUrl={project.virtualTourUrl}
-  fallbackEmbedCode={project.virtualTourEmbedCode}
-/>
-    </div>
-
-  </div>
-)}
+          <div className="flex-1 p-4 overflow-auto">
+            <PropertyVirtualTourViewer
+              propertyId={project.id as any}
+              fallbackUrl={project.virtualTourUrl}
+              fallbackEmbedCode={project.virtualTourEmbedCode}
+            />
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
