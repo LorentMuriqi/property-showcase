@@ -108,6 +108,8 @@ export default function ProjectDetails() {
   const [project, setProject] = useState<ProjectType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
+  
+  const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
@@ -184,15 +186,22 @@ export default function ProjectDetails() {
 
       if (!isMounted) return;
 
-      if (error || !data) {
-        console.error("Project details fetch error:", error);
-        setProject(null);
-        setFetchError(true);
-      } else {
-        setProject(normalizeProject(data));
-        setFetchError(false);
-      }
+if (error || !data) {
+  console.error("Project details fetch error:", error);
+  setProject(null);
+  setHasBuiltInVirtualTour(false);
+  setFetchError(true);
+} else {
+  setProject(normalizeProject(data));
 
+  const { count } = await supabase
+    .from("virtual_tour_scenes")
+    .select("*", { count: "exact", head: true })
+    .eq("property_id", data.id);
+
+  setHasBuiltInVirtualTour((count || 0) > 0);
+  setFetchError(false);
+}
       setIsLoading(false);
     };
 
@@ -243,14 +252,15 @@ export default function ProjectDetails() {
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-  const hasVirtualTour = !!(
-    project.hasCustomVirtualTour ||
-    project.has_custom_virtual_tour ||
-    project.virtualTourUrl ||
-    project.virtual_tour_url ||
-    project.virtualTourEmbedCode ||
-    project.virtual_tour_embed_code
-  );
+const hasVirtualTour = !!(
+  hasBuiltInVirtualTour ||
+  project.hasCustomVirtualTour ||
+  project.has_custom_virtual_tour ||
+  project.virtualTourUrl ||
+  project.virtual_tour_url ||
+  project.virtualTourEmbedCode ||
+  project.virtual_tour_embed_code
+);
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
