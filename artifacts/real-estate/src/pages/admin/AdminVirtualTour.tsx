@@ -86,10 +86,10 @@ export default function AdminVirtualTour() {
   });
 
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
-  const selectedScene = useMemo(
-    () => scenes.find((scene) => scene.id === selectedSceneId) || null,
-    [scenes, selectedSceneId],
-  );
+const selectedScene = useMemo(() => {
+  if (selectedSceneId === null) return null;
+  return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
+}, [scenes, selectedSceneId]);
 
   const [clickCoords, setClickCoords] = useState<{ yaw: number; pitch: number } | null>(null);
   const [targetSceneId, setTargetSceneId] = useState<number | "">("");
@@ -222,6 +222,17 @@ export default function AdminVirtualTour() {
     }
   };
 
+const toNumber = (value: any, fallback = 0) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const toNullableNumber = (value: any) => {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
   const refreshTour = async () => {
     if (!projectId) return;
 
@@ -257,8 +268,8 @@ export default function AdminVirtualTour() {
       return;
     }
 
-    const sceneIds = (scenesData || []).map((scene) => scene.id);
-    const hotspotsMap = new Map<number, Hotspot[]>();
+const sceneIds = (scenesData || []).map((scene) => toNumber(scene.id));
+const hotspotsMap = new Map<number, Hotspot[]>();
 
     if (sceneIds.length > 0) {
       const { data: hotspotsData, error: hotspotsError } = await supabase
@@ -273,27 +284,41 @@ export default function AdminVirtualTour() {
           variant: "destructive",
         });
       } else {
-        for (const hotspot of hotspotsData || []) {
-          if (!hotspotsMap.has(hotspot.scene_id)) {
-            hotspotsMap.set(hotspot.scene_id, []);
-          }
-          hotspotsMap.get(hotspot.scene_id)!.push(hotspot as Hotspot);
-        }
+for (const hotspot of hotspotsData || []) {
+  const normalizedHotspot: Hotspot = {
+    id: toNumber(hotspot.id),
+    scene_id: toNumber(hotspot.scene_id),
+    to_scene_id: toNumber(hotspot.to_scene_id),
+    yaw: Number(hotspot.yaw),
+    pitch: Number(hotspot.pitch),
+    label: hotspot.label || null,
+  };
+
+  if (!hotspotsMap.has(normalizedHotspot.scene_id)) {
+    hotspotsMap.set(normalizedHotspot.scene_id, []);
+  }
+
+  hotspotsMap.get(normalizedHotspot.scene_id)!.push(normalizedHotspot);
+}
       }
     }
 
-    const normalizedScenes: Scene[] = (scenesData || []).map((scene) => ({
-      id: scene.id,
-      property_id: scene.property_id,
-      title: scene.title,
-      image_url: scene.image_url,
-      thumbnail_url: scene.thumbnail_url,
-      is_default: !!scene.is_default,
-      sort_order: scene.sort_order ?? 0,
-      position_x: scene.position_x,
-      position_y: scene.position_y,
-      hotspots: hotspotsMap.get(scene.id) || [],
-    }));
+const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
+  const normalizedId = toNumber(scene.id);
+
+  return {
+    id: normalizedId,
+    property_id: scene.property_id,
+    title: scene.title || "",
+    image_url: (scene.image_url || "").trim(),
+    thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
+    is_default: !!scene.is_default,
+    sort_order: toNumber(scene.sort_order, 0),
+    position_x: toNullableNumber(scene.position_x),
+    position_y: toNullableNumber(scene.position_y),
+    hotspots: hotspotsMap.get(normalizedId) || [],
+  };
+});
 
     setProject(projectData || null);
     setScenes(normalizedScenes);
@@ -303,19 +328,19 @@ export default function AdminVirtualTour() {
       return;
     }
 
-    if (currentSelectedSceneId) {
-      const existingSelected = normalizedScenes.find(
-        (scene) => scene.id === currentSelectedSceneId,
-      );
-      if (existingSelected) {
-        setSelectedSceneId(existingSelected.id);
-        return;
-      }
-    }
+if (currentSelectedSceneId !== null) {
+  const existingSelected = normalizedScenes.find(
+    (scene) => Number(scene.id) === Number(currentSelectedSceneId),
+  );
+  if (existingSelected) {
+    setSelectedSceneId(Number(existingSelected.id));
+    return;
+  }
+}
 
     const defaultScene =
       normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
-    setSelectedSceneId(defaultScene.id);
+    setSelectedSceneId(Number(defaultScene.id));
   };
 
   useEffect(() => {
@@ -927,7 +952,7 @@ useEffect(() => {
                       </div>
 
                       <button
-                        onClick={() => setSelectedSceneId(scene.id)}
+                        onClick={() => setSelectedSceneId(Number(scene.id))}
                         className={`w-full py-2 rounded-xl text-sm flex items-center justify-center gap-2 ${
                           selectedSceneId === scene.id
                             ? "bg-primary/15 text-primary"
