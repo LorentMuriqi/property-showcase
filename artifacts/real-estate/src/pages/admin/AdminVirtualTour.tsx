@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft,
@@ -79,17 +79,18 @@ const HOTSPOT_HTML = `
     font-weight:700;
     box-shadow:0 8px 20px rgba(0,0,0,.35);
     cursor:pointer;
+    user-select:none;
   ">
     ↗
   </div>
 `;
 
-const EDITING_HOTSPOT_HTML = `
+const ACTIVE_HOTSPOT_HTML = `
   <div style="
     width: 42px;
     height: 42px;
     border-radius: 9999px;
-    background: rgba(239,68,68,0.8);
+    background: rgba(239,68,68,0.82);
     border: 3px solid white;
     display:flex;
     align-items:center;
@@ -99,6 +100,7 @@ const EDITING_HOTSPOT_HTML = `
     font-weight:700;
     box-shadow:0 8px 20px rgba(0,0,0,.35);
     cursor:pointer;
+    user-select:none;
   ">
     ↗
   </div>
@@ -113,6 +115,7 @@ const TEMP_HOTSPOT_HTML = `
     border: 3px solid white;
     box-shadow: 0 0 0 10px rgba(239,68,68,.18);
     position: relative;
+    user-select:none;
   ">
     <div style="
       position:absolute;
@@ -179,6 +182,13 @@ export default function AdminVirtualTour() {
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
 
+  const selectedSceneRef = useRef<Scene | null>(null);
+  const scenesRef = useRef<Scene[]>([]);
+  const isPlacingHotspotRef = useRef(false);
+  const isEditingHotspotPlacementRef = useRef(false);
+  const clickCoordsRef = useRef<{ yaw: number; pitch: number } | null>(null);
+  const editingHotspotRef = useRef<HotspotFormState | null>(null);
+
   const toNumber = (value: any, fallback = 0) => {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
@@ -196,19 +206,76 @@ export default function AdminVirtualTour() {
     }
   }, [authLoading, isAdmin, setLocation]);
 
-  const removeTempHotspotMarker = () => {
-    if (!editorViewerRef.current) return;
-    const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
+  useEffect(() => {
+    selectedSceneRef.current = selectedScene;
+  }, [selectedScene]);
+
+  useEffect(() => {
+    scenesRef.current = scenes;
+  }, [scenes]);
+
+  useEffect(() => {
+    isPlacingHotspotRef.current = isPlacingHotspot;
+  }, [isPlacingHotspot]);
+
+  useEffect(() => {
+    isEditingHotspotPlacementRef.current = isEditingHotspotPlacement;
+  }, [isEditingHotspotPlacement]);
+
+  useEffect(() => {
+    clickCoordsRef.current = clickCoords;
+  }, [clickCoords]);
+
+  useEffect(() => {
+    editingHotspotRef.current = editingHotspot;
+  }, [editingHotspot]);
+
+  const renderEditorMarkers = useCallback(() => {
+    const viewer = editorViewerRef.current;
+    const scene = selectedSceneRef.current;
+    if (!viewer || !scene) return;
+
+    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
     if (!markersPlugin) return;
 
-    if (markersPlugin.getMarker?.("temp-new-hotspot")) {
-      markersPlugin.removeMarker("temp-new-hotspot");
+    const existingMarkers = markersPlugin.getMarkers?.() || [];
+    existingMarkers.forEach((marker: any) => {
+      markersPlugin.removeMarker(marker.id);
+    });
+
+    scene.hotspots.forEach((hotspot) => {
+      const target = scenesRef.current.find((s) => Number(s.id) === Number(hotspot.to_scene_id));
+      const isEditingThis = editingHotspotRef.current?.id === hotspot.id;
+
+      markersPlugin.addMarker({
+        id: `hs-${hotspot.id}`,
+        longitude: isEditingThis ? editingHotspotRef.current!.yaw : hotspot.yaw,
+        latitude: isEditingThis ? editingHotspotRef.current!.pitch : hotspot.pitch,
+        html: isEditingThis ? ACTIVE_HOTSPOT_HTML : HOTSPOT_HTML,
+        tooltip: hotspot.label || target?.title || "Lidhje",
+      });
+    });
+
+    if (isPlacingHotspotRef.current && clickCoordsRef.current) {
+      markersPlugin.addMarker({
+        id: "temp-new-hotspot",
+        longitude: clickCoordsRef.current.yaw,
+        latitude: clickCoordsRef.current.pitch,
+        html: TEMP_HOTSPOT_HTML,
+        tooltip: "Pozicioni i hotspot-it të ri",
+      });
     }
 
-    if (markersPlugin.getMarker?.("temp-edit-hotspot")) {
-      markersPlugin.removeMarker("temp-edit-hotspot");
+    if (isEditingHotspotPlacementRef.current && editingHotspotRef.current) {
+      markersPlugin.addMarker({
+        id: "temp-edit-hotspot",
+        longitude: editingHotspotRef.current.yaw,
+        latitude: editingHotspotRef.current.pitch,
+        html: TEMP_HOTSPOT_HTML,
+        tooltip: "Pozicioni i ri i hotspot-it",
+      });
     }
-  };
+  }, []);
 
   const refreshTour = async () => {
     if (!projectId) return;
@@ -512,18 +579,16 @@ export default function AdminVirtualTour() {
 
     setIsPlacingHotspot(true);
     setClickCoords(null);
-    removeTempHotspotMarker();
 
     toast({
       title: "Vendos hotspot-in",
-      description: "Kliko në panoramë aty ku dëshiron të vendoset hotspot-i.",
+      description: "Kliko në panoramë. Mund të riklikosh disa herë derisa ta vendosësh saktë.",
     });
   };
 
   const handleCancelHotspotPlacement = () => {
     setIsPlacingHotspot(false);
     setClickCoords(null);
-    removeTempHotspotMarker();
   };
 
   const handleAddHotspot = async () => {
@@ -577,7 +642,7 @@ export default function AdminVirtualTour() {
       toast({
         title: "Sukses",
         description:
-          "Hotspot-i u shtua. Kliko përsëri në panoramë për hotspot tjetër në të njëjtën skenë.",
+          "Hotspot-i u shtua. Mund të klikosh sërish për hotspot tjetër në të njëjtën panoramë.",
       });
     } catch (error: any) {
       toast({
@@ -594,11 +659,10 @@ export default function AdminVirtualTour() {
     setIsPlacingHotspot(false);
     setClickCoords(null);
     setIsEditingHotspotPlacement(true);
-    removeTempHotspotMarker();
 
     toast({
       title: "Ndrysho pozicionin",
-      description: "Kliko në panoramë për të zgjedhur vendin e ri të hotspot-it.",
+      description: "Kliko në panoramë. Mund të riklikosh derisa ta vendosësh saktë.",
     });
   };
 
@@ -732,7 +796,6 @@ export default function AdminVirtualTour() {
     }
 
     setViewerError("");
-    removeTempHotspotMarker();
 
     if (editorViewerRef.current) {
       editorViewerRef.current.destroy();
@@ -752,43 +815,9 @@ export default function AdminVirtualTour() {
       });
 
       editorViewerRef.current = viewer;
-      const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
-
-      selectedScene.hotspots.forEach((hotspot) => {
-        const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
-        const isEditingThisHotspot = editingHotspot?.id === hotspot.id;
-
-        markersPlugin.addMarker({
-          id: `hs-${hotspot.id}`,
-          longitude: isEditingThisHotspot ? editingHotspot.yaw : hotspot.yaw,
-          latitude: isEditingThisHotspot ? editingHotspot.pitch : hotspot.pitch,
-          html: isEditingThisHotspot ? EDITING_HOTSPOT_HTML : HOTSPOT_HTML,
-          tooltip: hotspot.label || target?.title || "Lidhje",
-        });
-      });
-
-      if (isPlacingHotspot && clickCoords) {
-        markersPlugin.addMarker({
-          id: "temp-new-hotspot",
-          longitude: clickCoords.yaw,
-          latitude: clickCoords.pitch,
-          html: TEMP_HOTSPOT_HTML,
-          tooltip: "Pozicioni i hotspot-it të ri",
-        });
-      }
-
-      if (isEditingHotspotPlacement && editingHotspot) {
-        markersPlugin.addMarker({
-          id: "temp-edit-hotspot",
-          longitude: editingHotspot.yaw,
-          latitude: editingHotspot.pitch,
-          html: TEMP_HOTSPOT_HTML,
-          tooltip: "Pozicioni i ri i hotspot-it",
-        });
-      }
 
       viewer.addEventListener("click", ({ data }: any) => {
-        if (isEditingHotspotPlacement && editingHotspot) {
+        if (isEditingHotspotPlacementRef.current && editingHotspotRef.current) {
           setEditingHotspot((prev) =>
             prev
               ? {
@@ -798,11 +827,10 @@ export default function AdminVirtualTour() {
                 }
               : prev,
           );
-          setIsEditingHotspotPlacement(false);
           return;
         }
 
-        if (!isPlacingHotspot) return;
+        if (!isPlacingHotspotRef.current) return;
 
         setClickCoords({ yaw: data.yaw, pitch: data.pitch });
       });
@@ -812,6 +840,10 @@ export default function AdminVirtualTour() {
           "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
         );
       });
+
+      setTimeout(() => {
+        renderEditorMarkers();
+      }, 50);
     } catch (error) {
       console.error("Viewer init error:", error);
       setViewerError(
@@ -825,7 +857,11 @@ export default function AdminVirtualTour() {
       }
       editorViewerRef.current = null;
     };
-  }, [selectedScene, scenes, isPlacingHotspot, clickCoords, editingHotspot, isEditingHotspotPlacement]);
+  }, [selectedScene?.id, selectedScene?.image_url, renderEditorMarkers]);
+
+  useEffect(() => {
+    renderEditorMarkers();
+  }, [scenes, clickCoords, isPlacingHotspot, editingHotspot, isEditingHotspotPlacement, renderEditorMarkers]);
 
   const virtualTourNodes = useMemo(() => {
     const validScenes = scenes.filter(
@@ -1072,9 +1108,9 @@ export default function AdminVirtualTour() {
                     <div ref={editorContainerRef} className="w-full h-full" />
                     <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                       {isEditingHotspotPlacement
-                        ? "Kliko në panoramë për të zgjedhur pozicionin e ri të hotspot-it"
+                        ? "Kliko në panoramë për të zgjedhur pozicionin e ri"
                         : isPlacingHotspot
-                        ? "Kliko në panoramë për të vendosur hotspot-in e ri"
+                        ? "Kliko në panoramë. Rikliko derisa pozicioni të jetë saktë"
                         : "Zgjidh destinacionin dhe kliko “Vendos Hotspot”"}
                     </div>
                   </div>
@@ -1587,7 +1623,7 @@ export default function AdminVirtualTour() {
                     onClick={() => setIsEditingHotspotPlacement(false)}
                     className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
                   >
-                    Anulo ndryshimin e vendit
+                    Ndalo ndryshimin e vendit
                   </button>
                 )}
 
