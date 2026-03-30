@@ -85,6 +85,7 @@ export default function AdminVirtualTour() {
   const [clickCoords, setClickCoords] = useState<{ yaw: number; pitch: number } | null>(null);
   const [targetSceneId, setTargetSceneId] = useState<number | "">("");
   const [hotspotLabel, setHotspotLabel] = useState("");
+  const [viewerError, setViewerError] = useState("")
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -398,15 +399,20 @@ export default function AdminVirtualTour() {
     }
   };
 
-  useEffect(() => {
-    if (!selectedScene || !editorContainerRef.current) return;
+useEffect(() => {
+  if (!selectedScene || !editorContainerRef.current) return;
 
-    if (editorViewerRef.current) {
-      editorViewerRef.current.destroy();
-      editorViewerRef.current = null;
-    }
+  setViewerError("");
 
-    const viewer = new Viewer({
+  if (editorViewerRef.current) {
+    editorViewerRef.current.destroy();
+    editorViewerRef.current = null;
+  }
+
+  let viewer: Viewer | null = null;
+
+  try {
+    viewer = new Viewer({
       container: editorContainerRef.current,
       panorama: selectedScene.image_url,
       navbar: ["zoom", "move", "fullscreen"],
@@ -416,10 +422,12 @@ export default function AdminVirtualTour() {
     });
 
     editorViewerRef.current = viewer;
+
     const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
 
     selectedScene.hotspots.forEach((hotspot) => {
       const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
+
       markersPlugin.addMarker({
         id: `hs-${hotspot.id}`,
         longitude: hotspot.yaw,
@@ -472,11 +480,25 @@ export default function AdminVirtualTour() {
       });
     });
 
-    return () => {
+    viewer.addEventListener("panorama-error", () => {
+      setViewerError(
+        "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën."
+      );
+    });
+  } catch (error) {
+    console.error("Viewer init error:", error);
+    setViewerError(
+      "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën."
+    );
+  }
+
+  return () => {
+    if (viewer) {
       viewer.destroy();
-      editorViewerRef.current = null;
-    };
-  }, [selectedScene, scenes]);
+    }
+    editorViewerRef.current = null;
+  };
+}, [selectedScene, scenes]);
 
   const virtualTourNodes = useMemo(() => {
     return scenes.map((scene) => ({
@@ -671,12 +693,20 @@ export default function AdminVirtualTour() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
-                <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
-                  <div ref={editorContainerRef} className="w-full h-full" />
-                  <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-                    Kliko për hotspot të ri
-                  </div>
-                </div>
+<div className="space-y-3">
+  {viewerError && (
+    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+      {viewerError}
+    </div>
+  )}
+
+  <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
+    <div ref={editorContainerRef} className="w-full h-full" />
+    <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
+      Kliko për hotspot të ri
+    </div>
+  </div>
+</div>
 
                 {clickCoords && (
                   <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
