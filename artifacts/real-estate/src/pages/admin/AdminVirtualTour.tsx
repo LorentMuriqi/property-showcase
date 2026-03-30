@@ -340,45 +340,66 @@ export default function AdminVirtualTour() {
     }
   };
 
-  const handleAddHotspot = async () => {
-    if (!selectedScene || !clickCoords || targetSceneId === "") {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh një pikë dhe një skenë destinacioni.",
-        variant: "destructive",
-      });
-      return;
-    }
+const handleAddHotspot = async () => {
+  if (!selectedScene || !clickCoords || targetSceneId === "") {
+    toast({
+      title: "Gabim",
+      description: "Kliko në panoramë dhe zgjidh skenën destinacion.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    try {
-      const { error } = await supabase.from("virtual_tour_hotspots").insert({
+  try {
+    const { data: insertedHotspot, error } = await supabase
+      .from("virtual_tour_hotspots")
+      .insert({
         scene_id: selectedScene.id,
         to_scene_id: Number(targetSceneId),
         yaw: clickCoords.yaw,
         pitch: clickCoords.pitch,
         label: hotspotLabel.trim() || null,
-      });
+      })
+      .select("*")
+      .single();
 
-      if (error) throw error;
+    if (error) throw error;
 
-      const currentSceneId = selectedScene.id;
+    // update lokal që hotspot-i i ri të shtohet menjëherë pa humbur skenën aktive
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.id === selectedScene.id
+          ? {
+              ...scene,
+              hotspots: [...scene.hotspots, insertedHotspot as Hotspot],
+            }
+          : scene,
+      ),
+    );
 
-      toast({ title: "Sukses", description: "Hotspot-i u shtua." });
+    // hiq vetëm pikën e përkohshme që të mund të klikosh menjëherë për hotspot tjetër
+    setClickCoords(null);
 
-      setClickCoords(null);
-      setTargetSceneId("");
-      setHotspotLabel("");
-
-      await refreshTour();
-      setSelectedSceneId(currentSceneId);
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Shtimi i hotspot-it dështoi.",
-        variant: "destructive",
-      });
+    if (editorViewerRef.current) {
+      const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
+      if (markersPlugin?.getMarker("temp-new-hotspot")) {
+        markersPlugin.removeMarker("temp-new-hotspot");
+      }
     }
-  };
+
+    // mos i reset target/label që të shtosh disa hotspot-e shpejt
+    toast({
+      title: "Sukses",
+      description: "Hotspot-i u shtua. Kliko përsëri në panoramë për hotspot tjetër.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Shtimi i hotspot-it dështoi.",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleDeleteHotspot = async (hotspotId: number) => {
     if (!confirm("A dëshironi ta fshini këtë hotspot?")) return;
@@ -736,8 +757,8 @@ export default function AdminVirtualTour() {
                   <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
                     <div ref={editorContainerRef} className="w-full h-full" />
                     <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-                      Kliko saktë aty ku dëshiron hotspot-in
-                    </div>
+						Kliko në panoramë për hotspot të ri. Mund të shtosh disa hotspot-e në të njëjtën skenë.
+					</div>
                   </div>
                 </div>
 
@@ -841,7 +862,9 @@ export default function AdminVirtualTour() {
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {selectedScene.hotspots.map((hotspot) => {
+                    {[...selectedScene.hotspots]
+					.sort((a, b) => b.id - a.id)
+					.map((hotspot) => {
                       const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
 
                       return (
