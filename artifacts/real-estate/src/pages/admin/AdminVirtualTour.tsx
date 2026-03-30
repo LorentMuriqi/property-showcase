@@ -64,6 +64,79 @@ type HotspotFormState = {
   pitch: number;
 };
 
+const HOTSPOT_HTML = `
+  <div style="
+    width: 42px;
+    height: 42px;
+    border-radius: 9999px;
+    background: rgba(0,0,0,0.55);
+    border: 3px solid #d4af37;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:0 8px 20px rgba(0,0,0,.35);
+    cursor:pointer;
+  ">
+    ↗
+  </div>
+`;
+
+const EDITING_HOTSPOT_HTML = `
+  <div style="
+    width: 42px;
+    height: 42px;
+    border-radius: 9999px;
+    background: rgba(239,68,68,0.8);
+    border: 3px solid white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:0 8px 20px rgba(0,0,0,.35);
+    cursor:pointer;
+  ">
+    ↗
+  </div>
+`;
+
+const TEMP_HOTSPOT_HTML = `
+  <div style="
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    background: #ef4444;
+    border: 3px solid white;
+    box-shadow: 0 0 0 10px rgba(239,68,68,.18);
+    position: relative;
+  ">
+    <div style="
+      position:absolute;
+      top:50%;
+      left:50%;
+      width:2px;
+      height:28px;
+      background:white;
+      transform:translate(-50%, -50%);
+      opacity:.9;
+    "></div>
+    <div style="
+      position:absolute;
+      top:50%;
+      left:50%;
+      width:28px;
+      height:2px;
+      background:white;
+      transform:translate(-50%, -50%);
+      opacity:.9;
+    "></div>
+  </div>
+`;
+
 export default function AdminVirtualTour() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -86,10 +159,10 @@ export default function AdminVirtualTour() {
   });
 
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
-const selectedScene = useMemo(() => {
-  if (selectedSceneId === null) return null;
-  return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
-}, [scenes, selectedSceneId]);
+  const selectedScene = useMemo(() => {
+    if (selectedSceneId === null) return null;
+    return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
+  }, [scenes, selectedSceneId]);
 
   const [clickCoords, setClickCoords] = useState<{ yaw: number; pitch: number } | null>(null);
   const [targetSceneId, setTargetSceneId] = useState<number | "">("");
@@ -105,8 +178,17 @@ const selectedScene = useMemo(() => {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
-  const isPlacingHotspotRef = useRef(false);
-  const isEditingHotspotPlacementRef = useRef(false);
+
+  const toNumber = (value: any, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const toNullableNumber = (value: any) => {
+    if (value === null || value === undefined || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -114,124 +196,19 @@ const selectedScene = useMemo(() => {
     }
   }, [authLoading, isAdmin, setLocation]);
 
-  useEffect(() => {
-    isPlacingHotspotRef.current = isPlacingHotspot;
-  }, [isPlacingHotspot]);
-
-  useEffect(() => {
-    isEditingHotspotPlacementRef.current = isEditingHotspotPlacement;
-  }, [isEditingHotspotPlacement]);
-
-  const renderEditorHotspots = (
-    viewer: Viewer,
-    scene: Scene,
-    allScenes: Scene[],
-    tempCoords?: { yaw: number; pitch: number } | null,
-    editingCoords?: { yaw: number; pitch: number } | null,
-  ) => {
-    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
-    if (!markersPlugin) return;
-
-    const existingMarkers = markersPlugin.getMarkers?.() || [];
-    existingMarkers.forEach((marker: any) => {
-      markersPlugin.removeMarker(marker.id);
-    });
-
-    scene.hotspots.forEach((hotspot) => {
-      const target = allScenes.find((s) => s.id === hotspot.to_scene_id);
-
-      const isCurrentlyEditing = editingHotspot?.id === hotspot.id;
-
-      markersPlugin.addMarker({
-        id: `hs-${hotspot.id}`,
-        longitude: isCurrentlyEditing && editingCoords ? editingCoords.yaw : hotspot.yaw,
-        latitude: isCurrentlyEditing && editingCoords ? editingCoords.pitch : hotspot.pitch,
-        html: `
-          <div style="
-            width: 42px;
-            height: 42px;
-            border-radius: 9999px;
-            background: ${isCurrentlyEditing ? "rgba(239,68,68,0.75)" : "rgba(0,0,0,0.55)"};
-            border: 3px solid ${isCurrentlyEditing ? "#ffffff" : "#d4af37"};
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            color:white;
-            font-size:12px;
-            font-weight:700;
-            box-shadow:0 8px 20px rgba(0,0,0,.35);
-            cursor:pointer;
-          ">
-            ↗
-          </div>
-        `,
-        tooltip: hotspot.label || target?.title || "Lidhje",
-      });
-    });
-
-    if (tempCoords) {
-      markersPlugin.addMarker({
-        id: "temp-new-hotspot",
-        longitude: tempCoords.yaw,
-        latitude: tempCoords.pitch,
-        html: `
-          <div style="
-            width: 24px;
-            height: 24px;
-            border-radius: 9999px;
-            background: #ef4444;
-            border: 3px solid white;
-            box-shadow: 0 0 0 10px rgba(239,68,68,.18);
-            position: relative;
-          ">
-            <div style="
-              position:absolute;
-              top:50%;
-              left:50%;
-              width:2px;
-              height:28px;
-              background:white;
-              transform:translate(-50%, -50%);
-              opacity:.9;
-            "></div>
-            <div style="
-              position:absolute;
-              top:50%;
-              left:50%;
-              width:28px;
-              height:2px;
-              background:white;
-              transform:translate(-50%, -50%);
-              opacity:.9;
-            "></div>
-          </div>
-        `,
-        tooltip: "Pozicioni i hotspot-it të ri",
-      });
-    }
-  };
-
   const removeTempHotspotMarker = () => {
     if (!editorViewerRef.current) return;
     const markersPlugin = editorViewerRef.current.getPlugin(MarkersPlugin) as any;
     if (!markersPlugin) return;
 
-    const tempMarker = markersPlugin.getMarker?.("temp-new-hotspot");
-    if (tempMarker) {
+    if (markersPlugin.getMarker?.("temp-new-hotspot")) {
       markersPlugin.removeMarker("temp-new-hotspot");
     }
+
+    if (markersPlugin.getMarker?.("temp-edit-hotspot")) {
+      markersPlugin.removeMarker("temp-edit-hotspot");
+    }
   };
-
-const toNumber = (value: any, fallback = 0) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-const toNullableNumber = (value: any) => {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
 
   const refreshTour = async () => {
     if (!projectId) return;
@@ -268,8 +245,8 @@ const toNullableNumber = (value: any) => {
       return;
     }
 
-const sceneIds = (scenesData || []).map((scene) => toNumber(scene.id));
-const hotspotsMap = new Map<number, Hotspot[]>();
+    const sceneIds = (scenesData || []).map((scene) => toNumber(scene.id));
+    const hotspotsMap = new Map<number, Hotspot[]>();
 
     if (sceneIds.length > 0) {
       const { data: hotspotsData, error: hotspotsError } = await supabase
@@ -284,41 +261,40 @@ const hotspotsMap = new Map<number, Hotspot[]>();
           variant: "destructive",
         });
       } else {
-for (const hotspot of hotspotsData || []) {
-  const normalizedHotspot: Hotspot = {
-    id: toNumber(hotspot.id),
-    scene_id: toNumber(hotspot.scene_id),
-    to_scene_id: toNumber(hotspot.to_scene_id),
-    yaw: Number(hotspot.yaw),
-    pitch: Number(hotspot.pitch),
-    label: hotspot.label || null,
-  };
+        for (const hotspot of hotspotsData || []) {
+          const normalizedHotspot: Hotspot = {
+            id: toNumber(hotspot.id),
+            scene_id: toNumber(hotspot.scene_id),
+            to_scene_id: toNumber(hotspot.to_scene_id),
+            yaw: Number(hotspot.yaw),
+            pitch: Number(hotspot.pitch),
+            label: hotspot.label || null,
+          };
 
-  if (!hotspotsMap.has(normalizedHotspot.scene_id)) {
-    hotspotsMap.set(normalizedHotspot.scene_id, []);
-  }
-
-  hotspotsMap.get(normalizedHotspot.scene_id)!.push(normalizedHotspot);
-}
+          if (!hotspotsMap.has(normalizedHotspot.scene_id)) {
+            hotspotsMap.set(normalizedHotspot.scene_id, []);
+          }
+          hotspotsMap.get(normalizedHotspot.scene_id)!.push(normalizedHotspot);
+        }
       }
     }
 
-const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
-  const normalizedId = toNumber(scene.id);
+    const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
+      const normalizedId = toNumber(scene.id);
 
-  return {
-    id: normalizedId,
-    property_id: scene.property_id,
-    title: scene.title || "",
-    image_url: (scene.image_url || "").trim(),
-    thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
-    is_default: !!scene.is_default,
-    sort_order: toNumber(scene.sort_order, 0),
-    position_x: toNullableNumber(scene.position_x),
-    position_y: toNullableNumber(scene.position_y),
-    hotspots: hotspotsMap.get(normalizedId) || [],
-  };
-});
+      return {
+        id: normalizedId,
+        property_id: scene.property_id,
+        title: scene.title || "",
+        image_url: (scene.image_url || "").trim(),
+        thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
+        is_default: !!scene.is_default,
+        sort_order: toNumber(scene.sort_order, 0),
+        position_x: toNullableNumber(scene.position_x),
+        position_y: toNullableNumber(scene.position_y),
+        hotspots: hotspotsMap.get(normalizedId) || [],
+      };
+    });
 
     setProject(projectData || null);
     setScenes(normalizedScenes);
@@ -328,15 +304,15 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
       return;
     }
 
-if (currentSelectedSceneId !== null) {
-  const existingSelected = normalizedScenes.find(
-    (scene) => Number(scene.id) === Number(currentSelectedSceneId),
-  );
-  if (existingSelected) {
-    setSelectedSceneId(Number(existingSelected.id));
-    return;
-  }
-}
+    if (currentSelectedSceneId !== null) {
+      const existingSelected = normalizedScenes.find(
+        (scene) => Number(scene.id) === Number(currentSelectedSceneId),
+      );
+      if (existingSelected) {
+        setSelectedSceneId(Number(existingSelected.id));
+        return;
+      }
+    }
 
     const defaultScene =
       normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
@@ -353,6 +329,16 @@ if (currentSelectedSceneId !== null) {
 
     load();
   }, [authLoading, isAdmin, projectId]);
+
+  useEffect(() => {
+    setClickCoords(null);
+    setIsPlacingHotspot(false);
+    setTargetSceneId("");
+    setHotspotLabel("");
+    setEditingHotspot(null);
+    setIsEditingHotspotPlacement(false);
+    setIsEditHotspotModalOpen(false);
+  }, [selectedSceneId]);
 
   const openCreateScene = () => {
     setEditingSceneId(null);
@@ -378,18 +364,18 @@ if (currentSelectedSceneId !== null) {
     setIsSceneModalOpen(true);
   };
 
-const openEditHotspot = (hotspot: Hotspot) => {
-  setEditingHotspot({
-    id: hotspot.id,
-    scene_id: hotspot.scene_id,
-    to_scene_id: hotspot.to_scene_id,
-    label: hotspot.label || "",
-    yaw: hotspot.yaw,
-    pitch: hotspot.pitch,
-  });
-  setIsEditingHotspotPlacement(false);
-  setIsEditHotspotModalOpen(true);
-};
+  const openEditHotspot = (hotspot: Hotspot) => {
+    setEditingHotspot({
+      id: hotspot.id,
+      scene_id: hotspot.scene_id,
+      to_scene_id: hotspot.to_scene_id,
+      label: hotspot.label || "",
+      yaw: hotspot.yaw,
+      pitch: hotspot.pitch,
+    });
+    setIsEditingHotspotPlacement(false);
+    setIsEditHotspotModalOpen(true);
+  };
 
   const handleSaveScene = async () => {
     try {
@@ -520,6 +506,10 @@ const openEditHotspot = (hotspot: Hotspot) => {
       return;
     }
 
+    setIsEditHotspotModalOpen(false);
+    setEditingHotspot(null);
+    setIsEditingHotspotPlacement(false);
+
     setIsPlacingHotspot(true);
     setClickCoords(null);
     removeTempHotspotMarker();
@@ -561,12 +551,21 @@ const openEditHotspot = (hotspot: Hotspot) => {
 
       if (error) throw error;
 
+      const normalizedInsertedHotspot: Hotspot = {
+        id: toNumber(insertedHotspot.id),
+        scene_id: toNumber(insertedHotspot.scene_id),
+        to_scene_id: toNumber(insertedHotspot.to_scene_id),
+        yaw: Number(insertedHotspot.yaw),
+        pitch: Number(insertedHotspot.pitch),
+        label: insertedHotspot.label || null,
+      };
+
       setScenes((prev) =>
         prev.map((scene) =>
           scene.id === selectedScene.id
             ? {
                 ...scene,
-                hotspots: [...scene.hotspots, insertedHotspot as Hotspot],
+                hotspots: [...scene.hotspots, normalizedInsertedHotspot],
               }
             : scene,
         ),
@@ -592,7 +591,10 @@ const openEditHotspot = (hotspot: Hotspot) => {
   const handleStartEditHotspotPlacement = () => {
     if (!editingHotspot) return;
 
+    setIsPlacingHotspot(false);
+    setClickCoords(null);
     setIsEditingHotspotPlacement(true);
+    removeTempHotspotMarker();
 
     toast({
       title: "Ndrysho pozicionin",
@@ -721,17 +723,16 @@ const openEditHotspot = (hotspot: Hotspot) => {
 
   useEffect(() => {
     if (
-  !selectedScene ||
-  !editorContainerRef.current ||
-  !selectedScene.image_url ||
-  String(selectedScene.image_url).trim() === ""
-) {
-  return;
-}
+      !selectedScene ||
+      !editorContainerRef.current ||
+      !selectedScene.image_url ||
+      String(selectedScene.image_url).trim() === ""
+    ) {
+      return;
+    }
 
     setViewerError("");
-    setClickCoords(null);
-    setIsPlacingHotspot(false);
+    removeTempHotspotMarker();
 
     if (editorViewerRef.current) {
       editorViewerRef.current.destroy();
@@ -751,6 +752,60 @@ const openEditHotspot = (hotspot: Hotspot) => {
       });
 
       editorViewerRef.current = viewer;
+      const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
+
+      selectedScene.hotspots.forEach((hotspot) => {
+        const target = scenes.find((scene) => scene.id === hotspot.to_scene_id);
+        const isEditingThisHotspot = editingHotspot?.id === hotspot.id;
+
+        markersPlugin.addMarker({
+          id: `hs-${hotspot.id}`,
+          longitude: isEditingThisHotspot ? editingHotspot.yaw : hotspot.yaw,
+          latitude: isEditingThisHotspot ? editingHotspot.pitch : hotspot.pitch,
+          html: isEditingThisHotspot ? EDITING_HOTSPOT_HTML : HOTSPOT_HTML,
+          tooltip: hotspot.label || target?.title || "Lidhje",
+        });
+      });
+
+      if (isPlacingHotspot && clickCoords) {
+        markersPlugin.addMarker({
+          id: "temp-new-hotspot",
+          longitude: clickCoords.yaw,
+          latitude: clickCoords.pitch,
+          html: TEMP_HOTSPOT_HTML,
+          tooltip: "Pozicioni i hotspot-it të ri",
+        });
+      }
+
+      if (isEditingHotspotPlacement && editingHotspot) {
+        markersPlugin.addMarker({
+          id: "temp-edit-hotspot",
+          longitude: editingHotspot.yaw,
+          latitude: editingHotspot.pitch,
+          html: TEMP_HOTSPOT_HTML,
+          tooltip: "Pozicioni i ri i hotspot-it",
+        });
+      }
+
+      viewer.addEventListener("click", ({ data }: any) => {
+        if (isEditingHotspotPlacement && editingHotspot) {
+          setEditingHotspot((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  yaw: data.yaw,
+                  pitch: data.pitch,
+                }
+              : prev,
+          );
+          setIsEditingHotspotPlacement(false);
+          return;
+        }
+
+        if (!isPlacingHotspot) return;
+
+        setClickCoords({ yaw: data.yaw, pitch: data.pitch });
+      });
 
       viewer.addEventListener("panorama-error", () => {
         setViewerError(
@@ -770,138 +825,95 @@ const openEditHotspot = (hotspot: Hotspot) => {
       }
       editorViewerRef.current = null;
     };
-  }, [selectedSceneId]);
+  }, [selectedScene, scenes, isPlacingHotspot, clickCoords, editingHotspot, isEditingHotspotPlacement]);
 
-  useEffect(() => {
-    const viewer = editorViewerRef.current;
-    if (!viewer) return;
-
-    const handleViewerClick = ({ data }: any) => {
-      if (isEditingHotspotPlacementRef.current && editingHotspot) {
-        setEditingHotspot((prev) =>
-          prev
-            ? {
-                ...prev,
-                yaw: data.yaw,
-                pitch: data.pitch,
-              }
-            : prev,
-        );
-        setIsEditingHotspotPlacement(false);
-        return;
-      }
-
-      if (!isPlacingHotspotRef.current) return;
-
-      setClickCoords({ yaw: data.yaw, pitch: data.pitch });
-    };
-
-    viewer.addEventListener("click", handleViewerClick);
-
-    return () => {
-      viewer.removeEventListener("click", handleViewerClick);
-    };
-  }, [selectedSceneId, editingHotspot]);
-
-useEffect(() => {
-  if (!editorViewerRef.current || !selectedScene) return;
-
-  renderEditorHotspots(
-    editorViewerRef.current,
-    selectedScene,
-    scenes,
-    clickCoords,
-    editingHotspot ? { yaw: editingHotspot.yaw, pitch: editingHotspot.pitch } : null,
-  );
-}, [selectedScene, scenes, clickCoords, editingHotspot]);
-
-const virtualTourNodes = useMemo(() => {
-  const validScenes = scenes.filter(
-    (scene) => scene.image_url && String(scene.image_url).trim() !== "",
-  );
-
-  const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
-
-  return validScenes.map((scene) => ({
-    id: String(scene.id),
-    panorama: scene.image_url,
-    name: scene.title,
-    thumbnail: scene.thumbnail_url || scene.image_url,
-    links: scene.hotspots
-      .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
-      .map((hotspot) => ({
-        nodeId: String(hotspot.to_scene_id),
-        position: {
-          yaw: hotspot.yaw,
-          pitch: hotspot.pitch,
-        },
-        name:
-          hotspot.label ||
-          validScenes.find((target) => Number(target.id) === Number(hotspot.to_scene_id))
-            ?.title ||
-          "Lidhje",
-      })),
-  }));
-}, [scenes]);
-
-  useEffect(() => {
-  if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
-
-  if (previewViewerRef.current) {
-    previewViewerRef.current.destroy();
-    previewViewerRef.current = null;
-  }
-
-  const validNodeIds = new Set(virtualTourNodes.map((node) => node.id));
-
-  const defaultScene =
-    scenes.find(
-      (scene) =>
-        scene.is_default &&
-        scene.image_url &&
-        String(scene.image_url).trim() !== "" &&
-        validNodeIds.has(String(scene.id)),
-    ) ||
-    scenes.find(
-      (scene) =>
-        scene.image_url &&
-        String(scene.image_url).trim() !== "" &&
-        validNodeIds.has(String(scene.id)),
+  const virtualTourNodes = useMemo(() => {
+    const validScenes = scenes.filter(
+      (scene) => scene.image_url && String(scene.image_url).trim() !== "",
     );
 
-  if (!defaultScene) return;
+    const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
 
-  let viewer: Viewer | null = null;
-
-  try {
-    viewer = new Viewer({
-      container: previewContainerRef.current,
-      navbar: ["zoom", "move", "fullscreen"],
-      plugins: [
-        [
-          VirtualTourPlugin,
-          {
-            positionMode: "manual",
-            renderMode: "3d",
-            startNodeId: String(defaultScene.id),
-            nodes: virtualTourNodes,
+    return validScenes.map((scene) => ({
+      id: String(scene.id),
+      panorama: scene.image_url,
+      name: scene.title,
+      thumbnail: scene.thumbnail_url || scene.image_url,
+      links: scene.hotspots
+        .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
+        .map((hotspot) => ({
+          nodeId: String(hotspot.to_scene_id),
+          position: {
+            yaw: hotspot.yaw,
+            pitch: hotspot.pitch,
           },
-        ],
-      ],
-    });
+          name:
+            hotspot.label ||
+            validScenes.find((target) => Number(target.id) === Number(hotspot.to_scene_id))
+              ?.title ||
+            "Lidhje",
+        })),
+    }));
+  }, [scenes]);
 
-    previewViewerRef.current = viewer;
-  } catch (error) {
-    console.error("Preview viewer init error:", error);
-  }
+  useEffect(() => {
+    if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
 
-  return () => {
-    if (viewer) {
-      viewer.destroy();
+    if (previewViewerRef.current) {
+      previewViewerRef.current.destroy();
+      previewViewerRef.current = null;
     }
-    previewViewerRef.current = null;
-  };
-}, [virtualTourNodes, scenes]);
+
+    const validNodeIds = new Set(virtualTourNodes.map((node) => node.id));
+
+    const defaultScene =
+      scenes.find(
+        (scene) =>
+          scene.is_default &&
+          scene.image_url &&
+          String(scene.image_url).trim() !== "" &&
+          validNodeIds.has(String(scene.id)),
+      ) ||
+      scenes.find(
+        (scene) =>
+          scene.image_url &&
+          String(scene.image_url).trim() !== "" &&
+          validNodeIds.has(String(scene.id)),
+      );
+
+    if (!defaultScene) return;
+
+    let viewer: Viewer | null = null;
+
+    try {
+      viewer = new Viewer({
+        container: previewContainerRef.current,
+        navbar: ["zoom", "move", "fullscreen"],
+        plugins: [
+          [
+            VirtualTourPlugin,
+            {
+              positionMode: "manual",
+              renderMode: "3d",
+              startNodeId: String(defaultScene.id),
+              nodes: virtualTourNodes,
+            },
+          ],
+        ],
+      });
+
+      previewViewerRef.current = viewer;
+    } catch (error) {
+      console.error("Preview viewer init error:", error);
+    }
+
+    return () => {
+      if (viewer) {
+        viewer.destroy();
+      }
+      previewViewerRef.current = null;
+    };
+  }, [virtualTourNodes, scenes]);
 
   if (authLoading) {
     return <div className="min-h-screen bg-background" />;
@@ -964,7 +976,7 @@ const virtualTourNodes = useMemo(() => {
                 .sort((a, b) => a.sort_order - b.sort_order)
                 .map((scene) => (
                   <div
-                    key={scene.id}
+                    key={String(scene.id)}
                     className={`rounded-2xl overflow-hidden border bg-card ${
                       selectedSceneId === scene.id
                         ? "border-primary ring-2 ring-primary/20"
@@ -1089,7 +1101,7 @@ const virtualTourNodes = useMemo(() => {
                         {scenes
                           .filter((scene) => scene.id !== selectedScene.id)
                           .map((scene) => (
-                            <option key={scene.id} value={scene.id}>
+                            <option key={String(scene.id)} value={scene.id}>
                               {scene.title}
                             </option>
                           ))}
@@ -1186,7 +1198,7 @@ const virtualTourNodes = useMemo(() => {
 
                         return (
                           <div
-                            key={hotspot.id}
+                            key={String(hotspot.id)}
                             className="rounded-xl border border-white/5 bg-black/25 p-3 flex items-center justify-between gap-3"
                           >
                             <div className="min-w-0">
@@ -1254,7 +1266,7 @@ const virtualTourNodes = useMemo(() => {
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((scene) => (
                     <div
-                      key={scene.id}
+                      key={String(scene.id)}
                       className="rounded-xl overflow-hidden border border-white/10 bg-white/5"
                     >
                       <div className="aspect-[4/3] bg-black">
@@ -1306,7 +1318,7 @@ const virtualTourNodes = useMemo(() => {
 
                 return (
                   <div
-                    key={scene.id}
+                    key={String(scene.id)}
                     draggable
                     title={scene.title}
                     className={`absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-move shadow-lg z-10 ${
@@ -1346,7 +1358,7 @@ const virtualTourNodes = useMemo(() => {
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((scene) => (
                     <div
-                      key={scene.id}
+                      key={String(scene.id)}
                       className="flex items-center gap-3 rounded-xl bg-black/20 p-2.5 border border-white/5"
                     >
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
@@ -1524,7 +1536,7 @@ const virtualTourNodes = useMemo(() => {
                   {scenes
                     .filter((scene) => scene.id !== selectedSceneId)
                     .map((scene) => (
-                      <option key={scene.id} value={scene.id}>
+                      <option key={String(scene.id)} value={scene.id}>
                         {scene.title}
                       </option>
                     ))}
