@@ -264,8 +264,8 @@ const hasVirtualTour = !!(
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
-    sold: "Shitur",
-    rented: "Dhënë me Qira",
+    // sold: "Shitur",
+    // rented: "Dhënë me Qira",
     for_rent: "Me Qira",
   };
 
