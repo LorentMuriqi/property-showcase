@@ -152,7 +152,7 @@ const toNullableNumber = (value: any) => {
 };
 
 export default function AdminVirtualTour() {
-  const { isAdmin, isLoading: authLoading } = useAuth();
+  const { isAdmin, permissions, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const projectId = id as string;
@@ -193,11 +193,21 @@ export default function AdminVirtualTour() {
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      setLocation("/admin/login");
-    }
-  }, [authLoading, isAdmin, setLocation]);
+
+
+useEffect(() => {
+  if (authLoading) return;
+
+  if (!isAdmin) {
+    setLocation("/admin/login");
+    return;
+  }
+
+  if (!permissions.canManageVirtualTours) {
+    setLocation("/admin");
+  }
+}, [authLoading, isAdmin, permissions, setLocation]);
+
 
   const refreshTour = async () => {
     if (!projectId) return;

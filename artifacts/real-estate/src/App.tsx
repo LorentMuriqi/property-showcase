@@ -15,6 +15,8 @@ import AdminLogin from "@/pages/admin/AdminLogin";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminProjectForm from "@/pages/admin/AdminProjectForm";
 import AdminVirtualTour from "@/pages/admin/AdminVirtualTour";
+import AdminUsers from "@/pages/admin/AdminUsers";
+import AdminRules from "@/pages/admin/AdminRules";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,12 +36,14 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       
-      {/* Admin Routes */}
-      <Route path="/admin/login" component={AdminLogin} />
-      <Route path="/admin" component={AdminDashboard} />
-      <Route path="/admin/projects/new" component={AdminProjectForm} />
-      <Route path="/admin/projects/:id/edit" component={AdminProjectForm} />
-      <Route path="/admin/projects/:id/virtual-tour" component={AdminVirtualTour} />
+{/* Admin Routes */}
+<Route path="/admin/login" component={AdminLogin} />
+<Route path="/admin" component={AdminDashboard} />
+<Route path="/admin/users" component={AdminUsers} />
+<Route path="/admin/rules" component={AdminRules} />
+<Route path="/admin/projects/new" component={AdminProjectForm} />
+<Route path="/admin/projects/:id/edit" component={AdminProjectForm} />
+<Route path="/admin/projects/:id/virtual-tour" component={AdminVirtualTour} />
       
       <Route component={NotFound} />
     </Switch>

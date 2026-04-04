@@ -28,7 +28,13 @@ function getComputedListingStatus(project: any): AdminListingStatus {
 }
 
 export default function AdminDashboard() {
-  const { isAdmin, isLoading: authLoading, logout } = useAuth();
+  const {
+  isAdmin,
+  isSuperAdmin,
+  permissions,
+  isLoading: authLoading,
+  logout,
+} = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -346,20 +352,39 @@ const handleDelete = async (id: number | string, title: string) => {
           </span>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
-          <Link
-            href="/admin"
-            className="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-xl font-medium"
-          >
-            <Home size={18} /> Paneli Administrativ
-          </Link>
-          <Link
-            href="/"
-            className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
-          >
-            <ExternalLink size={18} /> Shiko Faqen
-          </Link>
-        </nav>
+<nav className="flex-1 p-4 space-y-2">
+  <Link
+    href="/admin"
+    className="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-xl font-medium"
+  >
+    <Home size={18} /> Properties
+  </Link>
+
+  {isSuperAdmin && (
+    <>
+      <Link
+        href="/admin/users"
+        className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
+      >
+        <ExternalLink size={18} /> Users
+      </Link>
+
+      <Link
+        href="/admin/rules"
+        className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
+      >
+        <ExternalLink size={18} /> Rules
+      </Link>
+    </>
+  )}
+
+  <Link
+    href="/"
+    className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
+  >
+    <ExternalLink size={18} /> Shiko Faqen
+  </Link>
+</nav>
 
         <div className="p-4 border-t border-white/5">
           <button
@@ -389,12 +414,14 @@ const handleDelete = async (id: number | string, title: string) => {
             </p>
           </div>
 
-          <Link
-            href="/admin/projects/new"
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors"
-          >
-            <Plus size={18} /> Projekt i Ri
-          </Link>
+{permissions.canCreateProperty && (
+  <Link
+    href="/admin/projects/new"
+    className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors"
+  >
+    <Plus size={18} /> Projekt i Ri
+  </Link>
+)}
         </div>
 
         {isLoading ? (
@@ -492,83 +519,89 @@ const handleDelete = async (id: number | string, title: string) => {
                         </td>
 
                         <td className="p-4 text-right space-x-2">
-                          {listingStatus === "active" && (
-                            <>
-                              <button
-                                onClick={() => handlePause(project)}
-                                disabled={actionId === project.id}
-                                className="p-2 text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg transition-colors inline-flex"
-                                title="Pezullo projektin"
-                              >
-                                <EyeOff size={16} />
-                              </button>
+{listingStatus === "active" && permissions.canEditProperty && (
+  <>
+    <button
+      onClick={() => handlePause(project)}
+      disabled={actionId === project.id}
+      className="p-2 text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg transition-colors inline-flex"
+      title="Pezullo projektin"
+    >
+      <EyeOff size={16} />
+    </button>
 
-                              <button
-                                onClick={() => handleExpire(project)}
-                                disabled={actionId === project.id}
-                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
-                                title="Skado projektin"
-                              >
-                                <Ban size={16} />
-                              </button>
-                            </>
-                          )}
+    <button
+      onClick={() => handleExpire(project)}
+      disabled={actionId === project.id}
+      className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
+      title="Skado projektin"
+    >
+      <Ban size={16} />
+    </button>
+  </>
+)}
 
-                          {listingStatus === "paused" && (
-                            <>
-                              <button
-                                onClick={() => handleResume(project)}
-                                disabled={actionId === project.id}
-                                className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-                                title="Riaktivizo projektin"
-                              >
-                                <RefreshCw size={16} />
-                              </button>
+{listingStatus === "paused" && permissions.canEditProperty && (
+  <>
+    <button
+      onClick={() => handleResume(project)}
+      disabled={actionId === project.id}
+      className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+      title="Riaktivizo projektin"
+    >
+      <RefreshCw size={16} />
+    </button>
 
-                              <button
-                                onClick={() => handleExpire(project)}
-                                disabled={actionId === project.id}
-                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
-                                title="Skado projektin"
-                              >
-                                <Ban size={16} />
-                              </button>
-                            </>
-                          )}
+    <button
+      onClick={() => handleExpire(project)}
+      disabled={actionId === project.id}
+      className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
+      title="Skado projektin"
+    >
+      <Ban size={16} />
+    </button>
+  </>
+)}
 
-                          {listingStatus === "expired" && (
-                            <button
-                              onClick={() => handleResume(project)}
-                              disabled={actionId === project.id}
-                              className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-                              title="Riaktivizo projektin"
-                            >
-                              <RefreshCw size={16} />
-                            </button>
-                          )}
+{listingStatus === "expired" && permissions.canEditProperty && (
+  <button
+    onClick={() => handleResume(project)}
+    disabled={actionId === project.id}
+    className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+    title="Riaktivizo projektin"
+  >
+    <RefreshCw size={16} />
+  </button>
+)}
 
-                          <Link href={`/admin/projects/${project.id}/virtual-tour`}>
-                            <button
-                              className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-                              title="Menaxho Turin Virtual"
-                            >
-                              <Focus size={16} />
-                            </button>
-                          </Link>
+{permissions.canManageVirtualTours && (
+  <Link href={`/admin/projects/${project.id}/virtual-tour`}>
+    <button
+      className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+      title="Menaxho Turin Virtual"
+    >
+      <Focus size={16} />
+    </button>
+  </Link>
+)}
 
-                          <Link href={`/admin/projects/${project.id}/edit`}>
-                            <button className="p-2 text-muted-foreground hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors inline-flex">
-                              <Edit size={16} />
-                            </button>
-                          </Link>
+{permissions.canEditProperty && (
+  <Link href={`/admin/projects/${project.id}/edit`}>
+    <button className="p-2 text-muted-foreground hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors inline-flex">
+      <Edit size={16} />
+    </button>
+  </Link>
+)}
 
-                          <button
-                            onClick={() => handleDelete(project.id, project.title)}
-                            disabled={isDeleting}
-                            className="p-2 text-destructive hover:text-white bg-destructive/10 hover:bg-destructive rounded-lg transition-colors inline-flex"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+{permissions.canDeleteProperty && (
+  <button
+    onClick={() => handleDelete(project.id, project.title)}
+    disabled={isDeleting}
+    className="p-2 text-destructive hover:text-white bg-destructive/10 hover:bg-destructive rounded-lg transition-colors inline-flex"
+  >
+    <Trash2 size={16} />
+  </button>
+)}
                         </td>
                       </tr>
                     );

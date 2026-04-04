@@ -30,7 +30,7 @@ const Input = ({ label, ...props }: any) => (
 );
 
 export default function AdminProjectForm() {
-  const { isAdmin, isLoading: authLoading } = useAuth();
+  const { isAdmin, permissions, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const isEditing = !!id;
@@ -40,11 +40,27 @@ export default function AdminProjectForm() {
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      setLocation("/admin/login");
-    }
-  }, [authLoading, isAdmin, setLocation]);
+
+useEffect(() => {
+  if (authLoading) return;
+
+  if (!isAdmin) {
+    setLocation("/admin/login");
+    return;
+  }
+
+  if (!isEditing && !permissions.canCreateProperty) {
+    setLocation("/admin");
+    return;
+  }
+
+  if (isEditing && !permissions.canEditProperty) {
+    setLocation("/admin");
+    return;
+  }
+}, [authLoading, isAdmin, isEditing, permissions, setLocation]);
+
+
 
   const {
     register,
@@ -163,6 +179,25 @@ export default function AdminProjectForm() {
 
   const onSubmit = async (data: any) => {
     try {
+		
+		    if (!isEditing && !permissions.canCreateProperty) {
+      toast({
+        title: "Pa akses",
+        description: "Nuk ke leje për të krijuar prona.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isEditing && !permissions.canEditProperty) {
+      toast({
+        title: "Pa akses",
+        description: "Nuk ke leje për të edituar prona.",
+        variant: "destructive",
+      });
+      return;
+    }
+		
       setIsSaving(true);
 
       const cleanedImages = (data.images || []).filter(
