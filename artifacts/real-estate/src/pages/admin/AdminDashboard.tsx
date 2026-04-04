@@ -105,35 +105,74 @@ export default function AdminDashboard() {
     fetchProjects();
   }, [authLoading, isAdmin]);
 
-  const handleDelete = async (id: number | string, title: string) => {
-    if (!confirm(`A jeni i sigurt që dëshironi të fshini përgjithmonë "${title}"?`)) {
-      return;
+const handleDelete = async (id: number | string, title: string) => {
+  if (!confirm(`A jeni i sigurt që dëshironi të fshini përgjithmonë "${title}"?`)) {
+    return;
+  }
+
+  try {
+    setIsDeleting(true);
+
+    // 1. Merr të gjitha skenat e lidhura me këtë pronë
+    const { data: scenes, error: scenesError } = await supabase
+      .from("virtual_tour_scenes")
+      .select("id")
+      .eq("property_id", id);
+
+    if (scenesError) throw scenesError;
+
+    const sceneIds = (scenes || []).map((scene) => scene.id);
+
+    // 2. Fshi hotspot-et e lidhura me këto skena
+    if (sceneIds.length > 0) {
+      const { error: hotspotsBySceneError } = await supabase
+        .from("virtual_tour_hotspots")
+        .delete()
+        .in("scene_id", sceneIds);
+
+      if (hotspotsBySceneError) throw hotspotsBySceneError;
+
+      const { error: hotspotsByTargetError } = await supabase
+        .from("virtual_tour_hotspots")
+        .delete()
+        .in("to_scene_id", sceneIds);
+
+      if (hotspotsByTargetError) throw hotspotsByTargetError;
+
+      // 3. Fshi skenat
+      const { error: scenesDeleteError } = await supabase
+        .from("virtual_tour_scenes")
+        .delete()
+        .in("id", sceneIds);
+
+      if (scenesDeleteError) throw scenesDeleteError;
     }
 
-    try {
-      setIsDeleting(true);
+    // 4. Fshi pronën
+    const { error: propertyDeleteError } = await supabase
+      .from("properties")
+      .delete()
+      .eq("id", id);
 
-      const { error } = await supabase.from("properties").delete().eq("id", id);
+    if (propertyDeleteError) throw propertyDeleteError;
 
-      if (error) throw error;
+    setProjects((prev) => prev.filter((project) => project.id !== id));
 
-      setProjects((prev) => prev.filter((project) => project.id !== id));
-
-      toast({
-        title: "Projekti u Fshi",
-        description: "Prona është hequr.",
-      });
-    } catch (err) {
-      console.error("Delete error:", err);
-      toast({
-        title: "Gabim",
-        description: "Dështoi fshirja e projektit.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+    toast({
+      title: "Projekti u Fshi",
+      description: "Prona dhe të gjitha të dhënat e lidhura u hoqën me sukses.",
+    });
+  } catch (err) {
+    console.error("Delete error:", err);
+    toast({
+      title: "Gabim",
+      description: "Dështoi fshirja e projektit.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsDeleting(false);
+  }
+};
 
   const handlePause = async (project: any) => {
 	  if (!confirm(`A jeni i sigurt që dëshironi ta pezulloni "${project.title}"?`)) {
