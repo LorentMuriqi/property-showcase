@@ -814,28 +814,36 @@ export default function AdminVirtualTour() {
         });
       }
 
-      viewer.addEventListener("click", ({ data }: any) => {
-        if (isEditingHotspotPlacement && editingHotspot) {
-          setEditingHotspot((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  yaw: data.yaw,
-                  pitch: data.pitch,
-                }
-              : prev,
-          );
-          return;
-        }
+viewer.addEventListener("click", ({ data }: any) => {
+  const longitude = data?.longitude ?? data?.yaw;
+  const latitude = data?.latitude ?? data?.pitch;
 
-        if (!isPlacementMode) return;
+  if (longitude == null || latitude == null) {
+    console.warn("Panorama click coordinates missing:", data);
+    return;
+  }
 
-        setDraft((prev) => ({
-          ...prev,
-          yaw: data.yaw,
-          pitch: data.pitch,
-        }));
-      });
+  if (isEditingHotspotPlacement && editingHotspot) {
+    setEditingHotspot((prev) =>
+      prev
+        ? {
+            ...prev,
+            yaw: longitude,
+            pitch: latitude,
+          }
+        : prev,
+    );
+    return;
+  }
+
+  if (!isPlacementMode) return;
+
+  setDraft((prev) => ({
+    ...prev,
+    yaw: longitude,
+    pitch: latitude,
+  }));
+});
 
       viewer.addEventListener("panorama-error", () => {
         setViewerError(
