@@ -232,6 +232,31 @@ export default function AdminVirtualTour() {
       pitch: null,
     }));
   }, []);
+  
+  
+  
+  const getLiveViewerPosition = () => {
+  try {
+    const viewer = editorViewerRef.current;
+    if (!viewer) return null;
+
+    const position = viewer.getPosition();
+    if (!position) return null;
+
+    if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
+      return null;
+    }
+
+    return {
+      yaw: position.yaw,
+      pitch: position.pitch,
+    };
+  } catch (error) {
+    console.error("Live viewer position read error:", error);
+    return null;
+  }
+};
+  
 
   const usedTargetSceneIds = useMemo(() => {
     if (!selectedScene) return new Set<number>();
@@ -568,36 +593,40 @@ export default function AdminVirtualTour() {
     setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
   };
 
-  const handlePlaceHotspotAtCenter = () => {
-    if (!isPlacementMode) {
-      toast({
-        title: "Gabim",
-        description: "Aktivizo placement mode fillimisht.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!cameraCenter) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setDraft((prev) => ({
-      ...prev,
-      yaw: cameraCenter.yaw,
-      pitch: cameraCenter.pitch,
-    }));
-
+const handlePlaceHotspotAtCenter = () => {
+  if (!isPlacementMode) {
     toast({
-      title: "Pozicioni u vendos",
-      description: "Hotspot-i u vendos në qendrën aktuale të pamjes.",
+      title: "Gabim",
+      description: "Aktivizo placement mode fillimisht.",
+      variant: "destructive",
     });
-  };
+    return;
+  }
+
+  const livePosition = getLiveViewerPosition();
+
+  if (!livePosition) {
+    toast({
+      title: "Gabim",
+      description: "Pozicioni aktual i kamerës nuk u lexua.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  setDraft((prev) => ({
+    ...prev,
+    yaw: livePosition.yaw,
+    pitch: livePosition.pitch,
+  }));
+
+  setCameraCenter(livePosition);
+
+  toast({
+    title: "Pozicioni u vendos",
+    description: "Hotspot-i u vendos në qendrën aktuale të pamjes.",
+  });
+};
 
   const nudgeDraftPosition = (yawDelta: number, pitchDelta: number) => {
     setDraft((prev) => {
@@ -611,35 +640,38 @@ export default function AdminVirtualTour() {
     });
   };
 
-  const handlePlaceEditedHotspotAtCenter = () => {
-    if (!editingHotspot) return;
+const handlePlaceEditedHotspotAtCenter = () => {
+  if (!editingHotspot) return;
 
-    if (!cameraCenter) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const livePosition = getLiveViewerPosition();
 
-    setEditingHotspot((prev) =>
-      prev
-        ? {
-            ...prev,
-            yaw: cameraCenter.yaw,
-            pitch: cameraCenter.pitch,
-          }
-        : prev,
-    );
-
-    setIsEditingHotspotPlacement(true);
-
+  if (!livePosition) {
     toast({
-      title: "Pozicioni u përditësua",
-      description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
+      title: "Gabim",
+      description: "Pozicioni aktual i kamerës nuk u lexua.",
+      variant: "destructive",
     });
-  };
+    return;
+  }
+
+  setEditingHotspot((prev) =>
+    prev
+      ? {
+          ...prev,
+          yaw: livePosition.yaw,
+          pitch: livePosition.pitch,
+        }
+      : prev,
+  );
+
+  setCameraCenter(livePosition);
+  setIsEditingHotspotPlacement(true);
+
+  toast({
+    title: "Pozicioni u përditësua",
+    description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
+  });
+};
 
   const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
     setEditingHotspot((prev) => {
