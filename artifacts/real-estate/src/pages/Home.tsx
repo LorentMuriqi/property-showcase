@@ -21,11 +21,16 @@ export default function Home() {
     const fetchRecentProjects = async () => {
       setIsLoading(true);
 
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(6);
+const nowIso = new Date().toISOString();
+
+const { data, error } = await supabase
+  .from("properties")
+  .select("*")
+  .eq("listing_status", "active")
+  .eq("is_paused", false)
+  .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+  .order("created_at", { ascending: false })
+  .limit(6);
 
       if (error) {
         console.error("Fetch recent properties error:", error);
@@ -41,32 +46,39 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const fetchFilters = async () => {
-      const { data, error } = await supabase.from("properties").select("country, city");
 
-      if (error) {
-        console.error("Fetch filters error:", error);
-        return;
-      }
 
-      const allCountries = [...new Set((data || []).map((item) => item.country).filter(Boolean))] as string[];
-      setCountries(allCountries);
 
-      if (country) {
-        const filteredCities = [
-          ...new Set(
-            (data || [])
-              .filter((item) => item.country === country)
-              .map((item) => item.city)
-              .filter(Boolean)
-          ),
-        ] as string[];
+const fetchFilters = async () => {
+  const nowIso = new Date().toISOString();
 
-        setCities(filteredCities);
-      } else {
-        setCities([]);
-      }
-    };
+  const { data, error } = await supabase
+    .from("properties")
+    .select("country, city")
+    .eq("listing_status", "active")
+    .eq("is_paused", false)
+    .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
+
+  if (error) {
+    console.error("Error fetching filters:", error);
+    return;
+  }
+
+  if (data) {
+    const countries = [
+      ...new Set(data.map((item) => item.country).filter(Boolean)),
+    ];
+
+    const cities = [
+      ...new Set(data.map((item) => item.city).filter(Boolean)),
+    ];
+
+    setCountries(countries);
+    setCities(cities);
+  }
+};
+
+
 
     fetchFilters();
   }, [country]);
