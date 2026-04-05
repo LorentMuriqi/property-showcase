@@ -815,6 +815,8 @@ export default function AdminVirtualTour() {
       }
 
 viewer.addEventListener("click", ({ data }: any) => {
+  console.log("CLICK EVENT:", data);
+
   const longitude = data?.longitude ?? data?.yaw;
   const latitude = data?.latitude ?? data?.pitch;
 
