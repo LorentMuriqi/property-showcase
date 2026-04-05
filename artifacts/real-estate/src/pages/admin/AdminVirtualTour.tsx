@@ -13,6 +13,10 @@ import {
   Move,
   Check,
   X,
+  LocateFixed,
+  ArrowLeftRight,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
@@ -196,6 +200,8 @@ export default function AdminVirtualTour() {
     pitch: null,
   });
 
+  const [cameraCenter, setCameraCenter] = useState<{ yaw: number; pitch: number } | null>(null);
+
   const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
   const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
   const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] = useState(false);
@@ -354,6 +360,7 @@ export default function AdminVirtualTour() {
     setEditingHotspot(null);
     setIsEditingHotspotPlacement(false);
     setIsEditHotspotModalOpen(false);
+    setCameraCenter(null);
   }, [selectedSceneId, resetDraft]);
 
   const openCreateScene = () => {
@@ -533,7 +540,7 @@ export default function AdminVirtualTour() {
     toast({
       title: "Placement mode aktiv",
       description:
-        "Kliko mbi panoramë për të caktuar vendin. Pas ruajtjes mund të vazhdosh menjëherë me hotspot tjetër.",
+        "Rrotullo panoramën derisa vendi i saktë të jetë në qendër, pastaj kliko “Vendose në Qendër”.",
     });
   };
 
@@ -542,11 +549,128 @@ export default function AdminVirtualTour() {
     setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
   };
 
+  const handlePlaceHotspotAtCenter = () => {
+    if (!isPlacementMode) {
+      toast({
+        title: "Gabim",
+        description: "Aktivizo placement mode fillimisht.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!cameraCenter) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDraft((prev) => ({
+      ...prev,
+      yaw: cameraCenter.yaw,
+      pitch: cameraCenter.pitch,
+    }));
+
+    toast({
+      title: "Pozicioni u vendos",
+      description: "Hotspot-i u vendos në qendrën aktuale të pamjes.",
+    });
+  };
+
+  const nudgeDraftPosition = (yawDelta: number, pitchDelta: number) => {
+    setDraft((prev) => {
+      if (prev.yaw == null || prev.pitch == null) return prev;
+
+      return {
+        ...prev,
+        yaw: prev.yaw + yawDelta,
+        pitch: prev.pitch + pitchDelta,
+      };
+    });
+  };
+
+  const handleStartEditHotspotPlacement = () => {
+    if (!editingHotspot) return;
+
+    if (!cameraCenter) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPlacementMode(false);
+    setIsEditingHotspotPlacement(true);
+
+    setEditingHotspot((prev) =>
+      prev
+        ? {
+            ...prev,
+            yaw: cameraCenter.yaw,
+            pitch: cameraCenter.pitch,
+          }
+        : prev,
+    );
+
+    toast({
+      title: "Pozicioni u vendos",
+      description:
+        "Hotspot-i u zhvendos te qendra aktuale e pamjes. Mund ta rafinosh duke lëvizur panoramën dhe duke klikuar sërish butonin.",
+    });
+  };
+
+  const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
+    setEditingHotspot((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        yaw: prev.yaw + yawDelta,
+        pitch: prev.pitch + pitchDelta,
+      };
+    });
+  };
+
+  const handlePlaceEditedHotspotAtCenter = () => {
+    if (!editingHotspot) return;
+
+    if (!cameraCenter) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEditingHotspot((prev) =>
+      prev
+        ? {
+            ...prev,
+            yaw: cameraCenter.yaw,
+            pitch: cameraCenter.pitch,
+          }
+        : prev,
+    );
+
+    setIsEditingHotspotPlacement(true);
+
+    toast({
+      title: "Pozicioni u përditësua",
+      description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
+    });
+  };
+
   const handleAddHotspot = async () => {
     if (!selectedScene || draft.to_scene_id === "" || draft.yaw === null || draft.pitch === null) {
       toast({
         title: "Gabim",
-        description: "Zgjidh destinacionin dhe kliko vendin në panoramë.",
+        description: "Zgjidh destinacionin dhe vendose pozicionin e hotspot-it.",
         variant: "destructive",
       });
       return;
@@ -596,7 +720,7 @@ export default function AdminVirtualTour() {
       toast({
         title: "Hotspot u ruajt",
         description:
-          "Mund të klikosh menjëherë prapë në panoramë për hotspot tjetër në të njëjtën foto.",
+          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
       });
     } catch (error: any) {
       toast({
@@ -605,17 +729,6 @@ export default function AdminVirtualTour() {
         variant: "destructive",
       });
     }
-  };
-
-  const handleStartEditHotspotPlacement = () => {
-    if (!editingHotspot) return;
-    setIsPlacementMode(false);
-    setIsEditingHotspotPlacement(true);
-
-    toast({
-      title: "Ndrysho pozicionin",
-      description: "Kliko mbi panoramë për të caktuar vendin e ri të hotspot-it.",
-    });
   };
 
   const handleSaveEditedHotspot = async () => {
@@ -758,6 +871,7 @@ export default function AdminVirtualTour() {
     }
 
     let viewer: Viewer | null = null;
+    let updateCameraCenterHandler: (() => void) | null = null;
 
     try {
       viewer = new Viewer({
@@ -790,11 +904,7 @@ export default function AdminVirtualTour() {
         });
       });
 
-      if (
-        isPlacementMode &&
-        draft.yaw !== null &&
-        draft.pitch !== null
-      ) {
+      if (isPlacementMode && draft.yaw !== null && draft.pitch !== null) {
         markersPlugin.addMarker({
           id: "temp-new-hotspot",
           longitude: draft.yaw,
@@ -814,38 +924,22 @@ export default function AdminVirtualTour() {
         });
       }
 
-viewer.addEventListener("click", ({ data }: any) => {
-  console.log("CLICK EVENT:", data);
+      updateCameraCenterHandler = () => {
+        try {
+          const position = viewer?.getPosition?.();
+          if (!position) return;
 
-  const longitude = data?.longitude ?? data?.yaw;
-  const latitude = data?.latitude ?? data?.pitch;
+          setCameraCenter({
+            yaw: position.yaw,
+            pitch: position.pitch,
+          });
+        } catch (error) {
+          console.error("Camera position read error:", error);
+        }
+      };
 
-  if (longitude == null || latitude == null) {
-    console.warn("Panorama click coordinates missing:", data);
-    return;
-  }
-
-  if (isEditingHotspotPlacement && editingHotspot) {
-    setEditingHotspot((prev) =>
-      prev
-        ? {
-            ...prev,
-            yaw: longitude,
-            pitch: latitude,
-          }
-        : prev,
-    );
-    return;
-  }
-
-  if (!isPlacementMode) return;
-
-  setDraft((prev) => ({
-    ...prev,
-    yaw: longitude,
-    pitch: latitude,
-  }));
-});
+      updateCameraCenterHandler();
+      viewer.addEventListener("position-updated", updateCameraCenterHandler);
 
       viewer.addEventListener("panorama-error", () => {
         setViewerError(
@@ -860,9 +954,14 @@ viewer.addEventListener("click", ({ data }: any) => {
     }
 
     return () => {
+      if (viewer && updateCameraCenterHandler) {
+        viewer.removeEventListener("position-updated", updateCameraCenterHandler);
+      }
+
       if (viewer) {
         viewer.destroy();
       }
+
       editorViewerRef.current = null;
     };
   }, [
@@ -1104,7 +1203,7 @@ viewer.addEventListener("click", ({ data }: any) => {
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin, aktivizo placement mode,
-                  kliko në panoramë dhe ruaj. Pastaj mund të vazhdosh menjëherë me hotspot-in tjetër.
+                  rrotullo panoramën dhe vendose hotspot-in në qendrën e pamjes.
                 </p>
               </div>
             </div>
@@ -1122,12 +1221,19 @@ viewer.addEventListener("click", ({ data }: any) => {
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                     {isEditingHotspotPlacement
-                      ? "Kliko për të vendosur pozicionin e ri të hotspot-it"
+                      ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
                       : isPlacementMode
                       ? draft.yaw !== null && draft.pitch !== null
-                        ? "Pozicioni u zgjodh. Kliko Ruaj ose kliko prapë për pozicion tjetër"
-                        : "Placement mode aktiv. Kliko aty ku do të vendoset hotspot-i"
+                        ? "Pozicioni u zgjodh. Mund ta rafinosh ose ta ruash"
+                        : "Placement mode aktiv. Rrotullo panoramën dhe kliko “Vendose në Qendër”"
                       : "Zgjidh target-in dhe aktivizo placement mode"}
+                  </div>
+
+                  <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
+                    Qendra aktuale:{" "}
+                    {cameraCenter
+                      ? `${cameraCenter.yaw.toFixed(3)} / ${cameraCenter.pitch.toFixed(3)}`
+                      : "Duke lexuar..."}
                   </div>
                 </div>
 
@@ -1184,7 +1290,7 @@ viewer.addEventListener("click", ({ data }: any) => {
                         {isPlacementMode
                           ? draft.yaw !== null && draft.pitch !== null
                             ? "Gati për ruajtje"
-                            : "Duke pritur klikimin"
+                            : "Rrotullo panoramën dhe vendose në qendër"
                           : "Joaktiv"}
                       </span>
                       <span>
@@ -1213,6 +1319,14 @@ viewer.addEventListener("click", ({ data }: any) => {
                       </button>
                     ) : (
                       <>
+                        <button
+                          onClick={handlePlaceHotspotAtCenter}
+                          className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
+                        >
+                          <LocateFixed size={16} />
+                          Vendose në Qendër
+                        </button>
+
                         <button
                           onClick={handleAddHotspot}
                           disabled={draft.yaw === null || draft.pitch === null}
@@ -1243,6 +1357,42 @@ viewer.addEventListener("click", ({ data }: any) => {
                       </>
                     )}
                   </div>
+
+                  {isPlacementMode && (
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => nudgeDraftPosition(-0.02, 0)}
+                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                      >
+                        <ArrowLeftRight size={14} />
+                        Majtas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeDraftPosition(0.02, 0)}
+                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                      >
+                        Djathtas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeDraftPosition(0, -0.02)}
+                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                      >
+                        <ArrowUp size={14} />
+                        Lart
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeDraftPosition(0, 0.02)}
+                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                      >
+                        <ArrowDown size={14} />
+                        Poshtë
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1637,28 +1787,49 @@ viewer.addEventListener("click", ({ data }: any) => {
                   <span>
                     <strong className="text-white">Statusi:</strong>{" "}
                     {isEditingHotspotPlacement
-                      ? "Duke pritur klikim në panoramë"
+                      ? "Pozicioni po rregullohet"
                       : "Gati për ruajtje"}
                   </span>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {!isEditingHotspotPlacement ? (
-                  <button
-                    onClick={handleStartEditHotspotPlacement}
-                    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
-                  >
-                    Ndrysho vendin në foto
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setIsEditingHotspotPlacement(false)}
-                    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
-                  >
-                    Ndalo ndryshimin e vendit
-                  </button>
-                )}
+                <button
+                  onClick={handlePlaceEditedHotspotAtCenter}
+                  className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
+                >
+                  <LocateFixed size={16} />
+                  Vendose në Qendër
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => nudgeEditingHotspotPosition(-0.02, 0)}
+                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                >
+                  Majtas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => nudgeEditingHotspotPosition(0.02, 0)}
+                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                >
+                  Djathtas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => nudgeEditingHotspotPosition(0, -0.02)}
+                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                >
+                  Lart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => nudgeEditingHotspotPosition(0, 0.02)}
+                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                >
+                  Poshtë
+                </button>
 
                 <button
                   onClick={() => handleDeleteHotspot(editingHotspot.id)}
