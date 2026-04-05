@@ -394,9 +394,9 @@ const hasVirtualTour = !!(
                 )}
               </div>
 
-              <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
-                {project.title}
-              </h1>
+				<h1 className="text-4xl md:text-5xl font-sans font-semibold text-white mb-4 leading-tight tracking-tight">
+				{project.title}
+				</h1>
 
               <div className="flex items-center gap-2 text-muted-foreground text-lg">
                 <MapPin className="text-primary" size={20} />
