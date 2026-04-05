@@ -233,6 +233,25 @@ export default function AdminVirtualTour() {
     }));
   }, []);
 
+  const usedTargetSceneIds = useMemo(() => {
+    if (!selectedScene) return new Set<number>();
+
+    return new Set(
+      selectedScene.hotspots
+        .filter((hotspot) => hotspot.id !== editingHotspot?.id)
+        .map((hotspot) => Number(hotspot.to_scene_id)),
+    );
+  }, [selectedScene, editingHotspot]);
+
+  const availableTargetScenes = useMemo(() => {
+    return scenes.filter((scene) => {
+      if (!selectedScene) return false;
+      if (scene.id === selectedScene.id) return false;
+      if (usedTargetSceneIds.has(Number(scene.id))) return false;
+      return true;
+    });
+  }, [scenes, selectedScene, usedTargetSceneIds]);
+
   const refreshTour = useCallback(async () => {
     if (!projectId) return;
 
@@ -592,50 +611,6 @@ export default function AdminVirtualTour() {
     });
   };
 
-  const handleStartEditHotspotPlacement = () => {
-    if (!editingHotspot) return;
-
-    if (!cameraCenter) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsPlacementMode(false);
-    setIsEditingHotspotPlacement(true);
-
-    setEditingHotspot((prev) =>
-      prev
-        ? {
-            ...prev,
-            yaw: cameraCenter.yaw,
-            pitch: cameraCenter.pitch,
-          }
-        : prev,
-    );
-
-    toast({
-      title: "Pozicioni u vendos",
-      description:
-        "Hotspot-i u zhvendos te qendra aktuale e pamjes. Mund ta rafinosh duke lëvizur panoramën dhe duke klikuar sërish butonin.",
-    });
-  };
-
-  const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
-    setEditingHotspot((prev) => {
-      if (!prev) return prev;
-
-      return {
-        ...prev,
-        yaw: prev.yaw + yawDelta,
-        pitch: prev.pitch + pitchDelta,
-      };
-    });
-  };
-
   const handlePlaceEditedHotspotAtCenter = () => {
     if (!editingHotspot) return;
 
@@ -663,6 +638,18 @@ export default function AdminVirtualTour() {
     toast({
       title: "Pozicioni u përditësua",
       description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
+    });
+  };
+
+  const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
+    setEditingHotspot((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        yaw: prev.yaw + yawDelta,
+        pitch: prev.pitch + pitchDelta,
+      };
     });
   };
 
@@ -719,8 +706,7 @@ export default function AdminVirtualTour() {
 
       toast({
         title: "Hotspot u ruajt",
-        description:
-          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
+        description: "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
       });
     } catch (error: any) {
       toast({
@@ -870,11 +856,8 @@ export default function AdminVirtualTour() {
       editorViewerRef.current = null;
     }
 
-let viewer: Viewer | null = null;
-let updateCameraCenterHandler:
-  | ((event: { position: { yaw: number; pitch: number } }) => void)
-  | null = null;
-let readyHandler: (() => void) | null = null;
+    let viewer: Viewer | null = null;
+    let cameraInterval: number | null = null;
 
     try {
       viewer = new Viewer({
@@ -927,34 +910,24 @@ let readyHandler: (() => void) | null = null;
         });
       }
 
-      readyHandler = () => {
+      const syncCameraCenter = () => {
         try {
-          const position = viewer?.getPosition();
+          const position = viewer?.getPosition?.();
           if (!position) return;
 
-          setCameraCenter({
-            yaw: position.yaw,
-            pitch: position.pitch,
-          });
+          if (Number.isFinite(position.yaw) && Number.isFinite(position.pitch)) {
+            setCameraCenter({
+              yaw: position.yaw,
+              pitch: position.pitch,
+            });
+          }
         } catch (error) {
-          console.error("Initial camera position read error:", error);
+          console.error("Camera position read error:", error);
         }
       };
 
-      updateCameraCenterHandler = ({ position }) => {
-        if (!position) return;
-
-        setCameraCenter({
-          yaw: position.yaw,
-          pitch: position.pitch,
-        });
-      };
-
-      viewer.addEventListener("ready", readyHandler, { once: true });
-      viewer.addEventListener("position-updated", updateCameraCenterHandler);
-
-      updateCameraCenterHandler();
-      viewer.addEventListener("position-updated", updateCameraCenterHandler);
+      syncCameraCenter();
+      cameraInterval = window.setInterval(syncCameraCenter, 150);
 
       viewer.addEventListener("panorama-error", () => {
         setViewerError(
@@ -969,12 +942,8 @@ let readyHandler: (() => void) | null = null;
     }
 
     return () => {
-       if (viewer && updateCameraCenterHandler) {
-        viewer.removeEventListener("position-updated", updateCameraCenterHandler);
-      }
-
-      if (viewer && readyHandler) {
-        viewer.removeEventListener("ready", readyHandler);
+      if (cameraInterval) {
+        window.clearInterval(cameraInterval);
       }
 
       if (viewer) {
@@ -1277,14 +1246,19 @@ let readyHandler: (() => void) | null = null;
                         }
                       >
                         <option value="">Zgjidh skenën</option>
-                        {scenes
-                          .filter((scene) => scene.id !== selectedScene.id)
-                          .map((scene) => (
-                            <option key={String(scene.id)} value={scene.id}>
-                              {scene.title}
-                            </option>
-                          ))}
+                        {availableTargetScenes.map((scene) => (
+                          <option key={String(scene.id)} value={scene.id}>
+                            {scene.title}
+                          </option>
+                        ))}
                       </select>
+
+                      {availableTargetScenes.length === 0 && (
+                        <p className="mt-2 text-xs text-amber-300">
+                          Të gjitha skenat e tjera janë përdorur tashmë si destinacion për këtë panoramë.
+                          Nëse dëshiron një target tjetër, fshi ose edito një hotspot ekzistues.
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1770,9 +1744,16 @@ let readyHandler: (() => void) | null = null;
                     )
                   }
                 >
-                  <option value="">Zgjidh skenën</option>
                   {scenes
-                    .filter((scene) => scene.id !== selectedSceneId)
+                    .filter((scene) => {
+                      if (scene.id === selectedSceneId) return false;
+
+                      const isCurrentTarget =
+                        Number(scene.id) === Number(editingHotspot?.to_scene_id);
+                      if (isCurrentTarget) return true;
+
+                      return !usedTargetSceneIds.has(Number(scene.id));
+                    })
                     .map((scene) => (
                       <option key={String(scene.id)} value={scene.id}>
                         {scene.title}
