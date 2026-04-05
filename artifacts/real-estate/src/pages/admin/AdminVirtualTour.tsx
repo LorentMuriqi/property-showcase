@@ -100,10 +100,11 @@ const NORMAL_HOTSPOT_HTML = `
 
 const EDITING_HOTSPOT_HTML = `
   <div style="
+    position: relative;
     width: 42px;
     height: 42px;
     border-radius: 9999px;
-    background: rgba(239,68,68,0.82);
+    background: rgba(239,68,68,0.88);
     border: 3px solid white;
     display:flex;
     align-items:center;
@@ -111,23 +112,44 @@ const EDITING_HOTSPOT_HTML = `
     color:white;
     font-size:12px;
     font-weight:700;
-    box-shadow:0 10px 24px rgba(0,0,0,.38);
+    box-shadow:
+      0 0 0 10px rgba(239,68,68,.16),
+      0 10px 24px rgba(0,0,0,.38);
     cursor:pointer;
     user-select:none;
   ">
     ↗
+    <div style="
+      position:absolute;
+      left:50%;
+      top:calc(100% + 8px);
+      transform:translateX(-50%);
+      white-space:nowrap;
+      font-size:11px;
+      font-weight:700;
+      color:white;
+      background:rgba(0,0,0,0.72);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:9999px;
+      padding:4px 8px;
+      box-shadow:0 6px 18px rgba(0,0,0,.28);
+    ">
+      Duke u edituar
+    </div>
   </div>
 `;
 
 const TEMP_HOTSPOT_HTML = `
   <div style="
-    width: 26px;
-    height: 26px;
-    border-radius: 9999px;
-    background: #ef4444;
-    border: 3px solid white;
-    box-shadow: 0 0 0 10px rgba(239,68,68,.18);
     position: relative;
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    background: rgba(239,68,68,0.95);
+    border: 3px solid white;
+    box-shadow:
+      0 0 0 10px rgba(239,68,68,.16),
+      0 8px 24px rgba(0,0,0,.35);
     user-select:none;
   ">
     <div style="
@@ -135,21 +157,38 @@ const TEMP_HOTSPOT_HTML = `
       top:50%;
       left:50%;
       width:2px;
-      height:30px;
+      height:34px;
       background:white;
       transform:translate(-50%, -50%);
-      opacity:.9;
+      opacity:.95;
     "></div>
     <div style="
       position:absolute;
       top:50%;
       left:50%;
-      width:30px;
+      width:34px;
       height:2px;
       background:white;
       transform:translate(-50%, -50%);
-      opacity:.9;
+      opacity:.95;
     "></div>
+    <div style="
+      position:absolute;
+      left:50%;
+      top:calc(100% + 8px);
+      transform:translateX(-50%);
+      white-space:nowrap;
+      font-size:11px;
+      font-weight:700;
+      color:white;
+      background:rgba(0,0,0,0.72);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:9999px;
+      padding:4px 8px;
+      box-shadow:0 6px 18px rgba(0,0,0,.28);
+    ">
+      Hotspot i ri
+    </div>
   </div>
 `;
 
@@ -1239,14 +1278,24 @@ const handlePlaceEditedHotspotAtCenter = () => {
                 <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
                   <div ref={editorContainerRef} className="w-full h-full" />
 
+{(isPlacementMode || isEditingHotspotPlacement) && (
+  <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-20">
+    <div className="relative w-10 h-10">
+      <div className="absolute left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
+      <div className="absolute top-1/2 left-0 right-0 h-[2px] -translate-y-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
+      <div className="absolute left-1/2 top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-black/40 shadow-[0_0_16px_rgba(212,175,55,0.35)]" />
+    </div>
+  </div>
+)}
+
+
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                     {isEditingHotspotPlacement
                       ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
-                      : isPlacementMode
-                      ? draft.yaw !== null && draft.pitch !== null
-                        ? "Pozicioni u zgjodh. Mund ta rafinosh ose ta ruash"
-                        : "Placement mode aktiv. Rrotullo panoramën dhe kliko “Vendose në Qendër”"
-                      : "Zgjidh target-in dhe aktivizo placement mode"}
+: isPlacementMode
+? draft.yaw !== null && draft.pitch !== null
+  ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
+  : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
