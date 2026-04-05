@@ -453,9 +453,9 @@ const hasVirtualTour = !!(
           <div className="lg:col-span-1">
             <div className="sticky top-32 space-y-6">
               <div className="glass-panel rounded-2xl p-8">
-                <div className="text-4xl font-display text-primary mb-8 font-medium">
-                  {formattedPrice}
-                </div>
+				<div className="text-4xl font-sans text-primary mb-8 font-semibold tracking-tight">
+				{formattedPrice}
+			</div>
 
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   {project.areaM2 && (
