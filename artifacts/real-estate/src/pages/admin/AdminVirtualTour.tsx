@@ -870,8 +870,11 @@ export default function AdminVirtualTour() {
       editorViewerRef.current = null;
     }
 
-    let viewer: Viewer | null = null;
-    let updateCameraCenterHandler: (() => void) | null = null;
+let viewer: Viewer | null = null;
+let updateCameraCenterHandler:
+  | ((event: { position: { yaw: number; pitch: number } }) => void)
+  | null = null;
+let readyHandler: (() => void) | null = null;
 
     try {
       viewer = new Viewer({
@@ -924,9 +927,9 @@ export default function AdminVirtualTour() {
         });
       }
 
-      updateCameraCenterHandler = () => {
+      readyHandler = () => {
         try {
-          const position = viewer?.getPosition?.();
+          const position = viewer?.getPosition();
           if (!position) return;
 
           setCameraCenter({
@@ -934,9 +937,21 @@ export default function AdminVirtualTour() {
             pitch: position.pitch,
           });
         } catch (error) {
-          console.error("Camera position read error:", error);
+          console.error("Initial camera position read error:", error);
         }
       };
+
+      updateCameraCenterHandler = ({ position }) => {
+        if (!position) return;
+
+        setCameraCenter({
+          yaw: position.yaw,
+          pitch: position.pitch,
+        });
+      };
+
+      viewer.addEventListener("ready", readyHandler, { once: true });
+      viewer.addEventListener("position-updated", updateCameraCenterHandler);
 
       updateCameraCenterHandler();
       viewer.addEventListener("position-updated", updateCameraCenterHandler);
@@ -954,8 +969,12 @@ export default function AdminVirtualTour() {
     }
 
     return () => {
-      if (viewer && updateCameraCenterHandler) {
+       if (viewer && updateCameraCenterHandler) {
         viewer.removeEventListener("position-updated", updateCameraCenterHandler);
+      }
+
+      if (viewer && readyHandler) {
+        viewer.removeEventListener("ready", readyHandler);
       }
 
       if (viewer) {
