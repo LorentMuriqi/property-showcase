@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft,
@@ -11,6 +11,8 @@ import {
   Link2,
   Image as ImageIcon,
   Move,
+  Check,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
@@ -64,12 +66,19 @@ type HotspotFormState = {
   pitch: number;
 };
 
+type PlacementDraft = {
+  to_scene_id: number | "";
+  label: string;
+  yaw: number | null;
+  pitch: number | null;
+};
+
 const NORMAL_HOTSPOT_HTML = `
   <div style="
     width: 42px;
     height: 42px;
     border-radius: 9999px;
-    background: rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.58);
     border: 3px solid #d4af37;
     display:flex;
     align-items:center;
@@ -77,7 +86,7 @@ const NORMAL_HOTSPOT_HTML = `
     color:white;
     font-size:12px;
     font-weight:700;
-    box-shadow:0 8px 20px rgba(0,0,0,.35);
+    box-shadow:0 10px 24px rgba(0,0,0,.38);
     cursor:pointer;
     user-select:none;
   ">
@@ -98,7 +107,7 @@ const EDITING_HOTSPOT_HTML = `
     color:white;
     font-size:12px;
     font-weight:700;
-    box-shadow:0 8px 20px rgba(0,0,0,.35);
+    box-shadow:0 10px 24px rgba(0,0,0,.38);
     cursor:pointer;
     user-select:none;
   ">
@@ -108,8 +117,8 @@ const EDITING_HOTSPOT_HTML = `
 
 const TEMP_HOTSPOT_HTML = `
   <div style="
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     border-radius: 9999px;
     background: #ef4444;
     border: 3px solid white;
@@ -122,7 +131,7 @@ const TEMP_HOTSPOT_HTML = `
       top:50%;
       left:50%;
       width:2px;
-      height:28px;
+      height:30px;
       background:white;
       transform:translate(-50%, -50%);
       opacity:.9;
@@ -131,7 +140,7 @@ const TEMP_HOTSPOT_HTML = `
       position:absolute;
       top:50%;
       left:50%;
-      width:28px;
+      width:30px;
       height:2px;
       background:white;
       transform:translate(-50%, -50%);
@@ -178,11 +187,14 @@ export default function AdminVirtualTour() {
     return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
   }, [scenes, selectedSceneId]);
 
-  const [clickCoords, setClickCoords] = useState<{ yaw: number; pitch: number } | null>(null);
-  const [targetSceneId, setTargetSceneId] = useState<number | "">("");
-  const [hotspotLabel, setHotspotLabel] = useState("");
   const [viewerError, setViewerError] = useState("");
-  const [isPlacingHotspot, setIsPlacingHotspot] = useState(false);
+  const [isPlacementMode, setIsPlacementMode] = useState(false);
+  const [draft, setDraft] = useState<PlacementDraft>({
+    to_scene_id: "",
+    label: "",
+    yaw: null,
+    pitch: null,
+  });
 
   const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
   const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
@@ -193,23 +205,29 @@ export default function AdminVirtualTour() {
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
 
+  useEffect(() => {
+    if (authLoading) return;
 
+    if (!isAdmin) {
+      setLocation("/admin/login");
+      return;
+    }
 
-useEffect(() => {
-  if (authLoading) return;
+    if (!permissions.canManageVirtualTours) {
+      setLocation("/admin");
+    }
+  }, [authLoading, isAdmin, permissions, setLocation]);
 
-  if (!isAdmin) {
-    setLocation("/admin/login");
-    return;
-  }
+  const resetDraft = useCallback((keepTargetAndLabel = true) => {
+    setDraft((prev) => ({
+      to_scene_id: keepTargetAndLabel ? prev.to_scene_id : "",
+      label: keepTargetAndLabel ? prev.label : "",
+      yaw: null,
+      pitch: null,
+    }));
+  }, []);
 
-  if (!permissions.canManageVirtualTours) {
-    setLocation("/admin");
-  }
-}, [authLoading, isAdmin, permissions, setLocation]);
-
-
-  const refreshTour = async () => {
+  const refreshTour = useCallback(async () => {
     if (!projectId) return;
 
     const currentSelectedSceneId = selectedSceneId;
@@ -316,7 +334,7 @@ useEffect(() => {
     const defaultScene =
       normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
     setSelectedSceneId(Number(defaultScene.id));
-  };
+  }, [projectId, selectedSceneId, toast]);
 
   useEffect(() => {
     const load = async () => {
@@ -327,17 +345,16 @@ useEffect(() => {
     };
 
     load();
-  }, [authLoading, isAdmin, projectId]);
+  }, [authLoading, isAdmin, projectId, refreshTour]);
 
   useEffect(() => {
-    setClickCoords(null);
-    setIsPlacingHotspot(false);
-    setTargetSceneId("");
-    setHotspotLabel("");
+    setViewerError("");
+    setIsPlacementMode(false);
+    resetDraft(false);
     setEditingHotspot(null);
     setIsEditingHotspotPlacement(false);
     setIsEditHotspotModalOpen(false);
-  }, [selectedSceneId]);
+  }, [selectedSceneId, resetDraft]);
 
   const openCreateScene = () => {
     setEditingSceneId(null);
@@ -373,8 +390,8 @@ useEffect(() => {
       pitch: hotspot.pitch,
     });
     setIsEditingHotspotPlacement(false);
-    setIsPlacingHotspot(false);
-    setClickCoords(null);
+    setIsPlacementMode(false);
+    resetDraft(false);
     setIsEditHotspotModalOpen(true);
   };
 
@@ -488,7 +505,7 @@ useEffect(() => {
     }
   };
 
-  const handleStartHotspotPlacement = () => {
+  const handleStartPlacement = () => {
     if (!selectedScene) {
       toast({
         title: "Gabim",
@@ -498,37 +515,38 @@ useEffect(() => {
       return;
     }
 
-    if (targetSceneId === "") {
+    if (draft.to_scene_id === "") {
       toast({
         title: "Gabim",
-        description: "Zgjidh skenën destinacion përpara vendosjes së hotspot-it.",
+        description: "Zgjidh skenën destinacion para vendosjes së hotspot-it.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsEditHotspotModalOpen(false);
     setEditingHotspot(null);
+    setIsEditHotspotModalOpen(false);
     setIsEditingHotspotPlacement(false);
-    setClickCoords(null);
-    setIsPlacingHotspot(true);
+    setIsPlacementMode(true);
+    setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
 
     toast({
-      title: "Vendos hotspot-in",
-      description: "Kliko në panoramë. Mund të riklikosh derisa ta vendosësh saktë.",
+      title: "Placement mode aktiv",
+      description:
+        "Kliko mbi panoramë për të caktuar vendin. Pas ruajtjes mund të vazhdosh menjëherë me hotspot tjetër.",
     });
   };
 
-  const handleCancelHotspotPlacement = () => {
-    setIsPlacingHotspot(false);
-    setClickCoords(null);
+  const handleStopPlacement = () => {
+    setIsPlacementMode(false);
+    setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
   };
 
   const handleAddHotspot = async () => {
-    if (!selectedScene || !clickCoords || targetSceneId === "") {
+    if (!selectedScene || draft.to_scene_id === "" || draft.yaw === null || draft.pitch === null) {
       toast({
         title: "Gabim",
-        description: "Zgjidh një pikë dhe një skenë destinacioni.",
+        description: "Zgjidh destinacionin dhe kliko vendin në panoramë.",
         variant: "destructive",
       });
       return;
@@ -539,10 +557,10 @@ useEffect(() => {
         .from("virtual_tour_hotspots")
         .insert({
           scene_id: selectedScene.id,
-          to_scene_id: Number(targetSceneId),
-          yaw: clickCoords.yaw,
-          pitch: clickCoords.pitch,
-          label: hotspotLabel.trim() || null,
+          to_scene_id: Number(draft.to_scene_id),
+          yaw: draft.yaw,
+          pitch: draft.pitch,
+          label: draft.label.trim() || null,
         })
         .select("*")
         .single();
@@ -569,13 +587,16 @@ useEffect(() => {
         ),
       );
 
-      setClickCoords(null);
-      setIsPlacingHotspot(true);
+      setDraft((prev) => ({
+        ...prev,
+        yaw: null,
+        pitch: null,
+      }));
 
       toast({
-        title: "Sukses",
+        title: "Hotspot u ruajt",
         description:
-          "Hotspot-i u shtua. Mund të klikosh sërish për hotspot tjetër në të njëjtën panoramë.",
+          "Mund të klikosh menjëherë prapë në panoramë për hotspot tjetër në të njëjtën foto.",
       });
     } catch (error: any) {
       toast({
@@ -588,14 +609,12 @@ useEffect(() => {
 
   const handleStartEditHotspotPlacement = () => {
     if (!editingHotspot) return;
-
-    setIsPlacingHotspot(false);
-    setClickCoords(null);
+    setIsPlacementMode(false);
     setIsEditingHotspotPlacement(true);
 
     toast({
       title: "Ndrysho pozicionin",
-      description: "Kliko në panoramë. Mund të riklikosh derisa ta vendosësh saktë.",
+      description: "Kliko mbi panoramë për të caktuar vendin e ri të hotspot-it.",
     });
   };
 
@@ -643,9 +662,9 @@ useEffect(() => {
         ),
       );
 
-      setIsEditingHotspotPlacement(false);
       setIsEditHotspotModalOpen(false);
       setEditingHotspot(null);
+      setIsEditingHotspotPlacement(false);
 
       toast({
         title: "Sukses",
@@ -685,12 +704,15 @@ useEffect(() => {
       );
 
       if (editingHotspot?.id === hotspotId) {
-        setIsEditHotspotModalOpen(false);
         setEditingHotspot(null);
+        setIsEditHotspotModalOpen(false);
         setIsEditingHotspotPlacement(false);
       }
 
-      toast({ title: "Sukses", description: "Hotspot-i u fshi." });
+      toast({
+        title: "Sukses",
+        description: "Hotspot-i u fshi.",
+      });
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -768,11 +790,15 @@ useEffect(() => {
         });
       });
 
-      if (isPlacingHotspot && clickCoords) {
+      if (
+        isPlacementMode &&
+        draft.yaw !== null &&
+        draft.pitch !== null
+      ) {
         markersPlugin.addMarker({
           id: "temp-new-hotspot",
-          longitude: clickCoords.yaw,
-          latitude: clickCoords.pitch,
+          longitude: draft.yaw,
+          latitude: draft.pitch,
           html: TEMP_HOTSPOT_HTML,
           tooltip: "Pozicioni i hotspot-it të ri",
         });
@@ -802,9 +828,13 @@ useEffect(() => {
           return;
         }
 
-        if (!isPlacingHotspot) return;
+        if (!isPlacementMode) return;
 
-        setClickCoords({ yaw: data.yaw, pitch: data.pitch });
+        setDraft((prev) => ({
+          ...prev,
+          yaw: data.yaw,
+          pitch: data.pitch,
+        }));
       });
 
       viewer.addEventListener("panorama-error", () => {
@@ -828,8 +858,8 @@ useEffect(() => {
   }, [
     selectedScene,
     scenes,
-    clickCoords,
-    isPlacingHotspot,
+    draft,
+    isPlacementMode,
     editingHotspot,
     isEditingHotspotPlacement,
   ]);
@@ -1009,6 +1039,9 @@ useEffect(() => {
                         <p className="text-xs text-muted-foreground mt-1">
                           Renditja: {scene.sort_order}
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          Hotspot-e: {scene.hotspots.length}
+                        </p>
                       </div>
 
                       <button
@@ -1057,33 +1090,34 @@ useEffect(() => {
             <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
               <div>
                 <h2 className="font-display text-xl text-primary font-bold">
-                  2. Editor i Hotspot-eve
+                  2. Editor Profesional i Hotspot-eve
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Një skenë mund të ketë shumë hotspot-e. Zgjidh destinacionin, kliko “Vendos Hotspot”
-                  dhe pastaj kliko në panoramë aty ku dëshiron ta vendosësh.
+                  Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin, aktivizo placement mode,
+                  kliko në panoramë dhe ruaj. Pastaj mund të vazhdosh menjëherë me hotspot-in tjetër.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
-                <div className="space-y-3">
-                  {viewerError && (
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
-                      {viewerError}
-                    </div>
-                  )}
+                {viewerError && (
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                    {viewerError}
+                  </div>
+                )}
 
-                  <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
-                    <div ref={editorContainerRef} className="w-full h-full" />
-                    <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-                      {isEditingHotspotPlacement
-                        ? "Kliko në panoramë për të zgjedhur pozicionin e ri"
-                        : isPlacingHotspot
-                        ? "Kliko në panoramë. Rikliko derisa pozicioni të jetë saktë"
-                        : "Zgjidh destinacionin dhe kliko “Vendos Hotspot”"}
-                    </div>
+                <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
+                  <div ref={editorContainerRef} className="w-full h-full" />
+
+                  <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
+                    {isEditingHotspotPlacement
+                      ? "Kliko për të vendosur pozicionin e ri të hotspot-it"
+                      : isPlacementMode
+                      ? draft.yaw !== null && draft.pitch !== null
+                        ? "Pozicioni u zgjodh. Kliko Ruaj ose kliko prapë për pozicion tjetër"
+                        : "Placement mode aktiv. Kliko aty ku do të vendoset hotspot-i"
+                      : "Zgjidh target-in dhe aktivizo placement mode"}
                   </div>
                 </div>
 
@@ -1099,9 +1133,12 @@ useEffect(() => {
                       </label>
                       <select
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
-                        value={targetSceneId}
+                        value={draft.to_scene_id}
                         onChange={(e) =>
-                          setTargetSceneId(e.target.value ? Number(e.target.value) : "")
+                          setDraft((prev) => ({
+                            ...prev,
+                            to_scene_id: e.target.value ? Number(e.target.value) : "",
+                          }))
                         }
                       >
                         <option value="">Zgjidh skenën</option>
@@ -1121,8 +1158,10 @@ useEffect(() => {
                       </label>
                       <input
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
-                        value={hotspotLabel}
-                        onChange={(e) => setHotspotLabel(e.target.value)}
+                        value={draft.label}
+                        onChange={(e) =>
+                          setDraft((prev) => ({ ...prev, label: e.target.value }))
+                        }
                         placeholder="P.sh. Shko në korridor"
                       />
                     </div>
@@ -1132,54 +1171,64 @@ useEffect(() => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <span>
                         <strong className="text-white">Status:</strong>{" "}
-                        {isPlacingHotspot
-                          ? clickCoords
-                            ? "Pozicioni u zgjodh"
-                            : "Duke pritur klikimin në panoramë"
+                        {isPlacementMode
+                          ? draft.yaw !== null && draft.pitch !== null
+                            ? "Gati për ruajtje"
+                            : "Duke pritur klikimin"
                           : "Joaktiv"}
                       </span>
                       <span>
                         <strong className="text-white">Yaw/Pitch:</strong>{" "}
-                        {clickCoords
-                          ? `${clickCoords.yaw.toFixed(3)} / ${clickCoords.pitch.toFixed(3)}`
+                        {draft.yaw !== null && draft.pitch !== null
+                          ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
                           : "Pa zgjedhur"}
                       </span>
                       <span>
                         <strong className="text-white">Target:</strong>{" "}
-                        {targetSceneId === ""
+                        {draft.to_scene_id === ""
                           ? "Pa zgjedhur"
-                          : scenes.find((scene) => scene.id === Number(targetSceneId))?.title ||
+                          : scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.title ||
                             "Pa zgjedhur"}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {!isPlacingHotspot ? (
+                    {!isPlacementMode ? (
                       <button
-                        onClick={handleStartHotspotPlacement}
+                        onClick={handleStartPlacement}
                         className="px-4 py-2 rounded-xl bg-primary text-black font-semibold"
                       >
-                        Vendos Hotspot
+                        Aktivizo Placement Mode
                       </button>
                     ) : (
                       <>
                         <button
                           onClick={handleAddHotspot}
-                          disabled={!clickCoords}
-                          className={`px-4 py-2 rounded-xl font-semibold ${
-                            clickCoords
+                          disabled={draft.yaw === null || draft.pitch === null}
+                          className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
+                            draft.yaw !== null && draft.pitch !== null
                               ? "bg-primary text-black"
                               : "bg-white/10 text-white/50 cursor-not-allowed"
                           }`}
                         >
+                          <Check size={16} />
                           Ruaj Hotspot
                         </button>
+
                         <button
-                          onClick={handleCancelHotspotPlacement}
+                          onClick={() => resetDraft(true)}
+                          className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                        >
+                          <X size={16} />
+                          Pastro Pozicionin
+                        </button>
+
+                        <button
+                          onClick={handleStopPlacement}
                           className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
                         >
-                          Anulo
+                          Dil nga Placement Mode
                         </button>
                       </>
                     )}
@@ -1285,6 +1334,9 @@ useEffect(() => {
                       </div>
                       <div className="p-2">
                         <p className="text-xs text-white truncate">{scene.title}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {scene.hotspots.length} hotspot-e
+                        </p>
                       </div>
                     </div>
                   ))}
