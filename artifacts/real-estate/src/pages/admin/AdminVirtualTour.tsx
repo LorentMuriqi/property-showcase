@@ -953,7 +953,7 @@ const normalizedInsertedHotspot: Hotspot = {
                 hotspots: scene.hotspots.map((hotspot) =>
                   hotspot.id === editingHotspot.id
                     ? {
-? {
+ {
     ...hotspot,
     to_scene_id: Number(editingHotspot.to_scene_id),
     label: editingHotspot.label.trim() || null,
