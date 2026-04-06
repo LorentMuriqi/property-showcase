@@ -55,6 +55,8 @@ type Hotspot = {
   to_scene_id: number;
   yaw: number;
   pitch: number;
+  target_yaw: number | null;
+  target_pitch: number | null;
   label: string | null;
 };
 
@@ -70,6 +72,8 @@ type HotspotFormState = {
   label: string;
   yaw: number;
   pitch: number;
+  target_yaw: number | null;
+  target_pitch: number | null;
 };
 
 type PlacementDraft = {
@@ -367,14 +371,16 @@ export default function AdminVirtualTour() {
         });
       } else {
         for (const hotspot of hotspotsData || []) {
-          const normalizedHotspot: Hotspot = {
-            id: toNumber(hotspot.id),
-            scene_id: toNumber(hotspot.scene_id),
-            to_scene_id: toNumber(hotspot.to_scene_id),
-            yaw: Number(hotspot.yaw),
-            pitch: Number(hotspot.pitch),
-            label: hotspot.label || null,
-          };
+const normalizedHotspot: Hotspot = {
+  id: toNumber(hotspot.id),
+  scene_id: toNumber(hotspot.scene_id),
+  to_scene_id: toNumber(hotspot.to_scene_id),
+  yaw: Number(hotspot.yaw),
+  pitch: Number(hotspot.pitch),
+  target_yaw: toNullableNumber(hotspot.target_yaw),
+  target_pitch: toNullableNumber(hotspot.target_pitch),
+  label: hotspot.label || null,
+};
 
           if (!hotspotsMap.has(normalizedHotspot.scene_id)) {
             hotspotsMap.set(normalizedHotspot.scene_id, []);
@@ -472,14 +478,16 @@ export default function AdminVirtualTour() {
   };
 
   const openEditHotspot = (hotspot: Hotspot) => {
-    setEditingHotspot({
-      id: hotspot.id,
-      scene_id: hotspot.scene_id,
-      to_scene_id: hotspot.to_scene_id,
-      label: hotspot.label || "",
-      yaw: hotspot.yaw,
-      pitch: hotspot.pitch,
-    });
+setEditingHotspot({
+  id: hotspot.id,
+  scene_id: hotspot.scene_id,
+  to_scene_id: hotspot.to_scene_id,
+  label: hotspot.label || "",
+  yaw: hotspot.yaw,
+  pitch: hotspot.pitch,
+  target_yaw: hotspot.target_yaw,
+  target_pitch: hotspot.target_pitch,
+});
     setIsEditingHotspotPlacement(false);
     setIsPlacementMode(false);
     resetDraft(false);
@@ -733,6 +741,72 @@ export default function AdminVirtualTour() {
 
   const handlePlaceEditedHotspotAtCenter = () => {
     if (!editingHotspot) return;
+	
+	
+	const handleSaveHotspotTargetView = async (hotspotId: number) => {
+  const livePosition = getLiveViewerPosition();
+
+  if (!livePosition) {
+    toast({
+      title: "Gabim",
+      description: "Pozicioni aktual i kamerës nuk u lexua.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from("virtual_tour_hotspots")
+      .update({
+        target_yaw: livePosition.yaw,
+        target_pitch: livePosition.pitch,
+      })
+      .eq("id", hotspotId);
+
+    if (error) throw error;
+
+    setScenes((prev) =>
+      prev.map((scene) => ({
+        ...scene,
+        hotspots: scene.hotspots.map((hotspot) =>
+          hotspot.id === hotspotId
+            ? {
+                ...hotspot,
+                target_yaw: livePosition.yaw,
+                target_pitch: livePosition.pitch,
+              }
+            : hotspot,
+        ),
+      })),
+    );
+
+    if (editingHotspot?.id === hotspotId) {
+      setEditingHotspot((prev) =>
+        prev
+          ? {
+              ...prev,
+              target_yaw: livePosition.yaw,
+              target_pitch: livePosition.pitch,
+            }
+          : prev,
+      );
+    }
+
+    toast({
+      title: "Sukses",
+      description: "Target view i hotspot-it u ruajt.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Ruajtja e target view dështoi.",
+      variant: "destructive",
+    });
+  }
+};
+	
+	
 
     const livePosition = getLiveViewerPosition();
 
@@ -789,26 +863,32 @@ export default function AdminVirtualTour() {
     try {
       const { data: insertedHotspot, error } = await supabase
         .from("virtual_tour_hotspots")
-        .insert({
-          scene_id: selectedScene.id,
-          to_scene_id: Number(draft.to_scene_id),
-          yaw: draft.yaw,
-          pitch: draft.pitch,
-          label: draft.label.trim() || null,
-        })
+.insert({
+  scene_id: selectedScene.id,
+  to_scene_id: Number(draft.to_scene_id),
+  yaw: draft.yaw,
+  pitch: draft.pitch,
+  target_yaw:
+    scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.initial_yaw ?? null,
+  target_pitch:
+    scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.initial_pitch ?? null,
+  label: draft.label.trim() || null,
+})
         .select("*")
         .single();
 
       if (error) throw error;
 
-      const normalizedInsertedHotspot: Hotspot = {
-        id: toNumber(insertedHotspot.id),
-        scene_id: toNumber(insertedHotspot.scene_id),
-        to_scene_id: toNumber(insertedHotspot.to_scene_id),
-        yaw: Number(insertedHotspot.yaw),
-        pitch: Number(insertedHotspot.pitch),
-        label: insertedHotspot.label || null,
-      };
+const normalizedInsertedHotspot: Hotspot = {
+  id: toNumber(insertedHotspot.id),
+  scene_id: toNumber(insertedHotspot.scene_id),
+  to_scene_id: toNumber(insertedHotspot.to_scene_id),
+  yaw: Number(insertedHotspot.yaw),
+  pitch: Number(insertedHotspot.pitch),
+  target_yaw: toNullableNumber(insertedHotspot.target_yaw),
+  target_pitch: toNullableNumber(insertedHotspot.target_pitch),
+  label: insertedHotspot.label || null,
+};
 
       setScenes((prev) =>
         prev.map((scene) =>
@@ -853,12 +933,14 @@ export default function AdminVirtualTour() {
     try {
       const { error } = await supabase
         .from("virtual_tour_hotspots")
-        .update({
-          to_scene_id: Number(editingHotspot.to_scene_id),
-          label: editingHotspot.label.trim() || null,
-          yaw: editingHotspot.yaw,
-          pitch: editingHotspot.pitch,
-        })
+.update({
+  to_scene_id: Number(editingHotspot.to_scene_id),
+  label: editingHotspot.label.trim() || null,
+  yaw: editingHotspot.yaw,
+  pitch: editingHotspot.pitch,
+  target_yaw: editingHotspot.target_yaw,
+  target_pitch: editingHotspot.target_pitch,
+})
         .eq("id", editingHotspot.id);
 
       if (error) throw error;
@@ -871,12 +953,15 @@ export default function AdminVirtualTour() {
                 hotspots: scene.hotspots.map((hotspot) =>
                   hotspot.id === editingHotspot.id
                     ? {
-                        ...hotspot,
-                        to_scene_id: Number(editingHotspot.to_scene_id),
-                        label: editingHotspot.label.trim() || null,
-                        yaw: editingHotspot.yaw,
-                        pitch: editingHotspot.pitch,
-                      }
+? {
+    ...hotspot,
+    to_scene_id: Number(editingHotspot.to_scene_id),
+    label: editingHotspot.label.trim() || null,
+    yaw: editingHotspot.yaw,
+    pitch: editingHotspot.pitch,
+    target_yaw: editingHotspot.target_yaw,
+    target_pitch: editingHotspot.target_pitch,
+  }
                     : hotspot,
                 ),
               }
@@ -1579,6 +1664,14 @@ export default function AdminVirtualTour() {
                                 <Edit size={14} />
                               </button>
 
+  <button
+    onClick={() => handleSaveHotspotTargetView(hotspot.id)}
+    className="p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white"
+    title="Ruaj drejtimin e hyrjes"
+  >
+    <LocateFixed size={14} />
+  </button>
+
                               <button
                                 onClick={() => handleDeleteHotspot(hotspot.id)}
                                 className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
@@ -1949,6 +2042,14 @@ export default function AdminVirtualTour() {
                   <LocateFixed size={16} />
                   Vendose në Qendër
                 </button>
+
+
+  <button
+    onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
+    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+  >
+    Ruaj drejtimin e hyrjes për këtë hotspot
+  </button>
 
                 <button
                   type="button"

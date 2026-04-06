@@ -48,29 +48,31 @@ export default function PropertyVirtualTourViewer({
         console.error("Hotspot load error:", hotspotError);
       }
 
-      const normalized = sceneData.map((scene) => ({
-        id: scene.id,
-        title: scene.title,
-        imageUrl: scene.image_url,
-        thumbnailUrl: scene.thumbnail_url,
-        isDefault: scene.is_default,
-        sortOrder: scene.sort_order,
-        positionX: scene.position_x,
-        positionY: scene.position_y,
-        initialYaw: scene.initial_yaw,
-        initialPitch: scene.initial_pitch,
-        hotspots:
-          hotspots
-            ?.filter((h) => h.scene_id === scene.id)
-            .map((h) => ({
-              id: h.id,
-              fromSceneId: h.scene_id,
-              toSceneId: h.to_scene_id,
-              yaw: h.yaw,
-              pitch: h.pitch,
-              label: h.label,
-            })) || [],
-      }));
+const normalized = sceneData.map((scene) => ({
+  id: scene.id,
+  title: scene.title,
+  imageUrl: scene.image_url,
+  thumbnailUrl: scene.thumbnail_url,
+  isDefault: scene.is_default,
+  sortOrder: scene.sort_order,
+  positionX: scene.position_x,
+  positionY: scene.position_y,
+  initialYaw: scene.initial_yaw,
+  initialPitch: scene.initial_pitch,
+  hotspots:
+    hotspots
+      ?.filter((h) => h.scene_id === scene.id)
+      .map((h) => ({
+        id: h.id,
+        fromSceneId: h.scene_id,
+        toSceneId: h.to_scene_id,
+        yaw: h.yaw,
+        pitch: h.pitch,
+        targetYaw: h.target_yaw,
+        targetPitch: h.target_pitch,
+        label: h.label,
+      })) || [],
+}));
 
       setScenes(normalized);
       setLoading(false);

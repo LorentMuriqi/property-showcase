@@ -17,14 +17,16 @@ interface VirtualTour360Props {
     positionY?: number | null;
     initialYaw?: number | null;
     initialPitch?: number | null;
-    hotspots: Array<{
-      id: number;
-      fromSceneId: number;
-      toSceneId: number;
-      yaw: number;
-      pitch: number;
-      label?: string | null;
-    }>;
+hotspots: Array<{
+  id: number;
+  fromSceneId: number;
+  toSceneId: number;
+  yaw: number;
+  pitch: number;
+  targetYaw?: number | null;
+  targetPitch?: number | null;
+  label?: string | null;
+}>;
   }>;
   defaultSceneId?: number | null;
   onClose?: () => void;
@@ -68,6 +70,105 @@ export function VirtualTour360({
 
     return defaultScene ? String(defaultScene.id) : null;
   }, [scenes, defaultSceneId]);
+  
+  
+  const getSceneStartOrientation = (sceneId: number) => {
+  const scene = scenes.find((s) => s.id === sceneId);
+  if (!scene) return null;
+
+  if (
+    typeof scene.initialYaw === "number" &&
+    typeof scene.initialPitch === "number" &&
+    Number.isFinite(scene.initialYaw) &&
+    Number.isFinite(scene.initialPitch)
+  ) {
+    return {
+      yaw: scene.initialYaw,
+      pitch: scene.initialPitch,
+    };
+  }
+
+  return null;
+};
+
+const orientViewer = async (yaw: number, pitch: number) => {
+  const viewer = viewerRef.current;
+  if (!viewer) return;
+
+  try {
+    await viewer.animate({
+      yaw,
+      pitch,
+      speed: "8rpm",
+    });
+  } catch {
+    try {
+      viewer.rotate({ yaw, pitch });
+    } catch (error) {
+      console.error("Viewer orientation error:", error);
+    }
+  }
+};
+
+const orientToSceneStart = async (sceneId: number) => {
+  const orientation = getSceneStartOrientation(sceneId);
+  if (!orientation) return;
+
+  await orientViewer(orientation.yaw, orientation.pitch);
+};
+  
+  
+  
+  const getHotspotTransitionOrientation = (
+  fromSceneId: number,
+  toSceneId: number,
+  hotspotYaw: number,
+  hotspotPitch: number,
+  currentYaw: number,
+  currentPitch: number,
+) => {
+  const fromScene = scenes.find((s) => s.id === fromSceneId);
+  if (!fromScene) return null;
+
+  const hotspot = fromScene.hotspots.find(
+    (h) =>
+      h.toSceneId === toSceneId &&
+      h.yaw === hotspotYaw &&
+      h.pitch === hotspotPitch,
+  );
+
+  if (!hotspot) return getSceneStartOrientation(toSceneId);
+
+  const baseYaw =
+    typeof hotspot.targetYaw === "number" && Number.isFinite(hotspot.targetYaw)
+      ? hotspot.targetYaw
+      : getSceneStartOrientation(toSceneId)?.yaw;
+
+  const basePitch =
+    typeof hotspot.targetPitch === "number" && Number.isFinite(hotspot.targetPitch)
+      ? hotspot.targetPitch
+      : getSceneStartOrientation(toSceneId)?.pitch;
+
+  if (
+    typeof baseYaw !== "number" ||
+    typeof basePitch !== "number" ||
+    !Number.isFinite(baseYaw) ||
+    !Number.isFinite(basePitch)
+  ) {
+    return null;
+  }
+
+  const deltaYaw = currentYaw - hotspotYaw;
+  const deltaPitch = currentPitch - hotspotPitch;
+
+  return {
+    yaw: baseYaw + deltaYaw,
+    pitch: basePitch + deltaPitch,
+  };
+};
+  
+  
+  
 
   const orientToSceneStart = async (sceneId: number) => {
     const viewer = viewerRef.current;
@@ -137,14 +238,37 @@ export function VirtualTour360({
       orientToSceneStart(Number(resolvedStartNodeId));
     }, 120);
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      const nextId = Number(node.id);
-      setCurrentSceneId(nextId);
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  setCurrentSceneId(nextId);
+});
 
-      window.setTimeout(() => {
-        orientToSceneStart(nextId);
-      }, 120);
-    });
+
+
+vtPlugin.addEventListener("enter-arrow", ({ fromNode, link, toNode }: any) => {
+  const viewer = viewerRef.current;
+  if (!viewer) return;
+
+  const currentPosition = viewer.getPosition?.();
+  if (!currentPosition) return;
+
+  const orientation = getHotspotTransitionOrientation(
+    Number(fromNode.id),
+    Number(toNode.id),
+    Number(link.position?.yaw),
+    Number(link.position?.pitch),
+    currentPosition.yaw,
+    currentPosition.pitch,
+  );
+
+  if (!orientation) return;
+
+  window.setTimeout(() => {
+    orientViewer(orientation.yaw, orientation.pitch);
+  }, 120);
+});
+
+
 
     return () => {
       viewer.destroy();
@@ -152,11 +276,16 @@ export function VirtualTour360({
     };
   }, [nodes, resolvedStartNodeId]);
 
-  const handleSceneChange = (id: number) => {
-    if (!viewerRef.current) return;
-    const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
-    vtPlugin.setCurrentNode(String(id));
-  };
+const handleSceneChange = async (id: number) => {
+  if (!viewerRef.current) return;
+  const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
+
+  await vtPlugin.setCurrentNode(String(id));
+
+  window.setTimeout(() => {
+    orientToSceneStart(id);
+  }, 120);
+};
 
   const toggleFullscreen = async () => {
     try {
