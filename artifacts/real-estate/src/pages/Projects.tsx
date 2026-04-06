@@ -61,7 +61,38 @@ export default function Projects() {
         console.error("Supabase fetch error:", error);
         setProjects([]);
       } else {
-        setProjects(data || []);
+        const properties = data || [];
+
+        if (properties.length === 0) {
+          setProjects([]);
+        } else {
+          const propertyIds = properties.map((item) => item.id);
+
+          const { data: sceneRows, error: sceneError } = await supabase
+            .from("virtual_tour_scenes")
+            .select("property_id")
+            .in("property_id", propertyIds);
+
+          if (sceneError) {
+            console.error("Supabase virtual tour scenes fetch error:", sceneError);
+          }
+
+          const scenePropertyIds = new Set(
+            (sceneRows || []).map((row) => String(row.property_id)),
+          );
+
+          const enrichedProjects = properties.map((property) => ({
+            ...property,
+            hasVirtualTour:
+              scenePropertyIds.has(String(property.id)) ||
+              !!property.virtualTourUrl ||
+              !!property.virtualTourEmbedCode ||
+              !!property.virtual_tour_url ||
+              !!property.virtual_tour_embed_code,
+          }));
+
+          setProjects(enrichedProjects);
+        }
       }
 
       setIsLoading(false);

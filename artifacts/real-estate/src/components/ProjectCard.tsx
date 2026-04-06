@@ -52,7 +52,7 @@ export function ProjectCard({ project }: { project: any }) {
             </span>
           </div>
 
-          {(project.virtualTourUrl || project.virtual_tour_url) && (
+          {project.hasVirtualTour && (
             <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-[10px] font-bold text-white uppercase tracking-widest">Tur 360°</span>
@@ -67,9 +67,13 @@ export function ProjectCard({ project }: { project: any }) {
             <h3 className="font-display text-xl font-bold text-white group-hover:text-primary transition-colors line-clamp-1">
               {project.title}
             </h3>
-            <span className="font-display text-lg text-primary shrink-0 font-medium">
-              {formattedPrice}
-            </span>
+            <div className="shrink-0 text-right">
+              <div className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 shadow-[0_8px_30px_rgba(212,175,55,0.12)] backdrop-blur-sm">
+                <span className="font-display text-base md:text-lg font-semibold text-primary leading-none">
+                  {formattedPrice}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 text-muted-foreground text-sm mb-6">
