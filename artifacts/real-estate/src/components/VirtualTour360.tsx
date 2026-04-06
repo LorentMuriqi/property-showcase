@@ -15,6 +15,8 @@ interface VirtualTour360Props {
     sortOrder: number;
     positionX?: number | null;
     positionY?: number | null;
+    initialYaw?: number | null;
+    initialPitch?: number | null;
     hotspots: Array<{
       id: number;
       fromSceneId: number;
@@ -67,6 +69,40 @@ export function VirtualTour360({
     return defaultScene ? String(defaultScene.id) : null;
   }, [scenes, defaultSceneId]);
 
+  const orientToSceneStart = async (sceneId: number) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const scene = scenes.find((s) => s.id === sceneId);
+    if (!scene) return;
+
+    const yaw = scene.initialYaw;
+    const pitch = scene.initialPitch;
+
+    if (
+      typeof yaw !== "number" ||
+      typeof pitch !== "number" ||
+      !Number.isFinite(yaw) ||
+      !Number.isFinite(pitch)
+    ) {
+      return;
+    }
+
+    try {
+      await viewer.animate({
+        yaw,
+        pitch,
+        speed: "8rpm",
+      });
+    } catch (error) {
+      try {
+        viewer.rotate({ yaw, pitch });
+      } catch (rotateError) {
+        console.error("Scene orientation error:", rotateError);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0 || !resolvedStartNodeId) return;
 
@@ -97,8 +133,17 @@ export function VirtualTour360({
 
     setCurrentSceneId(Number(resolvedStartNodeId));
 
+    window.setTimeout(() => {
+      orientToSceneStart(Number(resolvedStartNodeId));
+    }, 120);
+
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      setCurrentSceneId(Number(node.id));
+      const nextId = Number(node.id);
+      setCurrentSceneId(nextId);
+
+      window.setTimeout(() => {
+        orientToSceneStart(nextId);
+      }, 120);
     });
 
     return () => {
@@ -135,14 +180,14 @@ export function VirtualTour360({
 
   if (scenes.length === 0) {
     return (
-      <div className="w-full h-full min-h-[500px] flex items-center justify-center bg-black text-white">
+      <div className="w-full h-full min-h-[100dvh] md:min-h-[500px] flex items-center justify-center bg-black text-white">
         Asnjë skenë e disponueshme.
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full min-h-[500px] flex flex-col bg-black overflow-hidden font-sans group">
+    <div className="relative w-full h-full min-h-[100dvh] md:min-h-[500px] flex flex-col bg-black overflow-hidden font-sans group">
       {onClose && (
         <button
           onClick={onClose}
@@ -154,7 +199,7 @@ export function VirtualTour360({
 
       <div ref={containerRef} className="w-full h-full flex-1" />
 
-      <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none">
+      <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none max-w-[80%]">
         <h2 className="text-white font-display text-xl">
           {scenes.find((s) => s.id === currentSceneId)?.title || "Tur 360°"}
         </h2>
@@ -216,7 +261,7 @@ export function VirtualTour360({
         </div>
       )}
 
-      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-4 px-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
         <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
           {scenes.map((scene) => (
             <button

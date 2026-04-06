@@ -44,6 +44,8 @@ type Scene = {
   sort_order: number;
   position_x: number | null;
   position_y: number | null;
+  initial_yaw: number | null;
+  initial_pitch: number | null;
   hotspots: Hotspot[];
 };
 
@@ -271,31 +273,28 @@ export default function AdminVirtualTour() {
       pitch: null,
     }));
   }, []);
-  
-  
-  
+
   const getLiveViewerPosition = () => {
-  try {
-    const viewer = editorViewerRef.current;
-    if (!viewer) return null;
+    try {
+      const viewer = editorViewerRef.current;
+      if (!viewer) return null;
 
-    const position = viewer.getPosition();
-    if (!position) return null;
+      const position = viewer.getPosition();
+      if (!position) return null;
 
-    if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
+      if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
+        return null;
+      }
+
+      return {
+        yaw: position.yaw,
+        pitch: position.pitch,
+      };
+    } catch (error) {
+      console.error("Live viewer position read error:", error);
       return null;
     }
-
-    return {
-      yaw: position.yaw,
-      pitch: position.pitch,
-    };
-  } catch (error) {
-    console.error("Live viewer position read error:", error);
-    return null;
-  }
-};
-  
+  };
 
   const usedTargetSceneIds = useMemo(() => {
     if (!selectedScene) return new Set<number>();
@@ -398,6 +397,8 @@ export default function AdminVirtualTour() {
         sort_order: toNumber(scene.sort_order, 0),
         position_x: toNullableNumber(scene.position_x),
         position_y: toNullableNumber(scene.position_y),
+        initial_yaw: toNullableNumber(scene.initial_yaw),
+        initial_pitch: toNullableNumber(scene.initial_pitch),
         hotspots: hotspotsMap.get(normalizedId) || [],
       };
     });
@@ -570,6 +571,57 @@ export default function AdminVirtualTour() {
     }
   };
 
+  const handleSaveSceneStartView = async () => {
+    if (!selectedScene) return;
+
+    const livePosition = getLiveViewerPosition();
+
+    if (!livePosition) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("virtual_tour_scenes")
+        .update({
+          initial_yaw: livePosition.yaw,
+          initial_pitch: livePosition.pitch,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedScene.id);
+
+      if (error) throw error;
+
+      setScenes((prev) =>
+        prev.map((scene) =>
+          scene.id === selectedScene.id
+            ? {
+                ...scene,
+                initial_yaw: livePosition.yaw,
+                initial_pitch: livePosition.pitch,
+              }
+            : scene,
+        ),
+      );
+
+      toast({
+        title: "Sukses",
+        description: "Pamja fillestare e skenës u ruajt.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Ruajtja e pamjes fillestare dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSetDefaultScene = async (sceneId: number) => {
     try {
       await supabase
@@ -632,40 +684,40 @@ export default function AdminVirtualTour() {
     setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
   };
 
-const handlePlaceHotspotAtCenter = () => {
-  if (!isPlacementMode) {
+  const handlePlaceHotspotAtCenter = () => {
+    if (!isPlacementMode) {
+      toast({
+        title: "Gabim",
+        description: "Aktivizo placement mode fillimisht.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const livePosition = getLiveViewerPosition();
+
+    if (!livePosition) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDraft((prev) => ({
+      ...prev,
+      yaw: livePosition.yaw,
+      pitch: livePosition.pitch,
+    }));
+
+    setCameraCenter(livePosition);
+
     toast({
-      title: "Gabim",
-      description: "Aktivizo placement mode fillimisht.",
-      variant: "destructive",
+      title: "Pozicioni u vendos",
+      description: "Hotspot-i u vendos në qendrën aktuale të pamjes.",
     });
-    return;
-  }
-
-  const livePosition = getLiveViewerPosition();
-
-  if (!livePosition) {
-    toast({
-      title: "Gabim",
-      description: "Pozicioni aktual i kamerës nuk u lexua.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  setDraft((prev) => ({
-    ...prev,
-    yaw: livePosition.yaw,
-    pitch: livePosition.pitch,
-  }));
-
-  setCameraCenter(livePosition);
-
-  toast({
-    title: "Pozicioni u vendos",
-    description: "Hotspot-i u vendos në qendrën aktuale të pamjes.",
-  });
-};
+  };
 
   const nudgeDraftPosition = (yawDelta: number, pitchDelta: number) => {
     setDraft((prev) => {
@@ -679,38 +731,38 @@ const handlePlaceHotspotAtCenter = () => {
     });
   };
 
-const handlePlaceEditedHotspotAtCenter = () => {
-  if (!editingHotspot) return;
+  const handlePlaceEditedHotspotAtCenter = () => {
+    if (!editingHotspot) return;
 
-  const livePosition = getLiveViewerPosition();
+    const livePosition = getLiveViewerPosition();
 
-  if (!livePosition) {
+    if (!livePosition) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEditingHotspot((prev) =>
+      prev
+        ? {
+            ...prev,
+            yaw: livePosition.yaw,
+            pitch: livePosition.pitch,
+          }
+        : prev,
+    );
+
+    setCameraCenter(livePosition);
+    setIsEditingHotspotPlacement(true);
+
     toast({
-      title: "Gabim",
-      description: "Pozicioni aktual i kamerës nuk u lexua.",
-      variant: "destructive",
+      title: "Pozicioni u përditësua",
+      description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
     });
-    return;
-  }
-
-  setEditingHotspot((prev) =>
-    prev
-      ? {
-          ...prev,
-          yaw: livePosition.yaw,
-          pitch: livePosition.pitch,
-        }
-      : prev,
-  );
-
-  setCameraCenter(livePosition);
-  setIsEditingHotspotPlacement(true);
-
-  toast({
-    title: "Pozicioni u përditësua",
-    description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
-  });
-};
+  };
 
   const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
     setEditingHotspot((prev) => {
@@ -935,8 +987,8 @@ const handlePlaceEditedHotspotAtCenter = () => {
         container: editorContainerRef.current,
         panorama: selectedScene.image_url,
         navbar: ["zoom", "move", "fullscreen"],
-        defaultYaw: 0,
-        defaultPitch: 0,
+        defaultYaw: selectedScene.initial_yaw ?? 0,
+        defaultPitch: selectedScene.initial_pitch ?? 0,
         plugins: [[MarkersPlugin, {}]],
       });
 
@@ -1267,6 +1319,21 @@ const handlePlaceEditedHotspotAtCenter = () => {
               </div>
             </div>
 
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                onClick={handleSaveSceneStartView}
+                className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+              >
+                Ruaj këndin fillestar të kësaj skene
+              </button>
+
+              {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
+                <div className="px-4 py-2 rounded-xl bg-black/20 text-xs text-white/70 border border-white/10">
+                  Start view: {selectedScene.initial_yaw.toFixed(3)} / {selectedScene.initial_pitch.toFixed(3)}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 {viewerError && (
@@ -1278,25 +1345,24 @@ const handlePlaceEditedHotspotAtCenter = () => {
                 <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
                   <div ref={editorContainerRef} className="w-full h-full" />
 
-{(isPlacementMode || isEditingHotspotPlacement) && (
-  <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-20">
-    <div className="relative w-10 h-10">
-      <div className="absolute left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
-      <div className="absolute top-1/2 left-0 right-0 h-[2px] -translate-y-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
-      <div className="absolute left-1/2 top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-black/40 shadow-[0_0_16px_rgba(212,175,55,0.35)]" />
-    </div>
-  </div>
-)}
-
+                  {(isPlacementMode || isEditingHotspotPlacement) && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-20">
+                      <div className="relative w-10 h-10">
+                        <div className="absolute left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
+                        <div className="absolute top-1/2 left-0 right-0 h-[2px] -translate-y-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
+                        <div className="absolute left-1/2 top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-black/40 shadow-[0_0_16px_rgba(212,175,55,0.35)]" />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-{isEditingHotspotPlacement
-  ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
-  : isPlacementMode
-  ? draft.yaw !== null && draft.pitch !== null
-    ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
-    : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
-  : "Zgjidh target-in dhe aktivizo placement mode"}
+                    {isEditingHotspotPlacement
+                      ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
+                      : isPlacementMode
+                      ? draft.yaw !== null && draft.pitch !== null
+                        ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
+                        : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
+                      : "Zgjidh target-in dhe aktivizo placement mode"}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">

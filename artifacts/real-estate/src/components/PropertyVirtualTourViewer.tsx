@@ -57,6 +57,8 @@ export default function PropertyVirtualTourViewer({
         sortOrder: scene.sort_order,
         positionX: scene.position_x,
         positionY: scene.position_y,
+        initialYaw: scene.initial_yaw,
+        initialPitch: scene.initial_pitch,
         hotspots:
           hotspots
             ?.filter((h) => h.scene_id === scene.id)
@@ -94,7 +96,7 @@ export default function PropertyVirtualTourViewer({
   if (fallbackEmbedCode) {
     return (
       <div
-        className="w-full h-[80vh] [&>iframe]:w-full [&>iframe]:h-full"
+        className="w-full h-[100dvh] md:h-[80vh] [&>iframe]:w-full [&>iframe]:h-full"
         dangerouslySetInnerHTML={{ __html: fallbackEmbedCode }}
       />
     );
@@ -104,7 +106,7 @@ export default function PropertyVirtualTourViewer({
     return (
       <iframe
         src={fallbackUrl}
-        className="w-full h-[80vh] border-none rounded-2xl"
+        className="w-full h-[100dvh] md:h-[80vh] border-none rounded-none md:rounded-2xl"
         allowFullScreen
         title="Virtual Tour"
       />
