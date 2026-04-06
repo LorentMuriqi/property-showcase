@@ -170,40 +170,6 @@ const orientToSceneStart = async (sceneId: number) => {
   
   
 
-  const orientToSceneStart = async (sceneId: number) => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-
-    const scene = scenes.find((s) => s.id === sceneId);
-    if (!scene) return;
-
-    const yaw = scene.initialYaw;
-    const pitch = scene.initialPitch;
-
-    if (
-      typeof yaw !== "number" ||
-      typeof pitch !== "number" ||
-      !Number.isFinite(yaw) ||
-      !Number.isFinite(pitch)
-    ) {
-      return;
-    }
-
-    try {
-      await viewer.animate({
-        yaw,
-        pitch,
-        speed: "8rpm",
-      });
-    } catch (error) {
-      try {
-        viewer.rotate({ yaw, pitch });
-      } catch (rotateError) {
-        console.error("Scene orientation error:", rotateError);
-      }
-    }
-  };
-
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0 || !resolvedStartNodeId) return;
 
