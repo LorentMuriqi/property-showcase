@@ -950,20 +950,19 @@ const normalizedInsertedHotspot: Hotspot = {
           scene.id === selectedSceneId
             ? {
                 ...scene,
-                hotspots: scene.hotspots.map((hotspot) =>
-                  hotspot.id === editingHotspot.id
-                    ? {
- {
-    ...hotspot,
-    to_scene_id: Number(editingHotspot.to_scene_id),
-    label: editingHotspot.label.trim() || null,
-    yaw: editingHotspot.yaw,
-    pitch: editingHotspot.pitch,
-    target_yaw: editingHotspot.target_yaw,
-    target_pitch: editingHotspot.target_pitch,
-  }
-                    : hotspot,
-                ),
+hotspots: scene.hotspots.map((hotspot) =>
+  hotspot.id === editingHotspot.id
+    ? {
+        ...hotspot,
+        to_scene_id: Number(editingHotspot.to_scene_id),
+        label: editingHotspot.label.trim() || null,
+        yaw: editingHotspot.yaw,
+        pitch: editingHotspot.pitch,
+        target_yaw: editingHotspot.target_yaw,
+        target_pitch: editingHotspot.target_pitch,
+      }
+    : hotspot,
+),
               }
             : scene,
         ),
