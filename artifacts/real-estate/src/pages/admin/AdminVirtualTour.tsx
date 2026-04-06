@@ -1290,12 +1290,13 @@ const handlePlaceEditedHotspotAtCenter = () => {
 
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-                    {isEditingHotspotPlacement
-                      ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
-: isPlacementMode
-? draft.yaw !== null && draft.pitch !== null
-  ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
-  : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
+{isEditingHotspotPlacement
+  ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
+  : isPlacementMode
+  ? draft.yaw !== null && draft.pitch !== null
+    ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
+    : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
+  : "Zgjidh target-in dhe aktivizo placement mode"}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
