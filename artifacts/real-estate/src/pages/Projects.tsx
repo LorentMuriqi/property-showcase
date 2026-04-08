@@ -36,6 +36,13 @@ export default function Projects() {
   setPage(1);
 }, [country, city, search]);
 
+useEffect(() => {
+  window.scrollTo({
+    top: 0,
+    left: 0,
+    behavior: "smooth",
+  });
+}, [page]);
 
 
 
