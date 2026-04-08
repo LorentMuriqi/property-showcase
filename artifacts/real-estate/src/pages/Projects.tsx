@@ -19,7 +19,7 @@ export default function Projects() {
   
   
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 8;
   const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
