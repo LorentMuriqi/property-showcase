@@ -286,14 +286,17 @@ const getVisiblePages = () => {
     ))}
   </div>
 
+
+
 {totalPages > 1 && (
   <div className="mt-10 flex items-center justify-center gap-2 flex-wrap">
     <button
       onClick={() => setPage((prev) => Math.max(1, prev - 1))}
       disabled={page === 1}
-      className="px-4 py-2 border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+      aria-label="Faqja e mëparshme"
+      className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
     >
-      Previous
+      &#8249;
     </button>
 
     {getVisiblePages().map((item, index) =>
@@ -322,12 +325,18 @@ const getVisiblePages = () => {
     <button
       onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
       disabled={page === totalPages}
-      className="px-4 py-2 border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+      aria-label="Faqja tjetër"
+      className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
     >
-      Next
+      &#8250;
     </button>
   </div>
 )}
+
+
+
+
+
 </>
                 </>
               ) : (
