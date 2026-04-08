@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Filter, X, Search } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
@@ -17,6 +17,7 @@ export default function Projects() {
   const [cities, setCities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  const pageTopRef = useRef<HTMLDivElement | null>(null);
   
   const [page, setPage] = useState(1);
   const pageSize = 8;
@@ -36,13 +37,7 @@ export default function Projects() {
   setPage(1);
 }, [country, city, search]);
 
-useEffect(() => {
-  window.scrollTo({
-    top: 0,
-    left: 0,
-    behavior: "smooth",
-  });
-}, [page]);
+
 
 
 
@@ -69,20 +64,12 @@ useEffect(() => {
       query = query.eq("city", city);
     }
 
-if (search.trim()) {
-  const safeSearch = search
-    .trim()
-    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (safeSearch) {
-    query = query.textSearch("search_vector", safeSearch, {
-      type: "plain",
-      config: "simple",
-    });
-  }
-}
+    if (search.trim()) {
+      const safeSearch = search.trim().replace(/,/g, " ");
+      query = query.or(
+        `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`
+      );
+    }
 
     const { data, error, count } = await query
       .order("created_at", { ascending: false })
@@ -98,6 +85,13 @@ if (search.trim()) {
     }
 
     setIsLoading(false);
+
+    requestAnimationFrame(() => {
+      pageTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   };
 
   fetchProjects();
@@ -187,7 +181,7 @@ const getVisiblePages = () => {
 
   return (
     <Layout>
-      <div className="pt-32 pb-24 bg-background min-h-screen">
+      <div ref={pageTopRef} className="pt-32 pb-24 bg-background min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
             <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Prona</h1>
