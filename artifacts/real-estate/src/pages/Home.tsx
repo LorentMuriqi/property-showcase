@@ -12,107 +12,95 @@ export default function Home() {
   const [city, setCity] = useState("");
   const [search, setSearch] = useState("");
 
-  const [countries, setCountries] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [recentProjects, setRecentProjects] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchRecentProjects = async () => {
-      setIsLoading(true);
 
-const nowIso = new Date().toISOString();
 
-const { data, error } = await supabase
-  .from("properties")
-  .select("*")
-  .eq("listing_status", "active")
-  .eq("is_paused", false)
-  .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
-  .order("created_at", { ascending: false })
-  .limit(6);
+const [countries, setCountries] = useState<string[]>([]);
+const [cities, setCities] = useState<string[]>([]);
+const [allFilterRows, setAllFilterRows] = useState<{ country: string | null; city: string | null }[]>([]);
+const [recentProjects, setRecentProjects] = useState<any[]>([]);
+const [isLoading, setIsLoading] = useState(true);
 
-      if (error) {
-        console.error("Fetch recent properties error:", error);
-        setRecentProjects([]);
-      } else {
-        const properties = data || [];
+useEffect(() => {
+  const fetchHomeData = async () => {
+    setIsLoading(true);
 
-        if (properties.length === 0) {
-          setRecentProjects([]);
-        } else {
-          const propertyIds = properties.map((item) => item.id);
+    const nowIso = new Date().toISOString();
 
-          const { data: sceneRows, error: sceneError } = await supabase
-            .from("virtual_tour_scenes")
-            .select("property_id")
-            .in("property_id", propertyIds);
+    const { data, error } = await supabase
+      .from("properties")
+      .select(`
+        id,
+        title,
+        description,
+        country,
+        city,
+        address,
+        status,
+        property_type,
+        price,
+        currency,
+        images,
+        created_at,
+        listing_status,
+        is_paused,
+        expires_at
+      `)
+      .eq("listing_status", "active")
+      .eq("is_paused", false)
+      .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+      .order("created_at", { ascending: false });
 
-          if (sceneError) {
-            console.error("Fetch virtual tour scenes error:", sceneError);
-          }
-
-          const scenePropertyIds = new Set(
-            (sceneRows || []).map((row) => String(row.property_id)),
-          );
-
-          const enrichedProjects = properties.map((property) => ({
-            ...property,
-            hasVirtualTour:
-              scenePropertyIds.has(String(property.id)) ||
-              !!property.virtualTourUrl ||
-              !!property.virtualTourEmbedCode ||
-              !!property.virtual_tour_url ||
-              !!property.virtual_tour_embed_code,
-          }));
-
-          setRecentProjects(enrichedProjects);
-        }
-      }
-
+    if (error) {
+      console.error("Fetch home data error:", error);
+      setRecentProjects([]);
+      setAllFilterRows([]);
+      setCountries([]);
+      setCities([]);
       setIsLoading(false);
-    };
+      return;
+    }
 
-    fetchRecentProjects();
-  }, []);
+    const rows = data || [];
 
-  useEffect(() => {
+    setRecentProjects(rows.slice(0, 6));
+    setAllFilterRows(
+      rows.map((item) => ({
+        country: item.country ?? null,
+        city: item.city ?? null,
+      }))
+    );
 
+    const allCountries = [
+      ...new Set(rows.map((item) => item.country).filter(Boolean)),
+    ] as string[];
 
+    setCountries(allCountries);
+    setIsLoading(false);
+  };
 
-const fetchFilters = async () => {
-  const nowIso = new Date().toISOString();
+  fetchHomeData();
+}, []);
 
-  const { data, error } = await supabase
-    .from("properties")
-    .select("country, city")
-    .eq("listing_status", "active")
-    .eq("is_paused", false)
-    .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
+useEffect(() => {
+  if (country) {
+    const filteredCities = [
+      ...new Set(
+        allFilterRows
+          .filter((item) => item.country === country)
+          .map((item) => item.city)
+          .filter(Boolean)
+      ),
+    ] as string[];
 
-  if (error) {
-    console.error("Error fetching filters:", error);
-    return;
+    setCities(filteredCities);
+  } else {
+    setCities([]);
   }
-
-  if (data) {
-    const countries = [
-      ...new Set(data.map((item) => item.country).filter(Boolean)),
-    ];
-
-    const cities = [
-      ...new Set(data.map((item) => item.city).filter(Boolean)),
-    ];
-
-    setCountries(countries);
-    setCities(cities);
-  }
-};
+}, [country, allFilterRows]);
 
 
 
-    fetchFilters();
-  }, [country]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
