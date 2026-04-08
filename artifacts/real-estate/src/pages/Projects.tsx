@@ -86,12 +86,12 @@ useEffect(() => {
 
     setIsLoading(false);
 
-    requestAnimationFrame(() => {
-      pageTopRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
+setTimeout(() => {
+  pageTopRef.current?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}, 50);
   };
 
   fetchProjects();
