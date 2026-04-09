@@ -19,19 +19,24 @@ export default function Projects() {
   
   const pageTopRef = useRef<HTMLDivElement | null>(null);
   
-  const [page, setPage] = useState(1);
+  const initialPage = Math.max(1, Number(searchParams.get("page") || "1") || 1);
+  const [page, setPage] = useState(initialPage);
   const pageSize = 8;
   const [totalCount, setTotalCount] = useState(0);
 
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (country) params.append("country", country);
-    if (city) params.append("city", city);
-    if (search) params.append("search", search);
 
-    const newUrl = `/projects${params.toString() ? `?${params.toString()}` : ""}`;
-    window.history.replaceState({}, "", newUrl);
-  }, [country, city, search]);
+useEffect(() => {
+  const params = new URLSearchParams();
+  if (country) params.set("country", country);
+  if (city) params.set("city", city);
+  if (search) params.set("search", search);
+  if (page > 1) params.set("page", String(page));
+
+  const newUrl = `/projects${params.toString() ? `?${params.toString()}` : ""}`;
+  window.history.replaceState({}, "", newUrl);
+}, [country, city, search, page]);
+
+
   
   useEffect(() => {
   setPage(1);
