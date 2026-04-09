@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 const PROJECTS_SCROLL_Y_KEY = "projects-scroll-y";
 const PROJECTS_RETURN_URL_KEY = "projects-return-url";
 const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
+const PROJECTS_ACTIVE_CARD_ID_KEY = "projects-active-card-id";
+const PROJECTS_ACTIVE_CARD_TOP_KEY = "projects-active-card-top";
 
 export default function Projects() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -32,7 +34,12 @@ export default function Projects() {
   const shouldRestoreScrollRef = useRef(false);
   const restoredOnceRef = useRef(false);
 
-  const buildProjectsUrl = (pageValue: number, countryValue: string, cityValue: string, searchValue: string) => {
+  const buildProjectsUrl = (
+    pageValue: number,
+    countryValue: string,
+    cityValue: string,
+    searchValue: string
+  ) => {
     const params = new URLSearchParams();
     if (countryValue) params.set("country", countryValue);
     if (cityValue) params.set("city", cityValue);
@@ -43,6 +50,84 @@ export default function Projects() {
   };
 
   const currentProjectsUrl = buildProjectsUrl(page, country, city, search);
+
+  const saveProjectsState = (projectId?: string | number) => {
+    sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
+    sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
+
+    if (projectId !== undefined && projectId !== null) {
+      sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
+
+      const cardEl = document.getElementById(`project-card-${projectId}`);
+      if (cardEl) {
+        sessionStorage.setItem(
+          PROJECTS_ACTIVE_CARD_TOP_KEY,
+          String(cardEl.getBoundingClientRect().top)
+        );
+      }
+    }
+  };
+
+  const scrollToProjectsTop = (behavior: ScrollBehavior = "smooth") => {
+    const top =
+      pageTopRef.current
+        ? pageTopRef.current.getBoundingClientRect().top + window.scrollY
+        : 0;
+
+    window.scrollTo({
+      top,
+      left: 0,
+      behavior,
+    });
+  };
+
+  const restoreProjectsPosition = () => {
+    const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
+    const savedScrollY = Number(sessionStorage.getItem(PROJECTS_SCROLL_Y_KEY) || "0");
+    const savedCardId = sessionStorage.getItem(PROJECTS_ACTIVE_CARD_ID_KEY);
+    const savedCardTop = Number(sessionStorage.getItem(PROJECTS_ACTIVE_CARD_TOP_KEY) || "0");
+
+    if (savedUrl !== currentProjectsUrl) {
+      shouldRestoreScrollRef.current = false;
+      sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+      return;
+    }
+
+    const tryRestore = () => {
+      if (savedCardId) {
+        const cardEl = document.getElementById(`project-card-${savedCardId}`);
+
+        if (cardEl) {
+          const absoluteTop =
+            cardEl.getBoundingClientRect().top + window.scrollY;
+
+          window.scrollTo({
+            top: Math.max(0, absoluteTop - savedCardTop),
+            left: 0,
+            behavior: "auto",
+          });
+          return;
+        }
+      }
+
+      window.scrollTo({
+        top: savedScrollY,
+        left: 0,
+        behavior: "auto",
+      });
+    };
+
+    requestAnimationFrame(() => {
+      tryRestore();
+
+      setTimeout(() => {
+        tryRestore();
+
+        sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+        shouldRestoreScrollRef.current = false;
+      }, 120);
+    });
+  };
 
   const changePage = (nextPage: number) => {
     if (nextPage === page) return;
@@ -62,15 +147,12 @@ export default function Projects() {
   }, [country, city, search, page]);
 
   useEffect(() => {
-    const shouldRestore = sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
+    const shouldRestore =
+      sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
     const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
-    const savedScrollY = sessionStorage.getItem(PROJECTS_SCROLL_Y_KEY);
 
-    if (shouldRestore && savedUrl === currentProjectsUrl && savedScrollY) {
-      shouldRestoreScrollRef.current = true;
-    } else {
-      shouldRestoreScrollRef.current = false;
-    }
+    shouldRestoreScrollRef.current =
+      shouldRestore && savedUrl === currentProjectsUrl;
   }, []);
 
   useEffect(() => {
@@ -141,26 +223,16 @@ export default function Projects() {
 
       requestAnimationFrame(() => {
         if (shouldRestoreScrollRef.current) {
-          const savedScrollY = Number(sessionStorage.getItem(PROJECTS_SCROLL_Y_KEY) || "0");
-
-          window.scrollTo({
-            top: savedScrollY,
-            left: 0,
-            behavior: "auto",
-          });
-
-          sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
-          shouldRestoreScrollRef.current = false;
+          restoreProjectsPosition();
           restoredOnceRef.current = true;
           return;
         }
 
         if (shouldScrollToTopRef.current) {
-          pageTopRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-          shouldScrollToTopRef.current = false;
+          setTimeout(() => {
+            scrollToProjectsTop("smooth");
+            shouldScrollToTopRef.current = false;
+          }, 40);
         }
 
         restoredOnceRef.current = true;
@@ -186,7 +258,9 @@ export default function Projects() {
         return;
       }
 
-      const allCountries = [...new Set((data || []).map((item) => item.country).filter(Boolean))] as string[];
+      const allCountries = [
+        ...new Set((data || []).map((item) => item.country).filter(Boolean)),
+      ] as string[];
       setCountries(allCountries);
 
       if (country) {
@@ -254,7 +328,9 @@ export default function Projects() {
       <div ref={pageTopRef} className="pt-32 pb-24 bg-background min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">Prona</h1>
+            <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">
+              Prona
+            </h1>
             <p className="text-muted-foreground text-lg">
               Shfletoni koleksionin tonë të plotë të pronave luksoze.
             </p>
@@ -360,7 +436,13 @@ export default function Projects() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {projects.map((project) => (
-                      <ProjectCard key={project.id} project={project} />
+                      <div
+                        key={project.id}
+                        id={`project-card-${project.id}`}
+                        onClickCapture={() => saveProjectsState(project.id)}
+                      >
+                        <ProjectCard project={project} />
+                      </div>
                     ))}
                   </div>
 
