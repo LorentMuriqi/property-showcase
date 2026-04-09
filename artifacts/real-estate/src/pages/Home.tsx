@@ -111,11 +111,23 @@ const clearProjectsRestoreState = () => {
 };
 
 
+const prepareProjectsNavigationFromHome = () => {
+  sessionStorage.removeItem("projects-scroll-y");
+  sessionStorage.removeItem("projects-return-url");
+  sessionStorage.removeItem("projects-restore-scroll");
+  sessionStorage.removeItem("projects-active-card-id");
+  sessionStorage.removeItem("projects-active-card-top");
+
+  sessionStorage.removeItem("skip-global-scroll");
+  sessionStorage.setItem("force-scroll-top", "1");
+};
+
+
 
 const handleSearch = (e: React.FormEvent) => {
   e.preventDefault();
 
-  clearProjectsRestoreState();
+  prepareProjectsNavigationFromHome();
 
   const params = new URLSearchParams();
   if (country) params.append("country", country);
@@ -265,8 +277,7 @@ const handleSearch = (e: React.FormEvent) => {
 <Link
   href="/projects"
   onClick={() => {
-    clearProjectsRestoreState();
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    prepareProjectsNavigationFromHome();
   }}
   className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
 >
