@@ -147,14 +147,21 @@ const saveProjectsState = (projectId?: string | number) => {
     window.history.replaceState({}, "", newUrl);
   }, [country, city, search, page]);
 
-  useEffect(() => {
-    const shouldRestore =
-      sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
-    const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
+useEffect(() => {
+  const shouldRestore =
+    sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
+  const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
 
-    shouldRestoreScrollRef.current =
-      shouldRestore && savedUrl === currentProjectsUrl;
-  }, []);
+  const canRestore = shouldRestore && savedUrl === currentProjectsUrl;
+
+  shouldRestoreScrollRef.current = canRestore;
+
+  if (!canRestore) {
+    sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+    sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_ID_KEY);
+    sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_TOP_KEY);
+  }
+}, []);
 
   useEffect(() => {
     if (!restoredOnceRef.current) return;

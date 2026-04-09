@@ -102,14 +102,28 @@ useEffect(() => {
 
 
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const params = new URLSearchParams();
-    if (country) params.append("country", country);
-    if (city) params.append("city", city);
-    if (search) params.append("search", search);
-    setLocation(`/projects${params.toString() ? `?${params.toString()}` : ""}`);
-  };
+const clearProjectsRestoreState = () => {
+  sessionStorage.removeItem("projects-scroll-y");
+  sessionStorage.removeItem("projects-return-url");
+  sessionStorage.removeItem("projects-restore-scroll");
+  sessionStorage.removeItem("projects-active-card-id");
+  sessionStorage.removeItem("projects-active-card-top");
+};
+
+
+
+const handleSearch = (e: React.FormEvent) => {
+  e.preventDefault();
+
+  clearProjectsRestoreState();
+
+  const params = new URLSearchParams();
+  if (country) params.append("country", country);
+  if (city) params.append("city", city);
+  if (search) params.append("search", search);
+
+  setLocation(`/projects${params.toString() ? `?${params.toString()}` : ""}`);
+};
 
   return (
     <Layout>
@@ -248,13 +262,17 @@ useEffect(() => {
                 blerësin kërkues.
               </p>
             </div>
-            <Link
-              href="/projects"
-              className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
-            >
-              Shiko Të Gjitha Pronat
-              <span className="w-8 h-[1px] bg-primary group-hover:bg-white transition-colors" />
-            </Link>
+<Link
+  href="/projects"
+  onClick={() => {
+    clearProjectsRestoreState();
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }}
+  className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
+>
+  Shiko Të Gjitha Pronat
+  <span className="w-8 h-[1px] bg-primary group-hover:bg-white transition-colors" />
+</Link>
           </div>
 
           {isLoading ? (
