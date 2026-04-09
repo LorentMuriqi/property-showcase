@@ -102,6 +102,31 @@ function normalizeProject(raw: any): ProjectType {
   };
 }
 
+const formatAreaLabel = (value: number | string) => {
+  const n = Number(value);
+  return n === 1 ? "Metër Katror" : "Metra Katrorë";
+};
+
+const formatFloorLabel = (value: number | string) => {
+  const n = Number(value);
+  return n === 1 ? "Kat" : "Kate";
+};
+
+const formatBedroomLabel = (value: number | string) => {
+  const n = Number(value);
+  return n === 1 ? "Dhomë Gjumi" : "Dhoma Gjumi";
+};
+
+const formatLivingRoomLabel = (value: number | string) => {
+  const n = Number(value);
+  return n === 1 ? "Dhomë Ndenjeje" : "Dhoma Ndenjeje";
+};
+
+const formatBathroomLabel = (_value: number | string) => {
+  return "Banjo";
+};
+
+
 export default function ProjectDetails() {
   const { id } = useParams();
 
@@ -475,9 +500,9 @@ export default function ProjectDetails() {
                       <span className="block text-white text-lg font-medium">
                         {project.areaM2}
                       </span>
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                        Metra Katrorë
-                      </span>
+<span className="text-xs text-muted-foreground uppercase tracking-wider">
+  {formatAreaLabel(project.areaM2)}
+</span>
                     </div>
                   )}
 
@@ -487,9 +512,9 @@ export default function ProjectDetails() {
                       <span className="block text-white text-lg font-medium">
                         {project.bedrooms}
                       </span>
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                        Dhoma Gjumi
-                      </span>
+<span className="text-xs text-muted-foreground uppercase tracking-wider">
+  {formatBedroomLabel(project.bedrooms)}
+</span>
                     </div>
                   )}
 
@@ -499,9 +524,9 @@ export default function ProjectDetails() {
                       <span className="block text-white text-lg font-medium">
                         {project.bathrooms}
                       </span>
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                        Banjo
-                      </span>
+<span className="text-xs text-muted-foreground uppercase tracking-wider">
+  {formatBathroomLabel(project.bathrooms)}
+</span>
                     </div>
                   )}
 
@@ -511,9 +536,9 @@ export default function ProjectDetails() {
                       <span className="block text-white text-lg font-medium">
                         {project.livingRooms}
                       </span>
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                        Dh. Ndenjeje
-                      </span>
+<span className="text-xs text-muted-foreground uppercase tracking-wider">
+  {formatLivingRoomLabel(project.livingRooms)}
+</span>
                     </div>
                   )}
 
@@ -523,9 +548,9 @@ export default function ProjectDetails() {
                       <span className="block text-white text-lg font-medium">
                         {project.floors}
                       </span>
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                        Kate
-                      </span>
+<span className="text-xs text-muted-foreground uppercase tracking-wider">
+  {formatFloorLabel(project.floors)}
+</span>
                     </div>
                   )}
 
