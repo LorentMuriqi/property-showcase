@@ -74,9 +74,44 @@ export default function Home() {
         return;
       }
 
-      const rows = data || [];
 
-      setRecentProjects(rows.slice(0, 6));
+const rows = data || [];
+
+const propertyIds = rows.map((item) => item.id);
+
+let scenePropertyIds = new Set<string>();
+
+if (propertyIds.length > 0) {
+  const { data: sceneRows, error: sceneError } = await supabase
+    .from("virtual_tour_scenes")
+    .select("property_id")
+    .in("property_id", propertyIds);
+
+  if (sceneError) {
+    console.error("Fetch virtual tour scenes error:", sceneError);
+  } else {
+    scenePropertyIds = new Set(
+      (sceneRows || []).map((scene) => String(scene.property_id))
+    );
+  }
+}
+
+const rowsWithVirtualTour = rows.map((item) => {
+  const hasVirtualTour =
+    !!item.virtual_tour_url ||
+    !!item.virtual_tour_embed_code ||
+    !!item.has_custom_virtual_tour ||
+    scenePropertyIds.has(String(item.id));
+
+  return {
+    ...item,
+    hasVirtualTour,
+  };
+});
+
+setRecentProjects(rowsWithVirtualTour.slice(0, 6));
+
+
       setAllFilterRows(
         rows.map((item) => ({
           country: item.country ?? null,

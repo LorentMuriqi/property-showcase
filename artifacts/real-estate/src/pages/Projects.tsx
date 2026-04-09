@@ -217,14 +217,47 @@ export default function Projects() {
         .order("created_at", { ascending: false })
         .range(from, to);
 
-      if (error) {
-        console.error("Supabase fetch error:", error);
-        setProjects([]);
-        setTotalCount(0);
-      } else {
-        setProjects(data || []);
-        setTotalCount(count || 0);
-      }
+if (error) {
+  console.error("Supabase fetch error:", error);
+  setProjects([]);
+  setTotalCount(0);
+} else {
+  const rows = data || [];
+  const propertyIds = rows.map((item) => item.id);
+
+  let scenePropertyIds = new Set<string>();
+
+  if (propertyIds.length > 0) {
+    const { data: sceneRows, error: sceneError } = await supabase
+      .from("virtual_tour_scenes")
+      .select("property_id")
+      .in("property_id", propertyIds);
+
+    if (sceneError) {
+      console.error("Supabase virtual tour scenes fetch error:", sceneError);
+    } else {
+      scenePropertyIds = new Set(
+        (sceneRows || []).map((scene) => String(scene.property_id))
+      );
+    }
+  }
+
+  const rowsWithVirtualTour = rows.map((item) => {
+    const hasVirtualTour =
+      !!item.virtual_tour_url ||
+      !!item.virtual_tour_embed_code ||
+      !!item.has_custom_virtual_tour ||
+      scenePropertyIds.has(String(item.id));
+
+    return {
+      ...item,
+      hasVirtualTour,
+    };
+  });
+
+  setProjects(rowsWithVirtualTour);
+  setTotalCount(count || 0);
+}
 
       setIsLoading(false);
 
