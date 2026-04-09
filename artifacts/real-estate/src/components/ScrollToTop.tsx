@@ -19,7 +19,9 @@ export function ScrollToTop() {
   }, []);
 
   useEffect(() => {
-    const shouldForceTop = sessionStorage.getItem(FORCE_SCROLL_TOP_KEY) === "1";
+    const shouldForceTop =
+      sessionStorage.getItem(FORCE_SCROLL_TOP_KEY) === "1";
+
     if (shouldForceTop) {
       sessionStorage.removeItem(FORCE_SCROLL_TOP_KEY);
       sessionStorage.removeItem(SKIP_GLOBAL_SCROLL_KEY);
@@ -34,7 +36,9 @@ export function ScrollToTop() {
       return;
     }
 
-    const shouldSkip = sessionStorage.getItem(SKIP_GLOBAL_SCROLL_KEY) === "1";
+    const shouldSkip =
+      sessionStorage.getItem(SKIP_GLOBAL_SCROLL_KEY) === "1";
+
     if (shouldSkip) {
       sessionStorage.removeItem(SKIP_GLOBAL_SCROLL_KEY);
       return;

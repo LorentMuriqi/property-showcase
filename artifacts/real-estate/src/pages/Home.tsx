@@ -6,102 +6,6 @@ import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
 
-export default function Home() {
-  const [, setLocation] = useLocation();
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
-  const [search, setSearch] = useState("");
-
-
-
-
-const [countries, setCountries] = useState<string[]>([]);
-const [cities, setCities] = useState<string[]>([]);
-const [allFilterRows, setAllFilterRows] = useState<{ country: string | null; city: string | null }[]>([]);
-const [recentProjects, setRecentProjects] = useState<any[]>([]);
-const [isLoading, setIsLoading] = useState(true);
-
-useEffect(() => {
-  const fetchHomeData = async () => {
-    setIsLoading(true);
-
-    const nowIso = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from("properties")
-      .select(`
-        id,
-        title,
-        description,
-        country,
-        city,
-        address,
-        status,
-        property_type,
-        price,
-        currency,
-        images,
-        created_at,
-        listing_status,
-        is_paused,
-        expires_at
-      `)
-      .eq("listing_status", "active")
-      .eq("is_paused", false)
-      .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Fetch home data error:", error);
-      setRecentProjects([]);
-      setAllFilterRows([]);
-      setCountries([]);
-      setCities([]);
-      setIsLoading(false);
-      return;
-    }
-
-    const rows = data || [];
-
-    setRecentProjects(rows.slice(0, 6));
-    setAllFilterRows(
-      rows.map((item) => ({
-        country: item.country ?? null,
-        city: item.city ?? null,
-      }))
-    );
-
-    const allCountries = [
-      ...new Set(rows.map((item) => item.country).filter(Boolean)),
-    ] as string[];
-
-    setCountries(allCountries);
-    setIsLoading(false);
-  };
-
-  fetchHomeData();
-}, []);
-
-useEffect(() => {
-  if (country) {
-    const filteredCities = [
-      ...new Set(
-        allFilterRows
-          .filter((item) => item.country === country)
-          .map((item) => item.city)
-          .filter(Boolean)
-      ),
-    ] as string[];
-
-    setCities(filteredCities);
-  } else {
-    setCities([]);
-  }
-}, [country, allFilterRows]);
-
-
-
-
 const clearProjectsRestoreState = () => {
   sessionStorage.removeItem("projects-scroll-y");
   sessionStorage.removeItem("projects-return-url");
@@ -110,32 +14,116 @@ const clearProjectsRestoreState = () => {
   sessionStorage.removeItem("projects-active-card-top");
 };
 
-
 const prepareProjectsNavigationFromHome = () => {
-  sessionStorage.removeItem("projects-scroll-y");
-  sessionStorage.removeItem("projects-return-url");
-  sessionStorage.removeItem("projects-restore-scroll");
-  sessionStorage.removeItem("projects-active-card-id");
-  sessionStorage.removeItem("projects-active-card-top");
-
+  clearProjectsRestoreState();
   sessionStorage.removeItem("skip-global-scroll");
   sessionStorage.setItem("force-scroll-top", "1");
 };
 
+export default function Home() {
+  const [, setLocation] = useLocation();
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  const [search, setSearch] = useState("");
 
+  const [countries, setCountries] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [allFilterRows, setAllFilterRows] = useState<
+    { country: string | null; city: string | null }[]
+  >([]);
+  const [recentProjects, setRecentProjects] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-const handleSearch = (e: React.FormEvent) => {
-  e.preventDefault();
+  useEffect(() => {
+    const fetchHomeData = async () => {
+      setIsLoading(true);
 
-  prepareProjectsNavigationFromHome();
+      const nowIso = new Date().toISOString();
 
-  const params = new URLSearchParams();
-  if (country) params.append("country", country);
-  if (city) params.append("city", city);
-  if (search) params.append("search", search);
+      const { data, error } = await supabase
+        .from("properties")
+        .select(`
+          id,
+          title,
+          description,
+          country,
+          city,
+          address,
+          status,
+          property_type,
+          price,
+          currency,
+          images,
+          created_at,
+          listing_status,
+          is_paused,
+          expires_at
+        `)
+        .eq("listing_status", "active")
+        .eq("is_paused", false)
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+        .order("created_at", { ascending: false });
 
-  setLocation(`/projects${params.toString() ? `?${params.toString()}` : ""}`);
-};
+      if (error) {
+        console.error("Fetch home data error:", error);
+        setRecentProjects([]);
+        setAllFilterRows([]);
+        setCountries([]);
+        setCities([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const rows = data || [];
+
+      setRecentProjects(rows.slice(0, 6));
+      setAllFilterRows(
+        rows.map((item) => ({
+          country: item.country ?? null,
+          city: item.city ?? null,
+        }))
+      );
+
+      const allCountries = [
+        ...new Set(rows.map((item) => item.country).filter(Boolean)),
+      ] as string[];
+
+      setCountries(allCountries);
+      setIsLoading(false);
+    };
+
+    fetchHomeData();
+  }, []);
+
+  useEffect(() => {
+    if (country) {
+      const filteredCities = [
+        ...new Set(
+          allFilterRows
+            .filter((item) => item.country === country)
+            .map((item) => item.city)
+            .filter(Boolean)
+        ),
+      ] as string[];
+
+      setCities(filteredCities);
+    } else {
+      setCities([]);
+    }
+  }, [country, allFilterRows]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    prepareProjectsNavigationFromHome();
+
+    const params = new URLSearchParams();
+    if (country) params.append("country", country);
+    if (city) params.append("city", city);
+    if (search) params.append("search", search);
+
+    setLocation(`/projects${params.toString() ? `?${params.toString()}` : ""}`);
+  };
 
   return (
     <Layout>
@@ -274,16 +262,16 @@ const handleSearch = (e: React.FormEvent) => {
                 blerësin kërkues.
               </p>
             </div>
-<Link
-  href="/projects"
-  onClick={() => {
-    prepareProjectsNavigationFromHome();
-  }}
-  className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
->
-  Shiko Të Gjitha Pronat
-  <span className="w-8 h-[1px] bg-primary group-hover:bg-white transition-colors" />
-</Link>
+            <Link
+              href="/projects"
+              onClick={() => {
+                prepareProjectsNavigationFromHome();
+              }}
+              className="group flex items-center gap-2 text-primary font-medium tracking-widest uppercase text-sm hover:text-white transition-colors"
+            >
+              Shiko Të Gjitha Pronat
+              <span className="w-8 h-[1px] bg-primary group-hover:bg-white transition-colors" />
+            </Link>
           </div>
 
           {isLoading ? (

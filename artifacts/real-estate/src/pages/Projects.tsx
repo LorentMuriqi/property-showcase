@@ -10,6 +10,14 @@ const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
 const PROJECTS_ACTIVE_CARD_ID_KEY = "projects-active-card-id";
 const PROJECTS_ACTIVE_CARD_TOP_KEY = "projects-active-card-top";
 
+const clearProjectsRestoreState = () => {
+  sessionStorage.removeItem(PROJECTS_SCROLL_Y_KEY);
+  sessionStorage.removeItem(PROJECTS_RETURN_URL_KEY);
+  sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+  sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_ID_KEY);
+  sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_TOP_KEY);
+};
+
 export default function Projects() {
   const searchParams = new URLSearchParams(window.location.search);
 
@@ -18,21 +26,21 @@ export default function Projects() {
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [showFilters, setShowFilters] = useState(false);
 
+  const initialPage = Math.max(1, Number(searchParams.get("page") || "1") || 1);
+  const [page, setPage] = useState(initialPage);
+
   const [projects, setProjects] = useState<any[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  const pageTopRef = useRef<HTMLDivElement | null>(null);
-
-  const initialPage = Math.max(1, Number(searchParams.get("page") || "1") || 1);
-  const [page, setPage] = useState(initialPage);
-  const pageSize = 8;
   const [totalCount, setTotalCount] = useState(0);
 
-  const shouldScrollToTopRef = useRef(false);
+  const pageTopRef = useRef<HTMLDivElement | null>(null);
   const shouldRestoreScrollRef = useRef(false);
-  const restoredOnceRef = useRef(false);
+  const shouldScrollToTopRef = useRef(false);
+  const didInitRef = useRef(false);
+
+  const pageSize = 8;
 
   const buildProjectsUrl = (
     pageValue: number,
@@ -51,29 +59,28 @@ export default function Projects() {
 
   const currentProjectsUrl = buildProjectsUrl(page, country, city, search);
 
-const saveProjectsState = (projectId?: string | number) => {
-  sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
-  sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
+  const saveProjectsState = (projectId?: string | number) => {
+    sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
+    sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
 
-  if (projectId !== undefined && projectId !== null) {
-    sessionStorage.setItem(PROJECTS_RESTORE_SCROLL_KEY, "1");
-    sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
+    if (projectId !== undefined && projectId !== null) {
+      sessionStorage.setItem(PROJECTS_RESTORE_SCROLL_KEY, "1");
+      sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
 
-    const cardEl = document.getElementById(`project-card-${projectId}`);
-    if (cardEl) {
-      sessionStorage.setItem(
-        PROJECTS_ACTIVE_CARD_TOP_KEY,
-        String(cardEl.getBoundingClientRect().top)
-      );
+      const cardEl = document.getElementById(`project-card-${projectId}`);
+      if (cardEl) {
+        sessionStorage.setItem(
+          PROJECTS_ACTIVE_CARD_TOP_KEY,
+          String(cardEl.getBoundingClientRect().top)
+        );
+      }
     }
-  }
-};
+  };
 
-  const scrollToProjectsTop = (behavior: ScrollBehavior = "smooth") => {
-    const top =
-      pageTopRef.current
-        ? pageTopRef.current.getBoundingClientRect().top + window.scrollY
-        : 0;
+  const scrollToProjectsTop = (behavior: ScrollBehavior = "auto") => {
+    const top = pageTopRef.current
+      ? pageTopRef.current.getBoundingClientRect().top + window.scrollY
+      : 0;
 
     window.scrollTo({
       top,
@@ -90,17 +97,16 @@ const saveProjectsState = (projectId?: string | number) => {
 
     if (savedUrl !== currentProjectsUrl) {
       shouldRestoreScrollRef.current = false;
-      sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+      clearProjectsRestoreState();
       return;
     }
 
-    const tryRestore = () => {
+    const applyRestore = () => {
       if (savedCardId) {
         const cardEl = document.getElementById(`project-card-${savedCardId}`);
 
         if (cardEl) {
-          const absoluteTop =
-            cardEl.getBoundingClientRect().top + window.scrollY;
+          const absoluteTop = cardEl.getBoundingClientRect().top + window.scrollY;
 
           window.scrollTo({
             top: Math.max(0, absoluteTop - savedCardTop),
@@ -119,14 +125,13 @@ const saveProjectsState = (projectId?: string | number) => {
     };
 
     requestAnimationFrame(() => {
-      tryRestore();
+      applyRestore();
 
       setTimeout(() => {
-        tryRestore();
-
-        sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+        applyRestore();
         shouldRestoreScrollRef.current = false;
-      }, 120);
+        sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+      }, 150);
     });
   };
 
@@ -147,24 +152,23 @@ const saveProjectsState = (projectId?: string | number) => {
     window.history.replaceState({}, "", newUrl);
   }, [country, city, search, page]);
 
-useEffect(() => {
-  const shouldRestore =
-    sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
-  const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
+  useEffect(() => {
+    const shouldRestore =
+      sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
+    const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
 
-  const canRestore = shouldRestore && savedUrl === currentProjectsUrl;
+    const canRestore = shouldRestore && savedUrl === currentProjectsUrl;
 
-  shouldRestoreScrollRef.current = canRestore;
+    shouldRestoreScrollRef.current = canRestore;
+    shouldScrollToTopRef.current = !canRestore;
 
-  if (!canRestore) {
-    sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
-    sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_ID_KEY);
-    sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_TOP_KEY);
-  }
-}, []);
+    if (!canRestore) {
+      clearProjectsRestoreState();
+    }
+  }, []);
 
   useEffect(() => {
-    if (!restoredOnceRef.current) return;
+    if (!didInitRef.current) return;
 
     shouldScrollToTopRef.current = true;
     setPage(1);
@@ -199,13 +203,8 @@ useEffect(() => {
         .eq("is_paused", false)
         .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
 
-      if (country) {
-        query = query.eq("country", country);
-      }
-
-      if (city) {
-        query = query.eq("city", city);
-      }
+      if (country) query = query.eq("country", country);
+      if (city) query = query.eq("city", city);
 
       if (search.trim()) {
         const safeSearch = search.trim().replace(/,/g, " ");
@@ -232,18 +231,12 @@ useEffect(() => {
       requestAnimationFrame(() => {
         if (shouldRestoreScrollRef.current) {
           restoreProjectsPosition();
-          restoredOnceRef.current = true;
-          return;
+        } else if (shouldScrollToTopRef.current) {
+          scrollToProjectsTop(didInitRef.current ? "smooth" : "auto");
+          shouldScrollToTopRef.current = false;
         }
 
-        if (shouldScrollToTopRef.current) {
-          setTimeout(() => {
-            scrollToProjectsTop("smooth");
-            shouldScrollToTopRef.current = false;
-          }, 40);
-        }
-
-        restoredOnceRef.current = true;
+        didInitRef.current = true;
       });
     };
 
@@ -303,28 +296,20 @@ useEffect(() => {
     const pages: (number | string)[] = [];
 
     if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
       return pages;
     }
 
     pages.push(1);
 
-    if (page > 3) {
-      pages.push("...");
-    }
+    if (page > 3) pages.push("...");
 
     const start = Math.max(2, page - 1);
     const end = Math.min(totalPages - 1, page + 1);
 
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
+    for (let i = start; i <= end; i++) pages.push(i);
 
-    if (page < totalPages - 2) {
-      pages.push("...");
-    }
+    if (page < totalPages - 2) pages.push("...");
 
     pages.push(totalPages);
 
