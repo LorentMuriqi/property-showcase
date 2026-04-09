@@ -464,7 +464,7 @@ export default function ProjectDetails() {
           <div className="lg:col-span-1">
             <div className="sticky top-32 space-y-6">
               <div className="glass-panel rounded-2xl p-8">
-<div className="price-font text-4xl text-primary font-semibold">
+<div className="price-font text-4xl text-primary font-semibold mb-8">
   {formattedPrice}
 </div>
 

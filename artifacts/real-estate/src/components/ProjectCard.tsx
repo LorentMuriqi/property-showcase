@@ -64,10 +64,10 @@ export function ProjectCard({ project }: { project: any }) {
 
         <div className="p-6 flex flex-col flex-grow">
 <div className="flex items-start justify-between gap-4 mb-3">
-  <h3 className="font-sans text-2xl font-semibold text-white tracking-tight line-clamp-1">
+  <h3 className="font-sans text-xl font-semibold text-white tracking-tight line-clamp-1">
     {project.title}
   </h3>
-<span className="price-font text-primary text-2xl font-semibold">
+<span className="price-font text-xl text-primary font-semibold">
   {formattedPrice}
 </span>
 </div>
