@@ -402,9 +402,9 @@ export default function ProjectDetails() {
                 )}
               </div>
 
-              <h1 className="text-4xl md:text-5xl font-sans font-semibold text-white mb-4 leading-tight tracking-tight">
-                {project.title}
-              </h1>
+<h1 className="font-sans text-4xl md:text-5xl font-semibold text-white mb-4 leading-tight tracking-tight">
+  {project.title}
+</h1>
 
               <div className="flex items-center gap-2 text-muted-foreground text-lg">
                 <MapPin className="text-primary" size={20} />
@@ -420,13 +420,16 @@ export default function ProjectDetails() {
                 <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">
                   Prona
                 </h3>
-                <div className="prose prose-invert max-w-none text-muted-foreground leading-relaxed">
-                  {String(project.description)
-                    .split("\n")
-                    .map((paragraph, i) => (
-                      <p key={i}>{paragraph}</p>
-                    ))}
-                </div>
+<div className="max-w-none text-[17px] leading-8 text-white/70 font-sans">
+  {String(project.description)
+    .split("\n")
+    .filter((paragraph) => paragraph.trim() !== "")
+    .map((paragraph, i) => (
+      <p key={i} className="mb-5 last:mb-0">
+        {paragraph}
+      </p>
+    ))}
+</div>
               </div>
             )}
 
@@ -461,9 +464,9 @@ export default function ProjectDetails() {
           <div className="lg:col-span-1">
             <div className="sticky top-32 space-y-6">
               <div className="glass-panel rounded-2xl p-8">
-                <div className="text-4xl font-sans text-primary mb-8 font-semibold tracking-tight">
-                  {formattedPrice}
-                </div>
+<div className="text-4xl font-sans text-primary mb-8 font-semibold tracking-tight">
+  {formattedPrice}
+</div>
 
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   {project.areaM2 && (
