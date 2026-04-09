@@ -108,7 +108,7 @@ export default function ProjectDetails() {
   const [project, setProject] = useState<ProjectType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  
+    
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
