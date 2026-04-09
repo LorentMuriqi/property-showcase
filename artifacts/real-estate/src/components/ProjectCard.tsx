@@ -67,9 +67,9 @@ export function ProjectCard({ project }: { project: any }) {
   <h3 className="font-sans text-2xl font-semibold text-white tracking-tight line-clamp-1">
     {project.title}
   </h3>
-  <span className="font-sans text-2xl text-primary shrink-0 font-semibold tracking-tight">
-    {formattedPrice}
-  </span>
+<span className="font-sans text-[28px] leading-none text-primary font-semibold">
+  {formattedPrice}
+</span>
 </div>
 
           <div className="flex items-center gap-1.5 text-muted-foreground text-sm mb-6">
