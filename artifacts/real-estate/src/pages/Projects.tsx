@@ -51,22 +51,23 @@ export default function Projects() {
 
   const currentProjectsUrl = buildProjectsUrl(page, country, city, search);
 
-  const saveProjectsState = (projectId?: string | number) => {
-    sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
-    sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
+const saveProjectsState = (projectId?: string | number) => {
+  sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
+  sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
 
-    if (projectId !== undefined && projectId !== null) {
-      sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
+  if (projectId !== undefined && projectId !== null) {
+    sessionStorage.setItem(PROJECTS_RESTORE_SCROLL_KEY, "1");
+    sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
 
-      const cardEl = document.getElementById(`project-card-${projectId}`);
-      if (cardEl) {
-        sessionStorage.setItem(
-          PROJECTS_ACTIVE_CARD_TOP_KEY,
-          String(cardEl.getBoundingClientRect().top)
-        );
-      }
+    const cardEl = document.getElementById(`project-card-${projectId}`);
+    if (cardEl) {
+      sessionStorage.setItem(
+        PROJECTS_ACTIVE_CARD_TOP_KEY,
+        String(cardEl.getBoundingClientRect().top)
+      );
     }
-  };
+  }
+};
 
   const scrollToProjectsTop = (behavior: ScrollBehavior = "smooth") => {
     const top =
