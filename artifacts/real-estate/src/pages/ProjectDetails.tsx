@@ -228,7 +228,7 @@ export default function ProjectDetails() {
         <div className="min-h-screen pt-32 flex items-center justify-center">
           <div className="animate-pulse flex flex-col items-center">
             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-primary font-display tracking-widest uppercase">
+            <p className="text-primary price-font tracking-widest uppercase">
               Duke Ngarkuar Pronën
             </p>
           </div>
@@ -242,7 +242,7 @@ export default function ProjectDetails() {
       <Layout>
         <div className="min-h-screen pt-32 flex items-center justify-center text-center px-4">
           <div>
-            <h1 className="font-display text-4xl text-white mb-4">
+            <h1 className="price-font text-4xl text-white mb-4">
               Prona Nuk U Gjet
             </h1>
             <p className="text-muted-foreground">
@@ -402,7 +402,7 @@ export default function ProjectDetails() {
                 )}
               </div>
 
-<h1 className="font-sans text-4xl md:text-5xl font-semibold text-white mb-4 leading-tight tracking-tight">
+<h1 className="price-font text-4xl md:text-5xl font-semibold text-white mb-4 leading-tight tracking-tight">
   {project.title}
 </h1>
 
@@ -417,10 +417,10 @@ export default function ProjectDetails() {
 
             {project.description && (
               <div>
-                <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">
+                <h3 className="price-font text-2xl text-white mb-6 border-b border-white/10 pb-4">
                   Prona
                 </h3>
-<div className="max-w-none text-[17px] leading-8 text-white/70 font-sans">
+<div className="price-font max-w-none text-[17px] leading-8 text-white/70">
   {String(project.description)
     .split("\n")
     .filter((paragraph) => paragraph.trim() !== "")
@@ -436,7 +436,7 @@ export default function ProjectDetails() {
             {project.customFields &&
               Object.keys(project.customFields).length > 0 && (
                 <div>
-                  <h3 className="font-display text-2xl text-white mb-6 border-b border-white/10 pb-4">
+                  <h3 className="price-font text-2xl text-white mb-6 border-b border-white/10 pb-4">
                     Karakteristikat dhe Lehtësitë
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
