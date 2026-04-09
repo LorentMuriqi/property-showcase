@@ -63,14 +63,14 @@ export function ProjectCard({ project }: { project: any }) {
         </div>
 
         <div className="p-6 flex flex-col flex-grow">
-          <div className="flex items-start justify-between gap-4 mb-3">
-            <h3 className="font-display text-xl font-bold text-white group-hover:text-primary transition-colors line-clamp-1">
-              {project.title}
-            </h3>
-            <span className="font-display text-lg text-primary shrink-0 font-medium">
-              {formattedPrice}
-            </span>
-          </div>
+<div className="flex items-start justify-between gap-4 mb-3">
+  <h3 className="font-sans text-2xl font-semibold text-white tracking-tight line-clamp-1">
+    {project.title}
+  </h3>
+  <span className="font-sans text-2xl text-primary shrink-0 font-semibold tracking-tight">
+    {formattedPrice}
+  </span>
+</div>
 
           <div className="flex items-center gap-1.5 text-muted-foreground text-sm mb-6">
             <MapPin size={14} className="text-primary/70" />
