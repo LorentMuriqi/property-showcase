@@ -108,13 +108,23 @@ export default function ProjectDetails() {
   const [project, setProject] = useState<ProjectType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-    
+
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "auto",
+      });
+    });
+  }, [id]);
 
   const scrollPrev = useCallback(() => {
     if (emblaApi) emblaApi.scrollPrev();
@@ -186,22 +196,22 @@ export default function ProjectDetails() {
 
       if (!isMounted) return;
 
-if (error || !data) {
-  console.error("Project details fetch error:", error);
-  setProject(null);
-  setHasBuiltInVirtualTour(false);
-  setFetchError(true);
-} else {
-  setProject(normalizeProject(data));
+      if (error || !data) {
+        console.error("Project details fetch error:", error);
+        setProject(null);
+        setHasBuiltInVirtualTour(false);
+        setFetchError(true);
+      } else {
+        setProject(normalizeProject(data));
 
-  const { count } = await supabase
-    .from("virtual_tour_scenes")
-    .select("*", { count: "exact", head: true })
-    .eq("property_id", data.id);
+        const { count } = await supabase
+          .from("virtual_tour_scenes")
+          .select("*", { count: "exact", head: true })
+          .eq("property_id", data.id);
 
-  setHasBuiltInVirtualTour((count || 0) > 0);
-  setFetchError(false);
-}
+        setHasBuiltInVirtualTour((count || 0) > 0);
+        setFetchError(false);
+      }
       setIsLoading(false);
     };
 
@@ -252,20 +262,18 @@ if (error || !data) {
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-const hasVirtualTour = !!(
-  hasBuiltInVirtualTour ||
-  project.hasCustomVirtualTour ||
-  project.has_custom_virtual_tour ||
-  project.virtualTourUrl ||
-  project.virtual_tour_url ||
-  project.virtualTourEmbedCode ||
-  project.virtual_tour_embed_code
-);
+  const hasVirtualTour = !!(
+    hasBuiltInVirtualTour ||
+    project.hasCustomVirtualTour ||
+    project.has_custom_virtual_tour ||
+    project.virtualTourUrl ||
+    project.virtual_tour_url ||
+    project.virtualTourEmbedCode ||
+    project.virtual_tour_embed_code
+  );
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
-    // sold: "Shitur",
-    // rented: "Dhënë me Qira",
     for_rent: "Me Qira",
   };
 
@@ -394,9 +402,9 @@ const hasVirtualTour = !!(
                 )}
               </div>
 
-				<h1 className="text-4xl md:text-5xl font-sans font-semibold text-white mb-4 leading-tight tracking-tight">
-				{project.title}
-				</h1>
+              <h1 className="text-4xl md:text-5xl font-sans font-semibold text-white mb-4 leading-tight tracking-tight">
+                {project.title}
+              </h1>
 
               <div className="flex items-center gap-2 text-muted-foreground text-lg">
                 <MapPin className="text-primary" size={20} />
@@ -453,9 +461,9 @@ const hasVirtualTour = !!(
           <div className="lg:col-span-1">
             <div className="sticky top-32 space-y-6">
               <div className="glass-panel rounded-2xl p-8">
-				<div className="text-4xl font-sans text-primary mb-8 font-semibold tracking-tight">
-				{formattedPrice}
-			</div>
+                <div className="text-4xl font-sans text-primary mb-8 font-semibold tracking-tight">
+                  {formattedPrice}
+                </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   {project.areaM2 && (

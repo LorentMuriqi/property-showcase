@@ -1,13 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
+
+const SKIP_GLOBAL_SCROLL_KEY = "skip-global-scroll";
+const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
 
 export function ScrollToTop() {
   const [location] = useLocation();
-  const isPopNavigationRef = useRef(false);
 
   useEffect(() => {
     const handlePopState = () => {
-      isPopNavigationRef.current = true;
+      sessionStorage.setItem(SKIP_GLOBAL_SCROLL_KEY, "1");
+      sessionStorage.setItem(PROJECTS_RESTORE_SCROLL_KEY, "1");
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -17,8 +20,10 @@ export function ScrollToTop() {
   }, []);
 
   useEffect(() => {
-    if (isPopNavigationRef.current) {
-      isPopNavigationRef.current = false;
+    const shouldSkip = sessionStorage.getItem(SKIP_GLOBAL_SCROLL_KEY) === "1";
+
+    if (shouldSkip) {
+      sessionStorage.removeItem(SKIP_GLOBAL_SCROLL_KEY);
       return;
     }
 

@@ -4,6 +4,10 @@ import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
 
+const PROJECTS_SCROLL_Y_KEY = "projects-scroll-y";
+const PROJECTS_RETURN_URL_KEY = "projects-return-url";
+const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
+
 export default function Projects() {
   const searchParams = new URLSearchParams(window.location.search);
 
@@ -16,96 +20,155 @@ export default function Projects() {
   const [countries, setCountries] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const pageTopRef = useRef<HTMLDivElement | null>(null);
-  
+
   const initialPage = Math.max(1, Number(searchParams.get("page") || "1") || 1);
   const [page, setPage] = useState(initialPage);
   const pageSize = 8;
   const [totalCount, setTotalCount] = useState(0);
 
+  const shouldScrollToTopRef = useRef(false);
+  const shouldRestoreScrollRef = useRef(false);
+  const restoredOnceRef = useRef(false);
 
-useEffect(() => {
-  const params = new URLSearchParams();
-  if (country) params.set("country", country);
-  if (city) params.set("city", city);
-  if (search) params.set("search", search);
-  if (page > 1) params.set("page", String(page));
+  const buildProjectsUrl = (pageValue: number, countryValue: string, cityValue: string, searchValue: string) => {
+    const params = new URLSearchParams();
+    if (countryValue) params.set("country", countryValue);
+    if (cityValue) params.set("city", cityValue);
+    if (searchValue) params.set("search", searchValue);
+    if (pageValue > 1) params.set("page", String(pageValue));
 
-  const newUrl = `/projects${params.toString() ? `?${params.toString()}` : ""}`;
-  window.history.replaceState({}, "", newUrl);
-}, [country, city, search, page]);
-
-
-  
-  useEffect(() => {
-  setPage(1);
-}, [country, city, search]);
-
-
-
-
-
-useEffect(() => {
-  const fetchProjects = async () => {
-    setIsLoading(true);
-
-    const nowIso = new Date().toISOString();
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    let query = supabase
-      .from("properties")
-      .select("*", { count: "exact" })
-      .eq("listing_status", "active")
-      .eq("is_paused", false)
-      .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
-
-    if (country) {
-      query = query.eq("country", country);
-    }
-
-    if (city) {
-      query = query.eq("city", city);
-    }
-
-    if (search.trim()) {
-      const safeSearch = search.trim().replace(/,/g, " ");
-      query = query.or(
-        `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`
-      );
-    }
-
-    const { data, error, count } = await query
-      .order("created_at", { ascending: false })
-      .range(from, to);
-
-    if (error) {
-      console.error("Supabase fetch error:", error);
-      setProjects([]);
-      setTotalCount(0);
-    } else {
-      setProjects(data || []);
-      setTotalCount(count || 0);
-    }
-
-    setIsLoading(false);
-
-setTimeout(() => {
-  pageTopRef.current?.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
-  });
-}, 50);
+    return `/projects${params.toString() ? `?${params.toString()}` : ""}`;
   };
 
-  fetchProjects();
-}, [country, city, search, page]);
+  const currentProjectsUrl = buildProjectsUrl(page, country, city, search);
 
+  const changePage = (nextPage: number) => {
+    if (nextPage === page) return;
+    shouldScrollToTopRef.current = true;
+    setPage(nextPage);
+  };
 
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (country) params.set("country", country);
+    if (city) params.set("city", city);
+    if (search) params.set("search", search);
+    if (page > 1) params.set("page", String(page));
 
+    const newUrl = `/projects${params.toString() ? `?${params.toString()}` : ""}`;
+    window.history.replaceState({}, "", newUrl);
+  }, [country, city, search, page]);
 
+  useEffect(() => {
+    const shouldRestore = sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
+    const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
+    const savedScrollY = sessionStorage.getItem(PROJECTS_SCROLL_Y_KEY);
 
+    if (shouldRestore && savedUrl === currentProjectsUrl && savedScrollY) {
+      shouldRestoreScrollRef.current = true;
+    } else {
+      shouldRestoreScrollRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!restoredOnceRef.current) return;
+
+    shouldScrollToTopRef.current = true;
+    setPage(1);
+  }, [country, city, search]);
+
+  useEffect(() => {
+    const saveScrollState = () => {
+      sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
+      sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
+    };
+
+    saveScrollState();
+    window.addEventListener("scroll", saveScrollState, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", saveScrollState);
+    };
+  }, [currentProjectsUrl]);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      setIsLoading(true);
+
+      const nowIso = new Date().toISOString();
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let query = supabase
+        .from("properties")
+        .select("*", { count: "exact" })
+        .eq("listing_status", "active")
+        .eq("is_paused", false)
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
+
+      if (country) {
+        query = query.eq("country", country);
+      }
+
+      if (city) {
+        query = query.eq("city", city);
+      }
+
+      if (search.trim()) {
+        const safeSearch = search.trim().replace(/,/g, " ");
+        query = query.or(
+          `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`
+        );
+      }
+
+      const { data, error, count } = await query
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        console.error("Supabase fetch error:", error);
+        setProjects([]);
+        setTotalCount(0);
+      } else {
+        setProjects(data || []);
+        setTotalCount(count || 0);
+      }
+
+      setIsLoading(false);
+
+      requestAnimationFrame(() => {
+        if (shouldRestoreScrollRef.current) {
+          const savedScrollY = Number(sessionStorage.getItem(PROJECTS_SCROLL_Y_KEY) || "0");
+
+          window.scrollTo({
+            top: savedScrollY,
+            left: 0,
+            behavior: "auto",
+          });
+
+          sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+          shouldRestoreScrollRef.current = false;
+          restoredOnceRef.current = true;
+          return;
+        }
+
+        if (shouldScrollToTopRef.current) {
+          pageTopRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+          shouldScrollToTopRef.current = false;
+        }
+
+        restoredOnceRef.current = true;
+      });
+    };
+
+    fetchProjects();
+  }, [country, city, search, page]);
 
   useEffect(() => {
     const fetchFilters = async () => {
@@ -146,43 +209,45 @@ setTimeout(() => {
   }, [country]);
 
   const clearFilters = () => {
+    shouldScrollToTopRef.current = true;
     setCountry("");
     setCity("");
     setSearch("");
   };
- const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-const getVisiblePages = () => {
-  const pages: (number | string)[] = [];
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  if (totalPages <= 7) {
-    for (let i = 1; i <= totalPages; i++) {
+  const getVisiblePages = () => {
+    const pages: (number | string)[] = [];
+
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+      return pages;
+    }
+
+    pages.push(1);
+
+    if (page > 3) {
+      pages.push("...");
+    }
+
+    const start = Math.max(2, page - 1);
+    const end = Math.min(totalPages - 1, page + 1);
+
+    for (let i = start; i <= end; i++) {
       pages.push(i);
     }
+
+    if (page < totalPages - 2) {
+      pages.push("...");
+    }
+
+    pages.push(totalPages);
+
     return pages;
-  }
-
-  pages.push(1);
-
-  if (page > 3) {
-    pages.push("...");
-  }
-
-  const start = Math.max(2, page - 1);
-  const end = Math.min(totalPages - 1, page + 1);
-
-  for (let i = start; i <= end; i++) {
-    pages.push(i);
-  }
-
-  if (page < totalPages - 2) {
-    pages.push("...");
-  }
-
-  pages.push(totalPages);
-
-  return pages;
-};
+  };
 
   return (
     <Layout>
@@ -228,7 +293,10 @@ const getVisiblePages = () => {
                       placeholder="Fjalë kyçe..."
                       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
                       value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      onChange={(e) => {
+                        shouldScrollToTopRef.current = true;
+                        setSearch(e.target.value);
+                      }}
                     />
                   </div>
 
@@ -240,6 +308,7 @@ const getVisiblePages = () => {
                       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
                       value={country}
                       onChange={(e) => {
+                        shouldScrollToTopRef.current = true;
                         setCountry(e.target.value);
                         setCity("");
                       }}
@@ -260,7 +329,10 @@ const getVisiblePages = () => {
                     <select
                       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
                       value={city}
-                      onChange={(e) => setCity(e.target.value)}
+                      onChange={(e) => {
+                        shouldScrollToTopRef.current = true;
+                        setCity(e.target.value);
+                      }}
                       disabled={!country}
                     >
                       <option value="">Të Gjitha Qytetet</option>
@@ -285,65 +357,57 @@ const getVisiblePages = () => {
               ) : projects.length > 0 ? (
                 <>
                   <p className="text-muted-foreground mb-6">{totalCount} prona të gjetura</p>
-<>
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-    {projects.map((project) => (
-      <ProjectCard key={project.id} project={project} />
-    ))}
-  </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {projects.map((project) => (
+                      <ProjectCard key={project.id} project={project} />
+                    ))}
+                  </div>
 
+                  {totalPages > 1 && (
+                    <div className="mt-10 flex items-center justify-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => changePage(Math.max(1, page - 1))}
+                        disabled={page === 1}
+                        aria-label="Faqja e mëparshme"
+                        className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                      >
+                        &#8249;
+                      </button>
 
-{totalPages > 1 && (
-  <div className="mt-10 flex items-center justify-center gap-2 flex-wrap">
-    <button
-      onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-      disabled={page === 1}
-      aria-label="Faqja e mëparshme"
-      className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
-    >
-      &#8249;
-    </button>
+                      {getVisiblePages().map((item, index) =>
+                        item === "..." ? (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="px-3 py-2 text-white/50 select-none"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <button
+                            key={item}
+                            onClick={() => changePage(Number(item))}
+                            className={`min-w-[42px] h-[42px] px-3 rounded-xl border transition-colors ${
+                              page === item
+                                ? "border-primary bg-primary text-primary-foreground font-semibold"
+                                : "border-white/10 text-white hover:border-primary"
+                            }`}
+                          >
+                            {item}
+                          </button>
+                        )
+                      )}
 
-    {getVisiblePages().map((item, index) =>
-      item === "..." ? (
-        <span
-          key={`ellipsis-${index}`}
-          className="px-3 py-2 text-white/50 select-none"
-        >
-          ...
-        </span>
-      ) : (
-        <button
-          key={item}
-          onClick={() => setPage(Number(item))}
-          className={`min-w-[42px] h-[42px] px-3 rounded-xl border transition-colors ${
-            page === item
-              ? "border-primary bg-primary text-primary-foreground font-semibold"
-              : "border-white/10 text-white hover:border-primary"
-          }`}
-        >
-          {item}
-        </button>
-      )
-    )}
-
-    <button
-      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-      disabled={page === totalPages}
-      aria-label="Faqja tjetër"
-      className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
-    >
-      &#8250;
-    </button>
-  </div>
-)}
-
-
-
-
-
-</>
+                      <button
+                        onClick={() => changePage(Math.min(totalPages, page + 1))}
+                        disabled={page === totalPages}
+                        aria-label="Faqja tjetër"
+                        className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                      >
+                        &#8250;
+                      </button>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-32 bg-card rounded-2xl border border-white/5">
