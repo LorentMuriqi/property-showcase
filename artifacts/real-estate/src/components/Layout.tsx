@@ -177,7 +177,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div>
               
 			  
-              <ul className="space-y-3 pt-[42px]">
+              <ul className="space-y-3 pt-[48px]">
                 {navLinks.filter(l => !['Paneli Administrativ'].includes(l.name)).map(link => (
                   <li key={link.href}>
                     <Link href={link.href} className="text-muted-foreground hover:text-primary transition-colors">
