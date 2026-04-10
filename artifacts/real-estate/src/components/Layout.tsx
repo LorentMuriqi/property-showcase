@@ -110,7 +110,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link 
                   key={link.href} 
                   href={link.href}
-                  className={`font-display text-3xl transition-colors ${
+                  className={`price-font text-3xl transition-colors ${
                     location === link.href ? "text-primary italic" : "text-white hover:text-primary"
                   }`}
                 >
@@ -120,7 +120,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               {isAdmin && (
                 <button 
                   onClick={logout}
-                  className="font-display text-3xl text-destructive"
+                  className="price-font text-3xl text-destructive"
                 >
                   Dalje
                 </button>
