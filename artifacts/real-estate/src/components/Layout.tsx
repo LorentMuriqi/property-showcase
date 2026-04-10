@@ -184,11 +184,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </Link>
                   </li>
                 ))}
-                <li>
-                  <Link href="/admin" className="text-muted-foreground hover:text-primary transition-colors opacity-50">
-                    Hyrja e Agjentit
-                  </Link>
-                </li>
+
               </ul>
             </div>
           </div>
