@@ -176,6 +176,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <div>
               {/* Main Content <h4 className="font-display text-lg text-white mb-6">Lidhje të Shpejta</h4>  */}
+			  <h3 </h3>
               <ul className="space-y-3">
                 {navLinks.filter(l => !['Paneli Administrativ'].includes(l.name)).map(link => (
                   <li key={link.href}>
