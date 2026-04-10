@@ -21,7 +21,7 @@ export default function Contact() {
           
           <div className="mb-16 text-center max-w-3xl mx-auto">
             <h1 className="font-display text-5xl font-bold text-white mb-6"><span className="text-primary italic">Konsultim</span> Privat</h1>
-            <p className="text-muted-foreground text-lg">
+            <p className="price-font text-muted-foreground text-lg">
               Lidhuni me këshilltarët tanë të dedikuar për një diskutim konfidencial në lidhje me portofolin tuaj të pasurive të paluajtshme.
             </p>
           </div>
@@ -30,15 +30,15 @@ export default function Contact() {
             {/* Contact Info */}
             <div className="space-y-12">
               <div className="glass-panel p-10 rounded-2xl">
-                <h3 className="font-display text-2xl text-white mb-8">Selia Globale</h3>
+                <h3 className="price-font text-2xl text-white mb-8">Selia Globale</h3>
                 <div className="space-y-8">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                       <MapPin size={24} />
                     </div>
                     <div>
-                      <h4 className="text-white font-medium mb-1">Zyra</h4>
-                      <p className="text-muted-foreground">100 Luxury Way, Suite 500<br/>Beverly Hills, CA 90210<br/>Shtetet e Bashkuara</p>
+                      <h4 className="price-font text-white font-medium mb-1">Zyra</h4>
+                      <p className="price-font text-muted-foreground">100 Luxury Way, Suite 500<br/>Beverly Hills, CA 90210<br/>Shtetet e Bashkuara</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
@@ -46,8 +46,8 @@ export default function Contact() {
                       <Phone size={24} />
                     </div>
                     <div>
-                      <h4 className="text-white font-medium mb-1">Linja Direkte</h4>
-                      <p className="text-muted-foreground">+1 (310) 555-0198</p>
+                      <h4 className="price-font text-white font-medium mb-1">Linja Direkte</h4>
+                      <p className="price-font text-muted-foreground">+1 (310) 555-0198</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
@@ -60,6 +60,7 @@ export default function Contact() {
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
             </div>
 
@@ -68,22 +69,22 @@ export default function Contact() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Emri</label>
+                    <label className="price-font text-sm font-medium text-white/70 uppercase tracking-wider">Emri</label>
                     <input required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mbiemri</label>
+                    <label className="price-font text-sm font-medium text-white/70 uppercase tracking-wider">Mbiemri</label>
                     <input required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
+                  <label className="price-font text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
                   <input required type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Natyra e Kërkesës</label>
+                  <label className="price-font text-sm font-medium text-white/70 uppercase tracking-wider">Natyra e Kërkesës</label>
                   <select className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none">
                     <option>Blerje e një prone</option>
                     <option>Shitje e një prone</option>
@@ -93,7 +94,7 @@ export default function Contact() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mesazhi</label>
+                  <label className="price-font text-sm font-medium text-white/70 uppercase tracking-wider">Mesazhi</label>
                   <textarea required rows={4} className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
                 </div>
 
