@@ -169,7 +169,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </li>
                 <li className="flex items-center gap-3">
                   <Mail size={18} className="text-primary shrink-0" />
-                  <span>discover@auraestates.com</span>
+                  <span>info@auraks.com</span>
                 </li>
               </ul>
             </div>

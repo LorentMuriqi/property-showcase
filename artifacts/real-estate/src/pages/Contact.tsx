@@ -5,14 +5,64 @@ import { useToast } from "@/hooks/use-toast";
 export default function Contact() {
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+
+  const form = e.currentTarget;
+  const formData = new FormData(form);
+
+  const payload = {
+    firstName: String(formData.get("firstName") || "").trim(),
+    lastName: String(formData.get("lastName") || "").trim(),
+    email: String(formData.get("email") || "").trim(),
+    requestType: String(formData.get("requestType") || "").trim(),
+    message: String(formData.get("message") || "").trim(),
+  };
+
+  if (
+    !payload.firstName ||
+    !payload.lastName ||
+    !payload.email ||
+    !payload.requestType ||
+    !payload.message
+  ) {
+    toast({
+      title: "Gabim",
+      description: "Ju lutem plotësoni të gjitha fushat.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/contact", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.message || "Dërgimi dështoi.");
+    }
+
     toast({
       title: "Kërkesa u Pranua",
-      description: "Një nga specialistët tanë të pronave të luksit do t'ju kontaktojë së shpejti.",
+      description: "Mesazhi u dërgua me sukses. Do t'ju kontaktojmë së shpejti.",
     });
-    (e.target as HTMLFormElement).reset();
-  };
+
+    form.reset();
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Nuk u dërgua mesazhi.",
+      variant: "destructive",
+    });
+  }
+};
 
   return (
     <Layout>
@@ -56,7 +106,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <h4 className="price-font text-white font-medium mb-1">Email-i</h4>
-                      <p className="price-font text-muted-foreground">discover@auraestates.com</p>
+                      <p className="price-font text-muted-foreground">info@auraks.com</p>
                     </div>
                   </div>
                 </div>
@@ -69,32 +119,32 @@ export default function Contact() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Emri</label>
-                    <input required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                    <input name="firstName" required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mbiemri</label>
-                    <input required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                    <input name="lastName" required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
-                  <input required type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                  <input name="email" required type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Natyra e Kërkesës</label>
-                  <select className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none">
-                    <option>Blerje e një prone</option>
-                    <option>Shitje e një prone</option>
-                    <option>Shërbime të Turit Virtual</option>
-                    <option>Kërkesë e Përgjithshme</option>
+                  <select name="requestType" required className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none">
+         <option value="Blerje e një prone">Blerje e një prone</option>
+<option value="Shitje e një prone">Shitje e një prone</option>
+<option value="Shërbime të Turit Virtual">Shërbime të Turit Virtual</option>
+<option value="Kërkesë e Përgjithshme">Kërkesë e Përgjithshme</option>
                   </select>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mesazhi</label>
-                  <textarea required rows={4} className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
+                 <textarea name="message" required rows={4} className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
                 </div>
 
                 <button type="submit" className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors mt-4">
