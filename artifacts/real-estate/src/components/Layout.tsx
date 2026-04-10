@@ -110,8 +110,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link 
                   key={link.href} 
                   href={link.href}
-                  className={`price-font text-3xl transition-colors ${
-                    location === link.href ? "text-primary italic" : "text-white hover:text-primary"
+                  className={`price-font font-medium text-3xl transition-colors ${
+                    location === link.href ? "text-primary" : "text-white hover:text-primary"
                   }`}
                 >
                   {link.name}
