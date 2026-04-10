@@ -17,6 +17,7 @@
     "@photo-sphere-viewer/core": "^5.14.1",
     "@photo-sphere-viewer/markers-plugin": "^5.14.1",
     "@photo-sphere-viewer/virtual-tour-plugin": "^5.14.1",
-    "@supabase/supabase-js": "^2.99.3"
+    "@supabase/supabase-js": "^2.99.3",
+    "resend": "^6.10.0"
   }
 }
