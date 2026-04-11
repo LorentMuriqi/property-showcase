@@ -12,11 +12,11 @@ export default async function handler(req, res) {
       });
     }
 
-    if (
-      !process.env.RESEND_API_KEY ||
-      !process.env.CONTACT_FROM_EMAIL ||
-      !process.env.CONTACT_TO_EMAIL
-    ) {
+    const apiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.CONTACT_FROM_EMAIL;
+    const toEmail = process.env.CONTACT_TO_EMAIL;
+
+    if (!apiKey || !fromEmail || !toEmail) {
       return res.status(500).json({
         message: "Mungojnë environment variables për email.",
       });
@@ -25,12 +25,12 @@ export default async function handler(req, res) {
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env.CONTACT_FROM_EMAIL,
-        to: [process.env.CONTACT_TO_EMAIL],
+        from: fromEmail,
+        to: [toEmail],
         reply_to: email,
         subject: `Kontakt i ri nga website - ${requestType}`,
         html: `
@@ -64,7 +64,10 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json({
+      success: true,
+      message: "Mesazhi u dërgua me sukses.",
+    });
   } catch (error) {
     console.error("Contact function crash:", error);
     return res.status(500).json({
