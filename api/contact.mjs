@@ -1,5 +1,3 @@
-import { Resend } from "resend";
-
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -24,30 +22,49 @@ export default async function handler(req, res) {
       });
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    const result = await resend.emails.send({
-      from: process.env.CONTACT_FROM_EMAIL,
-      to: process.env.CONTACT_TO_EMAIL,
-      replyTo: email,
-      subject: `Kontakt i ri nga website - ${requestType}`,
-      html: `
-        <h2>Kërkesë e re nga forma e kontaktit</h2>
-        <p><strong>Emri:</strong> ${firstName} ${lastName}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Natyra e kërkesës:</strong> ${requestType}</p>
-        <p><strong>Mesazhi:</strong></p>
-        <p>${String(message).replace(/\n/g, "<br/>")}</p>
-      `,
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: process.env.CONTACT_FROM_EMAIL,
+        to: [process.env.CONTACT_TO_EMAIL],
+        reply_to: email,
+        subject: `Kontakt i ri nga website - ${requestType}`,
+        html: `
+          <h2>Kërkesë e re nga forma e kontaktit</h2>
+          <p><strong>Emri:</strong> ${firstName} ${lastName}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Natyra e kërkesës:</strong> ${requestType}</p>
+          <p><strong>Mesazhi:</strong></p>
+          <p>${String(message).replace(/\n/g, "<br/>")}</p>
+        `,
+      }),
     });
 
-    if (result?.error) {
+    const raw = await resendResponse.text();
+
+    let data = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!resendResponse.ok) {
+      console.error("Resend send error:", raw);
       return res.status(500).json({
-        message: result.error.message || "Dërgimi i email-it dështoi.",
+        message:
+          data?.message ||
+          data?.error?.message ||
+          raw ||
+          "Dërgimi i email-it dështoi.",
       });
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Contact function crash:", error);
     return res.status(500).json({
