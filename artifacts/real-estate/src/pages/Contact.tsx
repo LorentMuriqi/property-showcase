@@ -43,11 +43,25 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data?.message || "Dërgimi dështoi.");
-    }
+
+const raw = await res.text();
+
+let data: any = null;
+
+try {
+  data = raw ? JSON.parse(raw) : null;
+} catch {
+  data = null;
+}
+
+if (!res.ok) {
+  throw new Error(
+    data?.message || raw || "Nuk u dërgua mesazhi."
+  );
+}
+
+
 
     toast({
       title: "Kërkesa u Pranua",
