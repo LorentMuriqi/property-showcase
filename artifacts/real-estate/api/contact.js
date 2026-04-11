@@ -1,8 +1,8 @@
-import { Resend } from "resend";
+const { Resend } = require("resend");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
   }
@@ -17,8 +17,8 @@ export default async function handler(req: any, res: any) {
 
   try {
     await resend.emails.send({
-      from: process.env.CONTACT_FROM_EMAIL!,
-      to: process.env.CONTACT_TO_EMAIL!,
+      from: process.env.CONTACT_FROM_EMAIL,
+      to: process.env.CONTACT_TO_EMAIL,
       replyTo: email,
       subject: `Kontakt i ri nga website - ${requestType}`,
       html: `
@@ -38,4 +38,4 @@ export default async function handler(req: any, res: any) {
       message: "Dërgimi i email-it dështoi.",
     });
   }
-}
+};
