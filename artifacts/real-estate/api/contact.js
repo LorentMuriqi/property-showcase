@@ -1,22 +1,32 @@
 const { Resend } = require("resend");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 module.exports = async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method not allowed" });
-  }
-
-  const { firstName, lastName, email, requestType, message } = req.body || {};
-
-  if (!firstName || !lastName || !email || !requestType || !message) {
-    return res.status(400).json({
-      message: "Ju lutem plotësoni të gjitha fushat.",
-    });
-  }
-
   try {
-    await resend.emails.send({
+    if (req.method !== "POST") {
+      return res.status(405).json({ message: "Method not allowed" });
+    }
+
+    const { firstName, lastName, email, requestType, message } = req.body || {};
+
+    if (!firstName || !lastName || !email || !requestType || !message) {
+      return res.status(400).json({
+        message: "Ju lutem plotësoni të gjitha fushat.",
+      });
+    }
+
+    if (
+      !process.env.RESEND_API_KEY ||
+      !process.env.CONTACT_FROM_EMAIL ||
+      !process.env.CONTACT_TO_EMAIL
+    ) {
+      return res.status(500).json({
+        message: "Mungojnë environment variables për email.",
+      });
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    const result = await resend.emails.send({
       from: process.env.CONTACT_FROM_EMAIL,
       to: process.env.CONTACT_TO_EMAIL,
       replyTo: email,
@@ -31,11 +41,18 @@ module.exports = async function handler(req, res) {
       `,
     });
 
+    if (result?.error) {
+      console.error("Resend API error:", result.error);
+      return res.status(500).json({
+        message: result.error.message || "Dërgimi i email-it dështoi.",
+      });
+    }
+
     return res.status(200).json({ success: true });
   } catch (error) {
-    console.error("Contact email error:", error);
+    console.error("Contact function crash:", error);
     return res.status(500).json({
-      message: "Dërgimi i email-it dështoi.",
+      message: error?.message || "A server error has occurred",
     });
   }
 };
