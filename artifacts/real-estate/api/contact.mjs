@@ -1,6 +1,6 @@
-const { Resend } = require("resend");
+import { Resend } from "resend";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ message: "Method not allowed" });
@@ -42,7 +42,6 @@ module.exports = async function handler(req, res) {
     });
 
     if (result?.error) {
-      console.error("Resend API error:", result.error);
       return res.status(500).json({
         message: result.error.message || "Dërgimi i email-it dështoi.",
       });
@@ -55,4 +54,4 @@ module.exports = async function handler(req, res) {
       message: error?.message || "A server error has occurred",
     });
   }
-};
+}
