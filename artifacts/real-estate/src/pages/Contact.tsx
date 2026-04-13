@@ -54,7 +54,6 @@ const payload = {
 if (
   !payload.firstName ||
   !payload.lastName ||
-  !payload.email ||
   !payload.countryCode ||
   !payload.phoneNumber ||
   !payload.requestType ||
