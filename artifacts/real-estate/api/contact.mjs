@@ -60,7 +60,7 @@ if (!isPhoneValid(countryCode, phoneNumber)) {
       body: JSON.stringify({
         from: fromEmail,
         to: [toEmail],
-        reply_to: email,
+        ...(email ? { reply_to: email } : {}),
         subject: `Kontakt i ri - ${requestType}`,
         html: `
           <h2>Kërkesë e re nga website</h2>

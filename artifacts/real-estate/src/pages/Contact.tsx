@@ -185,7 +185,7 @@ if (!res.ok) {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
-                  <input name="email" required type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                  <input name="email" type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                 </div>
 				
 				
