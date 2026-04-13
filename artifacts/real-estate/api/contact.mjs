@@ -56,6 +56,7 @@ export default async function handler(req, res) {
     });
 
     const raw = await resendResponse.text();
+	console.log("RESEND RAW RESPONSE:", raw);
 
     let data = null;
     try {
@@ -67,8 +68,6 @@ export default async function handler(req, res) {
     return res.status(resendResponse.ok ? 200 : 500).json({
       ok: resendResponse.ok,
       status: resendResponse.status,
-      fromEmail,
-      toEmail,
       resend: data || raw,
     });
   } catch (error) {
