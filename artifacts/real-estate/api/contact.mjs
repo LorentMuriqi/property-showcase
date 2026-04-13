@@ -1,5 +1,20 @@
 export default async function handler(req, res) {
   try {
+    const apiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.CONTACT_FROM_EMAIL;
+    const toEmail = process.env.CONTACT_TO_EMAIL;
+
+    if (req.method === "GET") {
+      return res.status(200).json({
+        ok: true,
+        env: {
+          hasApiKey: Boolean(apiKey),
+          fromEmail,
+          toEmail,
+        },
+      });
+    }
+
     if (req.method !== "POST") {
       return res.status(405).json({ message: "Method not allowed" });
     }
@@ -11,10 +26,6 @@ export default async function handler(req, res) {
         message: "Ju lutem plotësoni të gjitha fushat.",
       });
     }
-
-    const apiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.CONTACT_FROM_EMAIL;
-    const toEmail = process.env.CONTACT_TO_EMAIL;
 
     if (!apiKey || !fromEmail || !toEmail) {
       return res.status(500).json({
@@ -53,25 +64,18 @@ export default async function handler(req, res) {
       data = null;
     }
 
-    if (!resendResponse.ok) {
-      console.error("Resend send error:", raw);
-      return res.status(500).json({
-        message:
-          data?.message ||
-          data?.error?.message ||
-          raw ||
-          "Dërgimi i email-it dështoi.",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Mesazhi u dërgua me sukses.",
+    return res.status(resendResponse.ok ? 200 : 500).json({
+      ok: resendResponse.ok,
+      status: resendResponse.status,
+      fromEmail,
+      toEmail,
+      resend: data || raw,
     });
   } catch (error) {
-    console.error("Contact function crash:", error);
     return res.status(500).json({
+      ok: false,
       message: error?.message || "A server error has occurred",
+      stack: error?.stack || null,
     });
   }
 }
