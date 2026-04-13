@@ -1,20 +1,5 @@
 export default async function handler(req, res) {
   try {
-    const apiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.CONTACT_FROM_EMAIL;
-    const toEmail = process.env.CONTACT_TO_EMAIL;
-
-    if (req.method === "GET") {
-      return res.status(200).json({
-        ok: true,
-        env: {
-          hasApiKey: Boolean(apiKey),
-          fromEmail,
-          toEmail,
-        },
-      });
-    }
-
     if (req.method !== "POST") {
       return res.status(405).json({ message: "Method not allowed" });
     }
@@ -27,9 +12,13 @@ export default async function handler(req, res) {
       });
     }
 
+    const apiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.CONTACT_FROM_EMAIL;
+    const toEmail = process.env.CONTACT_TO_EMAIL;
+
     if (!apiKey || !fromEmail || !toEmail) {
       return res.status(500).json({
-        message: "Mungojnë environment variables për email.",
+        message: "Konfigurimi i email-it mungon.",
       });
     }
 
@@ -43,38 +32,35 @@ export default async function handler(req, res) {
         from: fromEmail,
         to: [toEmail],
         reply_to: email,
-        subject: `Kontakt i ri nga website - ${requestType}`,
+        subject: `Kontakt i ri - ${requestType}`,
         html: `
-          <h2>Kërkesë e re nga forma e kontaktit</h2>
+          <h2>Kërkesë e re nga website</h2>
           <p><strong>Emri:</strong> ${firstName} ${lastName}</p>
           <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Natyra e kërkesës:</strong> ${requestType}</p>
+          <p><strong>Tipi:</strong> ${requestType}</p>
           <p><strong>Mesazhi:</strong></p>
           <p>${String(message).replace(/\n/g, "<br/>")}</p>
         `,
       }),
     });
 
-    const raw = await resendResponse.text();
-	console.log("RESEND RAW RESPONSE:", raw);
+    if (!resendResponse.ok) {
+      console.error("Resend error:", await resendResponse.text());
 
-    let data = null;
-    try {
-      data = raw ? JSON.parse(raw) : null;
-    } catch {
-      data = null;
+      return res.status(500).json({
+        message: "Dërgimi i mesazhit dështoi.",
+      });
     }
 
-    return res.status(resendResponse.ok ? 200 : 500).json({
-      ok: resendResponse.ok,
-      status: resendResponse.status,
-      resend: data || raw,
+    return res.status(200).json({
+      success: true,
+      message: "Mesazhi u dërgua me sukses.",
     });
   } catch (error) {
+    console.error("Server error:", error);
+
     return res.status(500).json({
-      ok: false,
-      message: error?.message || "A server error has occurred",
-      stack: error?.stack || null,
+      message: "Gabim në server.",
     });
   }
 }
