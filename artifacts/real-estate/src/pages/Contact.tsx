@@ -128,7 +128,7 @@ if (!res.ok) {
           <div className="mb-16 text-center max-w-3xl mx-auto">
             <h1 className="font-display text-5xl font-bold text-white mb-6"><span className="text-primary italic">Konsultim</span> Privat</h1>
             <p className="text-muted-foreground text-lg">
-              Lidhuni me këshilltarët tanë të dedikuar për një diskutim konfidencial në lidhje me portofolin tuaj të pasurive të paluajtshme.
+              Lidhu me ekspertët tanë për një këshillim të personalizuar dhe konfidencial mbi investimet tuaja në pasuri të paluajtshme.
             </p>
           </div>
 
@@ -136,7 +136,7 @@ if (!res.ok) {
             {/* Contact Info */}
             <div className="space-y-12">
               <div className="glass-panel p-10 rounded-2xl">
-                <h3 className="price-font text-2xl text-white mb-8">Selia Globale</h3>
+                <h3 className="price-font text-2xl text-white mb-8">Selia</h3>
                 <div className="space-y-8">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -144,7 +144,7 @@ if (!res.ok) {
                     </div>
                     <div>
                       <h4 className="price-font text-white font-medium mb-1">Zyra</h4>
-                      <p className="price-font text-muted-foreground">100 Luxury Way, Suite 500<br/>Beverly Hills, CA 90210<br/>Shtetet e Bashkuara</p>
+                      <p className="price-font text-muted-foreground">Pejë<br/>Fidanishte</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
@@ -152,8 +152,8 @@ if (!res.ok) {
                       <Phone size={24} />
                     </div>
                     <div>
-                      <h4 className="price-font text-white font-medium mb-1">Linja Direkte</h4>
-                      <p className="price-font text-muted-foreground">+1 (310) 555-0198</p>
+                      <h4 className="price-font text-white font-medium mb-1">Tel</h4>
+                      <p className="price-font text-muted-foreground">+38349123456</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
@@ -161,7 +161,7 @@ if (!res.ok) {
                       <Mail size={24} />
                     </div>
                     <div>
-                      <h4 className="price-font text-white font-medium mb-1">Email-i</h4>
+                      <h4 className="price-font text-white font-medium mb-1">Email</h4>
                       <p className="price-font text-muted-foreground">info@auraks.com</p>
                     </div>
                   </div>

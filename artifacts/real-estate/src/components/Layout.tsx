@@ -161,11 +161,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <ul className="space-y-4 text-muted-foreground">
                 <li className="flex items-start gap-3">
                   <MapPin size={18} className="text-primary mt-1 shrink-0" />
-                  <span>100 Luxury Way, Suite 500<br/>Beverly Hills, CA 90210</span>
+                  <span>Pejë<br/>Fidanishte</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <Phone size={18} className="text-primary shrink-0" />
-                  <span>+1 (310) 555-0198</span>
+                  <span>+383 49 123 456</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <Mail size={18} className="text-primary shrink-0" />
