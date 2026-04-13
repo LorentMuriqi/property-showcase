@@ -10,9 +10,14 @@ const PHONE_LENGTHS = {
 
 const sanitizePhone = (value) => String(value || "").replace(/\D/g, "");
 
-const isPhoneValid = (code, phone) => {
+const normalizePhone = (phone) => {
   const digits = sanitizePhone(phone);
-  return digits.length === PHONE_LENGTHS[code];
+  return digits.startsWith("0") ? digits.slice(1) : digits;
+};
+
+const isPhoneValid = (code, phone) => {
+  const normalized = normalizePhone(phone);
+  return normalized.length === PHONE_LENGTHS[code];
 };
 
 
@@ -61,7 +66,7 @@ if (!isPhoneValid(countryCode, phoneNumber)) {
           <h2>Kërkesë e re nga website</h2>
           <p><strong>Emri:</strong> ${firstName} ${lastName}</p>
           <p><strong>Email:</strong> ${email}</p>
-		  <p><strong>Telefoni:</strong> ${countryCode}${sanitizePhone(phoneNumber)}</p>
+		  <p><strong>Telefoni:</strong> ${countryCode}${normalizePhone(phoneNumber)}</p>
           <p><strong>Tipi:</strong> ${requestType}</p>
           <p><strong>Mesazhi:</strong></p>
           <p>${String(message).replace(/\n/g, "<br/>")}</p>

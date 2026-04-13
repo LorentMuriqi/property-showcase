@@ -23,9 +23,14 @@ const [phoneTouched, setPhoneTouched] = useState(false);
 
 const sanitizePhone = (value: string) => value.replace(/\D/g, "");
 
-const isPhoneValid = (code: string, phone: string) => {
+const normalizePhone = (phone: string) => {
   const digits = sanitizePhone(phone);
-  return digits.length === PHONE_LENGTHS[code];
+  return digits.startsWith("0") ? digits.slice(1) : digits;
+};
+
+const isPhoneValid = (code: string, phone: string) => {
+  const normalized = normalizePhone(phone);
+  return normalized.length === PHONE_LENGTHS[code];
 };
 
 
@@ -41,7 +46,7 @@ const payload = {
   lastName: String(formData.get("lastName") || "").trim(),
   email: String(formData.get("email") || "").trim(),
   countryCode: String(formData.get("countryCode") || "").trim(),
-  phoneNumber: sanitizePhone(String(formData.get("phoneNumber") || "").trim()),
+  phoneNumber: normalizePhone(String(formData.get("phoneNumber") || "").trim()),
   requestType: String(formData.get("requestType") || "").trim(),
   message: String(formData.get("message") || "").trim(),
 };
@@ -215,7 +220,7 @@ if (!res.ok) {
       value={phoneNumber}
       onChange={(e) => setPhoneNumber(e.target.value)}
       onBlur={() => setPhoneTouched(true)}
-      placeholder="49 239 568"
+      placeholder="049123456 / 49123456"
       className={`w-full bg-background border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors ${
         phoneTouched && phoneNumber && !isPhoneValid(countryCode, phoneNumber)
           ? "border-red-500"
