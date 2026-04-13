@@ -35,7 +35,7 @@ if (!isPhoneValid(countryCode, phoneNumber)) {
   });
 }
 
-    if (!firstName || !lastName || !email || !countryCode || !phoneNumber || !requestType || !message) {
+    if (!firstName || !lastName || !countryCode || !phoneNumber || !requestType || !message) {
       return res.status(400).json({
         message: "Ju lutem plotësoni të gjitha fushat.",
       });
