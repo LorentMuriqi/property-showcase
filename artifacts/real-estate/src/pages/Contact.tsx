@@ -11,21 +11,25 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
   const form = e.currentTarget;
   const formData = new FormData(form);
 
-  const payload = {
-    firstName: String(formData.get("firstName") || "").trim(),
-    lastName: String(formData.get("lastName") || "").trim(),
-    email: String(formData.get("email") || "").trim(),
-    requestType: String(formData.get("requestType") || "").trim(),
-    message: String(formData.get("message") || "").trim(),
-  };
+const payload = {
+  firstName: String(formData.get("firstName") || "").trim(),
+  lastName: String(formData.get("lastName") || "").trim(),
+  email: String(formData.get("email") || "").trim(),
+  countryCode: String(formData.get("countryCode") || "").trim(),
+  phoneNumber: String(formData.get("phoneNumber") || "").trim(),
+  requestType: String(formData.get("requestType") || "").trim(),
+  message: String(formData.get("message") || "").trim(),
+};
 
-  if (
-    !payload.firstName ||
-    !payload.lastName ||
-    !payload.email ||
-    !payload.requestType ||
-    !payload.message
-  ) {
+if (
+  !payload.firstName ||
+  !payload.lastName ||
+  !payload.email ||
+  !payload.countryCode ||
+  !payload.phoneNumber ||
+  !payload.requestType ||
+  !payload.message
+) {
     toast({
       title: "Gabim",
       description: "Ju lutem plotësoni të gjitha fushat.",
@@ -145,6 +149,42 @@ if (!res.ok) {
                   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
                   <input name="email" required type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
                 </div>
+				
+				
+				<div className="space-y-2">
+  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">
+    Numri i Telefonit
+  </label>
+
+  <div className="grid grid-cols-[140px_1fr] gap-3">
+    <select
+      name="countryCode"
+      required
+      defaultValue="+383"
+      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none"
+    >
+      <option value="+383">Kosovë (+383)</option>
+      <option value="+355">Shqipëri (+355)</option>
+      <option value="+389">Maqedoni (+389)</option>
+      <option value="+382">Mali i Zi (+382)</option>
+      <option value="+43">Austri (+43)</option>
+      <option value="+41">Zvicër (+41)</option>
+      <option value="+49">Gjermani (+49)</option>
+      <option value="+39">Itali (+39)</option>
+    </select>
+
+    <input
+      name="phoneNumber"
+      required
+      type="tel"
+	  pattern="[0-9 ]+"
+      inputMode="tel"
+      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+    />
+  </div>
+</div>
+				
+				
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Natyra e Kërkesës</label>

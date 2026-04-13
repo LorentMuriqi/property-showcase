@@ -4,9 +4,9 @@ export default async function handler(req, res) {
       return res.status(405).json({ message: "Method not allowed" });
     }
 
-    const { firstName, lastName, email, requestType, message } = req.body || {};
+    const { firstName, lastName, email, countryCode, phoneNumber, requestType, message } = req.body || {};
 
-    if (!firstName || !lastName || !email || !requestType || !message) {
+    if (!firstName || !lastName || !email || !countryCode || !phoneNumber || !requestType || !message) {
       return res.status(400).json({
         message: "Ju lutem plotësoni të gjitha fushat.",
       });
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
           <h2>Kërkesë e re nga website</h2>
           <p><strong>Emri:</strong> ${firstName} ${lastName}</p>
           <p><strong>Email:</strong> ${email}</p>
+		  <p><strong>Telefoni:</strong> ${countryCode}${phoneNumber}</p>
           <p><strong>Tipi:</strong> ${requestType}</p>
           <p><strong>Mesazhi:</strong></p>
           <p>${String(message).replace(/\n/g, "<br/>")}</p>
