@@ -1,9 +1,34 @@
 import { Layout } from "@/components/Layout";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export default function Contact() {
   const { toast } = useToast();
+
+
+const PHONE_LENGTHS: Record<string, number> = {
+  "+383": 8, // Kosovë
+  "+355": 9, // Shqipëri
+  "+389": 8, // Maqedoni e Veriut
+  "+382": 8, // Mali i Zi
+  "+387": 8, // Bosnje dhe Hercegovinë
+  "+385": 9, // Kroaci
+  "+386": 8, // Slloveni
+};
+
+const [countryCode, setCountryCode] = useState("+383");
+const [phoneNumber, setPhoneNumber] = useState("");
+const [phoneTouched, setPhoneTouched] = useState(false);
+
+const sanitizePhone = (value: string) => value.replace(/\D/g, "");
+
+const isPhoneValid = (code: string, phone: string) => {
+  const digits = sanitizePhone(phone);
+  return digits.length === PHONE_LENGTHS[code];
+};
+
+
 
 const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
   e.preventDefault();
@@ -16,7 +41,7 @@ const payload = {
   lastName: String(formData.get("lastName") || "").trim(),
   email: String(formData.get("email") || "").trim(),
   countryCode: String(formData.get("countryCode") || "").trim(),
-  phoneNumber: String(formData.get("phoneNumber") || "").trim(),
+  phoneNumber: sanitizePhone(String(formData.get("phoneNumber") || "").trim()),
   requestType: String(formData.get("requestType") || "").trim(),
   message: String(formData.get("message") || "").trim(),
 };
@@ -37,6 +62,15 @@ if (
     });
     return;
   }
+  if (!isPhoneValid(payload.countryCode, payload.phoneNumber)) {
+  setPhoneTouched(true);
+  toast({
+    title: "Gabim",
+    description: "Numri i telefonit është i pavlefshëm.",
+    variant: "destructive",
+  });
+  return;
+}
 
   try {
     const res = await fetch("/api/contact", {
@@ -160,7 +194,8 @@ if (!res.ok) {
     <select
       name="countryCode"
       required
-      defaultValue="+383"
+      value={countryCode}
+      onChange={(e) => setCountryCode(e.target.value)}
       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none"
     >
       <option value="+383">🇽🇰 +383</option>
@@ -176,11 +211,22 @@ if (!res.ok) {
       name="phoneNumber"
       required
       type="tel"
-      inputMode="tel"
-      pattern="[0-9 ]+"
-      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+      inputMode="numeric"
+      value={phoneNumber}
+      onChange={(e) => setPhoneNumber(e.target.value)}
+      onBlur={() => setPhoneTouched(true)}
+      placeholder="49 239 568"
+      className={`w-full bg-background border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors ${
+        phoneTouched && phoneNumber && !isPhoneValid(countryCode, phoneNumber)
+          ? "border-red-500"
+          : "border-white/10"
+      }`}
     />
   </div>
+
+  {phoneTouched && phoneNumber && !isPhoneValid(countryCode, phoneNumber) && (
+    <p className="text-sm text-red-400">Numër telefoni i pavlefshëm</p>
+  )}
 </div>
 				
 				

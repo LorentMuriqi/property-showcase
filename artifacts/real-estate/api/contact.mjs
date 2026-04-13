@@ -1,3 +1,21 @@
+const PHONE_LENGTHS = {
+  "+383": 8,
+  "+355": 9,
+  "+389": 8,
+  "+382": 8,
+  "+387": 8,
+  "+385": 9,
+  "+386": 8,
+};
+
+const sanitizePhone = (value) => String(value || "").replace(/\D/g, "");
+
+const isPhoneValid = (code, phone) => {
+  const digits = sanitizePhone(phone);
+  return digits.length === PHONE_LENGTHS[code];
+};
+
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -5,6 +23,12 @@ export default async function handler(req, res) {
     }
 
     const { firstName, lastName, email, countryCode, phoneNumber, requestType, message } = req.body || {};
+
+if (!isPhoneValid(countryCode, phoneNumber)) {
+  return res.status(400).json({
+    message: "Numri i telefonit është i pavlefshëm.",
+  });
+}
 
     if (!firstName || !lastName || !email || !countryCode || !phoneNumber || !requestType || !message) {
       return res.status(400).json({
@@ -37,7 +61,7 @@ export default async function handler(req, res) {
           <h2>Kërkesë e re nga website</h2>
           <p><strong>Emri:</strong> ${firstName} ${lastName}</p>
           <p><strong>Email:</strong> ${email}</p>
-		  <p><strong>Telefoni:</strong> ${countryCode}${phoneNumber}</p>
+		  <p><strong>Telefoni:</strong> ${countryCode}${sanitizePhone(phoneNumber)}</p>
           <p><strong>Tipi:</strong> ${requestType}</p>
           <p><strong>Mesazhi:</strong></p>
           <p>${String(message).replace(/\n/g, "<br/>")}</p>
