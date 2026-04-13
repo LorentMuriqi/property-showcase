@@ -151,34 +151,33 @@ if (!res.ok) {
                 </div>
 				
 				
-				<div className="space-y-2">
+<div className="space-y-2">
   <label className="text-sm font-medium text-white/70 uppercase tracking-wider">
     Numri i Telefonit
   </label>
 
-  <div className="grid grid-cols-[140px_1fr] gap-3">
+  <div className="grid grid-cols-[150px_1fr] gap-3">
     <select
       name="countryCode"
       required
       defaultValue="+383"
       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none"
     >
-      <option value="+383">Kosovë (+383)</option>
-      <option value="+355">Shqipëri (+355)</option>
-      <option value="+389">Maqedoni (+389)</option>
-      <option value="+382">Mali i Zi (+382)</option>
-      <option value="+43">Austri (+43)</option>
-      <option value="+41">Zvicër (+41)</option>
-      <option value="+49">Gjermani (+49)</option>
-      <option value="+39">Itali (+39)</option>
+      <option value="+383">🇽🇰 +383</option>
+      <option value="+355">🇦🇱 +355</option>
+      <option value="+389">🇲🇰 +389</option>
+      <option value="+382">🇲🇪 +382</option>
+      <option value="+387">🇧🇦 +387</option>
+      <option value="+385">🇭🇷 +385</option>
+      <option value="+386">🇸🇮 +386</option>
     </select>
 
     <input
       name="phoneNumber"
       required
       type="tel"
-	  pattern="[0-9 ]+"
       inputMode="tel"
+      pattern="[0-9 ]+"
       className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
     />
   </div>
