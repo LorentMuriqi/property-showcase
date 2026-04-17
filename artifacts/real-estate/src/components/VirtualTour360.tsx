@@ -37,12 +37,13 @@ export function VirtualTour360({
   defaultSceneId,
   onClose,
 }: VirtualTour360Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Viewer | null>(null);
-  const pendingOrientationRef = useRef<{ nodeId: number; yaw: number; pitch: number } | null>(null);
-  const lastClickedLinkRef = useRef<any | null>(null);
-  const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
+const containerRef = useRef<HTMLDivElement>(null);
+const viewerRef = useRef<Viewer | null>(null);
+const overlayRef = useRef<HTMLDivElement>(null);
+const isCustomTransitionRef = useRef(false);
+const pendingOrientationRef = useRef<{ nodeId: number; yaw: number; pitch: number } | null>(null);
+const lastClickedLinkRef = useRef<any | null>(null);
+const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
 
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
@@ -328,17 +329,8 @@ export function VirtualTour360({
 return {
   showLoader: false,
   effect: "fade",
-  speed: 650,
-  rotation: true,
-  rotateTo:
-    clickedLink?.position &&
-    Number.isFinite(Number(clickedLink.position.yaw)) &&
-    Number.isFinite(Number(clickedLink.position.pitch))
-      ? {
-          yaw: Number(clickedLink.position.yaw),
-          pitch: Number(clickedLink.position.pitch),
-        }
-      : undefined,
+  speed: isCustomTransitionRef.current ? 0 : 380,
+  rotation: false,
 };
             },
           },
@@ -353,48 +345,75 @@ return {
 vtPlugin.addEventListener("select-link", async ({ link }: any) => {
   if (!link) return;
 
-  lastClickedLinkRef.current = link;
-
-  const viewer = viewerRef.current;
   const overlay = overlayRef.current;
+  const currentViewer = viewerRef.current;
+  if (!overlay || !currentViewer) return;
 
-  if (!viewer || !overlay) return;
+  const targetNodeId = Number(link.nodeId);
+  const targetScene = scenes.find((s) => s.id === targetNodeId);
+  if (!targetScene?.imageUrl) return;
 
-  const targetScene = scenes.find(s => s.id === Number(link.nodeId));
-  if (!targetScene) return;
+  lastClickedLinkRef.current = link;
+  isCustomTransitionRef.current = true;
 
   try {
-    // 1. Preload image visually
-    overlay.style.backgroundImage = `url(${targetScene.imageUrl})`;
-    overlay.style.backgroundSize = "cover";
-    overlay.style.backgroundPosition = "center";
-    overlay.style.opacity = "0";
+    await preloadPanorama(targetScene.imageUrl);
 
-    // 2. Slight zoom forward
-    await viewer.animate({
-      zoom: 80,
-      speed: 150,
+    overlay.style.backgroundImage = `url("${targetScene.imageUrl}")`;
+    overlay.style.opacity = "0";
+    overlay.style.transform = "scale(1.035)";
+
+    try {
+      await vtPlugin.gotoLink(link.nodeId, "8rpm");
+    } catch (error) {
+      console.error("gotoLink smoothing error:", error);
+    }
+
+    const currentZoom = currentViewer.getZoomLevel?.() ?? 0;
+
+    try {
+      await currentViewer.animate({
+        yaw: Number(link.position?.yaw),
+        pitch: Number(link.position?.pitch),
+        zoom: Math.min(20, currentZoom + 6),
+        speed: 140,
+      });
+    } catch (error) {
+      console.error("Pre-transition pull error:", error);
+    }
+
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1";
+      overlay.style.transform = "scale(1)";
     });
 
-    // 3. Fade in next scene
-    overlay.style.opacity = "1";
+    await new Promise((resolve) => setTimeout(resolve, 170));
 
-    await new Promise(r => setTimeout(r, 250));
-
-    // 4. Switch scene instantly (hidden behind overlay)
-    await vtPlugin.setCurrentNode(link.nodeId, {
+    await vtPlugin.setCurrentNode(String(targetNodeId), {
       showLoader: false,
+      effect: "fade",
       speed: 0,
+      rotation: false,
     });
 
-    // 5. Reset zoom
-    viewer.zoom(0);
+    try {
+      currentViewer.zoom(0);
+    } catch (error) {
+      console.error("Zoom reset after transition error:", error);
+    }
 
-    // 6. Fade out overlay
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
     overlay.style.opacity = "0";
+    overlay.style.transform = "scale(0.995)";
 
+    await new Promise((resolve) => setTimeout(resolve, 220));
   } catch (error) {
-    console.error("Matterport-style transition error:", error);
+    console.error("Custom hotspot transition error:", error);
+  } finally {
+    overlay.style.opacity = "0";
+    overlay.style.transform = "scale(1)";
+    isCustomTransitionRef.current = false;
   }
 });
 
@@ -415,6 +434,14 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
 vtPlugin.addEventListener("node-changed", ({ node }: any) => {
   const nextId = Number(node.id);
   setCurrentSceneId(nextId);
+
+  if (!isCustomTransitionRef.current) {
+    try {
+      viewer.zoom(0);
+    } catch (error) {
+      console.error("Node changed zoom reset error:", error);
+    }
+  }
 
   pendingOrientationRef.current = null;
   lastClickedLinkRef.current = null;
@@ -445,12 +472,12 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
       pendingOrientationRef.current = null;
     }
 
-    await vtPlugin.setCurrentNode(String(id), {
-      showLoader: false,
-      effect: "fade",
-      speed: 650,
-      rotation: false,
-    });
+await vtPlugin.setCurrentNode(String(id), {
+  showLoader: false,
+  effect: "fade",
+  speed: 320,
+  rotation: false,
+});
   };
 
   const toggleFullscreen = async () => {
@@ -501,13 +528,20 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
         </button>
       )}
 
-      <div className="relative w-full h-full flex-1">
+ <div className="relative w-full h-full flex-1 overflow-hidden">
   <div ref={containerRef} className="w-full h-full" />
 
-  {/* Transition Layer */}
   <div
     ref={overlayRef}
-    className="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-500"
+    className="absolute inset-0 pointer-events-none opacity-0"
+    style={{
+      backgroundRepeat: "no-repeat",
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      transform: "scale(1)",
+      transition: "opacity 220ms ease, transform 320ms ease",
+      willChange: "opacity, transform",
+    }}
   />
 </div>
 
