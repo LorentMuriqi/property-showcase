@@ -175,58 +175,58 @@ const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
     return normalizeYaw(to - from);
   };
 
-  const getHotspotTransitionOrientation = useCallback(
-    (
-      fromSceneId: number,
-      toSceneId: number,
-      hotspotYaw: number,
-      hotspotPitch: number,
-      currentYaw: number,
-      currentPitch: number,
-    ) => {
-      const fromScene = scenes.find((s) => s.id === fromSceneId);
-      if (!fromScene) return getSceneStartOrientation(toSceneId);
 
-      const hotspot = fromScene.hotspots.find((h) => {
-        const sameTarget = h.toSceneId === toSceneId;
-        const sameYaw = Math.abs(h.yaw - hotspotYaw) < 0.0001;
-        const samePitch = Math.abs(h.pitch - hotspotPitch) < 0.0001;
-        return sameTarget && sameYaw && samePitch;
-      });
 
-      if (!hotspot) return getSceneStartOrientation(toSceneId);
 
-      const targetSceneStart = getSceneStartOrientation(toSceneId);
+const getHotspotTransitionOrientation = useCallback(
+  (
+    toSceneId: number,
+    hotspotYaw: number,
+    hotspotPitch: number,
+    currentYaw: number,
+    currentPitch: number,
+    targetYaw?: number | null,
+    targetPitch?: number | null,
+  ) => {
+    const targetSceneStart = getSceneStartOrientation(toSceneId);
 
-      const baseYaw =
-        typeof hotspot.targetYaw === "number" && Number.isFinite(hotspot.targetYaw)
-          ? hotspot.targetYaw
-          : targetSceneStart?.yaw;
+    const baseYaw =
+      typeof targetYaw === "number" && Number.isFinite(targetYaw)
+        ? targetYaw
+        : targetSceneStart?.yaw;
 
-      const basePitch =
-        typeof hotspot.targetPitch === "number" && Number.isFinite(hotspot.targetPitch)
-          ? hotspot.targetPitch
-          : targetSceneStart?.pitch;
+    const basePitch =
+      typeof targetPitch === "number" && Number.isFinite(targetPitch)
+        ? targetPitch
+        : targetSceneStart?.pitch;
 
-      if (
-        typeof baseYaw !== "number" ||
-        typeof basePitch !== "number" ||
-        !Number.isFinite(baseYaw) ||
-        !Number.isFinite(basePitch)
-      ) {
-        return null;
-      }
+    if (
+      typeof baseYaw !== "number" ||
+      typeof basePitch !== "number" ||
+      !Number.isFinite(baseYaw) ||
+      !Number.isFinite(basePitch)
+    ) {
+      return null;
+    }
 
-      const yawDelta = shortestAngleDelta(hotspotYaw, currentYaw);
-      const pitchDelta = currentPitch - hotspotPitch;
+    const yawDelta = shortestAngleDelta(hotspotYaw, currentYaw);
+    const pitchDelta = currentPitch - hotspotPitch;
 
-      return {
-        yaw: normalizeYaw(baseYaw + yawDelta),
-        pitch: clampPitch(basePitch + pitchDelta),
-      };
-    },
-    [scenes, getSceneStartOrientation],
-  );
+    return {
+      yaw: normalizeYaw(baseYaw + yawDelta),
+      pitch: clampPitch(basePitch + pitchDelta),
+    };
+  },
+  [getSceneStartOrientation],
+);
+  
+  
+  
+  
+  
+  
+  
+  
 
   useEffect(() => {
     Cache.enabled = true;
@@ -290,14 +290,15 @@ const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
                 Number.isFinite(Number(clickedLink.position.yaw)) &&
                 Number.isFinite(Number(clickedLink.position.pitch))
               ) {
-                const computedOrientation = getHotspotTransitionOrientation(
-                  Number(fromNode.id),
-                  Number(toNode.id),
-                  Number(clickedLink.position.yaw),
-                  Number(clickedLink.position.pitch),
-                  viewerPosition.yaw,
-                  viewerPosition.pitch,
-                );
+const computedOrientation = getHotspotTransitionOrientation(
+  Number(toNode.id),
+  Number(clickedLink.position.yaw),
+  Number(clickedLink.position.pitch),
+  viewerPosition.yaw,
+  viewerPosition.pitch,
+  clickedLink.data?.targetYaw ?? null,
+  clickedLink.data?.targetPitch ?? null,
+);
 
                 if (computedOrientation) {
                   pendingOrientationRef.current = {
