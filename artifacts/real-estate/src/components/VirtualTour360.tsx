@@ -337,7 +337,6 @@ return {
           pitch: Number(clickedLink.position.pitch),
         }
       : undefined,
-  zoomTo: viewer.getZoomLevel?.() ?? 55,
 };
             },
           },
