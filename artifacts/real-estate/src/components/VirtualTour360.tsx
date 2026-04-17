@@ -339,9 +339,17 @@ export function VirtualTour360({
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
-    vtPlugin.addEventListener("select-link", ({ link }: any) => {
-      lastClickedLinkRef.current = link || null;
-    });
+vtPlugin.addEventListener("select-link", async ({ link }: any) => {
+  if (!link) return;
+
+  lastClickedLinkRef.current = link;
+
+  try {
+    await vtPlugin.gotoLink(link.nodeId, 0);
+  } catch (error) {
+    console.error("Immediate gotoLink error:", error);
+  }
+});
 
     setCurrentSceneId(Number(resolvedStartNodeId));
 
@@ -357,35 +365,12 @@ export function VirtualTour360({
     
 	
 	
-	vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
   const nextId = Number(node.id);
   setCurrentSceneId(nextId);
 
-  const pending = pendingOrientationRef.current;
-
-  requestAnimationFrame(() => {
-    try {
-      if (pending && pending.nodeId === nextId) {
-        viewer.rotate({
-          yaw: pending.yaw,
-          pitch: pending.pitch,
-        });
-      } else {
-        const fallbackOrientation = getSceneStartOrientation(nextId);
-        if (fallbackOrientation) {
-          viewer.rotate({
-            yaw: fallbackOrientation.yaw,
-            pitch: fallbackOrientation.pitch,
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Node changed orientation apply error:", error);
-    } finally {
-      pendingOrientationRef.current = null;
-      lastClickedLinkRef.current = null;
-    }
-  });
+  pendingOrientationRef.current = null;
+  lastClickedLinkRef.current = null;
 });
 	
 
