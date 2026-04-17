@@ -323,11 +323,21 @@ export function VirtualTour360({
                   : null;
               }
 
-              return {
+return {
   showLoader: false,
   effect: "fade",
-  speed: 1100,
-  rotation: false,
+  speed: 1400,
+  rotation: true,
+  rotateTo:
+    clickedLink?.position &&
+    Number.isFinite(Number(clickedLink.position.yaw)) &&
+    Number.isFinite(Number(clickedLink.position.pitch))
+      ? {
+          yaw: Number(clickedLink.position.yaw),
+          pitch: Number(clickedLink.position.pitch),
+        }
+      : undefined,
+  zoomTo: viewer.getZoomLevel?.() ?? 55,
 };
             },
           },
@@ -345,9 +355,16 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
   lastClickedLinkRef.current = link;
 
   try {
-    await vtPlugin.gotoLink(link.nodeId, "4rpm");
+    const currentZoom = viewer.getZoomLevel?.() ?? 50;
+
+    await viewer.animate({
+      yaw: Number(link.position?.yaw),
+      pitch: Number(link.position?.pitch),
+      zoom: Math.min(90, currentZoom + 8),
+      speed: 220,
+    });
   } catch (error) {
-    console.error("gotoLink smoothing error:", error);
+    console.error("Pre-transition pull animation error:", error);
   }
 });
 
