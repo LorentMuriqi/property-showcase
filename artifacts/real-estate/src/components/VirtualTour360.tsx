@@ -38,10 +38,12 @@ export function VirtualTour360({
   onClose,
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const pendingOrientationRef = useRef<{ nodeId: number; yaw: number; pitch: number } | null>(null);
   const lastClickedLinkRef = useRef<any | null>(null);
   const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
+
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -353,10 +355,46 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
 
   lastClickedLinkRef.current = link;
 
+  const viewer = viewerRef.current;
+  const overlay = overlayRef.current;
+
+  if (!viewer || !overlay) return;
+
+  const targetScene = scenes.find(s => s.id === Number(link.nodeId));
+  if (!targetScene) return;
+
   try {
-    await vtPlugin.gotoLink(link.nodeId, "6rpm");
+    // 1. Preload image visually
+    overlay.style.backgroundImage = `url(${targetScene.imageUrl})`;
+    overlay.style.backgroundSize = "cover";
+    overlay.style.backgroundPosition = "center";
+    overlay.style.opacity = "0";
+
+    // 2. Slight zoom forward
+    await viewer.animate({
+      zoom: 80,
+      speed: 150,
+    });
+
+    // 3. Fade in next scene
+    overlay.style.opacity = "1";
+
+    await new Promise(r => setTimeout(r, 250));
+
+    // 4. Switch scene instantly (hidden behind overlay)
+    await vtPlugin.setCurrentNode(link.nodeId, {
+      showLoader: false,
+      speed: 0,
+    });
+
+    // 5. Reset zoom
+    viewer.zoom(0);
+
+    // 6. Fade out overlay
+    overlay.style.opacity = "0";
+
   } catch (error) {
-    console.error("gotoLink smoothing error:", error);
+    console.error("Matterport-style transition error:", error);
   }
 });
 
@@ -463,7 +501,15 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
         </button>
       )}
 
-      <div ref={containerRef} className="w-full h-full flex-1" />
+      <div className="relative w-full h-full flex-1">
+  <div ref={containerRef} className="w-full h-full" />
+
+  {/* Transition Layer */}
+  <div
+    ref={overlayRef}
+    className="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-500"
+  />
+</div>
 
       <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none max-w-[80%]">
         <h2 className="text-white font-display text-xl">
