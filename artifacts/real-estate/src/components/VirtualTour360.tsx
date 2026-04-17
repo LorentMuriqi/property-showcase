@@ -326,7 +326,7 @@ export function VirtualTour360({
 return {
   showLoader: false,
   effect: "fade",
-  speed: 1400,
+  speed: 650,
   rotation: true,
   rotateTo:
     clickedLink?.position &&
@@ -355,16 +355,9 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
   lastClickedLinkRef.current = link;
 
   try {
-    const currentZoom = viewer.getZoomLevel?.() ?? 50;
-
-    await viewer.animate({
-      yaw: Number(link.position?.yaw),
-      pitch: Number(link.position?.pitch),
-      zoom: Math.min(90, currentZoom + 8),
-      speed: 220,
-    });
+    await vtPlugin.gotoLink(link.nodeId, "6rpm");
   } catch (error) {
-    console.error("Pre-transition pull animation error:", error);
+    console.error("gotoLink smoothing error:", error);
   }
 });
 
