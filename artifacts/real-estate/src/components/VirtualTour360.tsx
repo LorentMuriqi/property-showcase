@@ -354,61 +354,40 @@ export function VirtualTour360({
       };
     }
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      const nextId = Number(node.id);
-      setCurrentSceneId(nextId);
+    
+	
+	
+	vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  setCurrentSceneId(nextId);
 
-      const pending = pendingOrientationRef.current;
+  const pending = pendingOrientationRef.current;
+
+  requestAnimationFrame(() => {
+    try {
       if (pending && pending.nodeId === nextId) {
-        requestAnimationFrame(async () => {
-          try {
-            await viewer.animate({
-              yaw: pending.yaw,
-              pitch: pending.pitch,
-              speed: "20rpm",
-            });
-          } catch {
-            try {
-              viewer.rotate({
-                yaw: pending.yaw,
-                pitch: pending.pitch,
-              });
-            } catch (error) {
-              console.error("Pending orientation apply error:", error);
-            }
-          } finally {
-            lastClickedLinkRef.current = null;
-          }
-        });
-        return;
-      }
-
-      const fallbackOrientation = getSceneStartOrientation(nextId);
-      if (fallbackOrientation) {
-        requestAnimationFrame(async () => {
-          try {
-            await viewer.animate({
-              yaw: fallbackOrientation.yaw,
-              pitch: fallbackOrientation.pitch,
-              speed: "20rpm",
-            });
-          } catch {
-            try {
-              viewer.rotate({
-                yaw: fallbackOrientation.yaw,
-                pitch: fallbackOrientation.pitch,
-              });
-            } catch (error) {
-              console.error("Fallback orientation apply error:", error);
-            }
-          } finally {
-            lastClickedLinkRef.current = null;
-          }
+        viewer.rotate({
+          yaw: pending.yaw,
+          pitch: pending.pitch,
         });
       } else {
-        lastClickedLinkRef.current = null;
+        const fallbackOrientation = getSceneStartOrientation(nextId);
+        if (fallbackOrientation) {
+          viewer.rotate({
+            yaw: fallbackOrientation.yaw,
+            pitch: fallbackOrientation.pitch,
+          });
+        }
       }
-    });
+    } catch (error) {
+      console.error("Node changed orientation apply error:", error);
+    } finally {
+      pendingOrientationRef.current = null;
+      lastClickedLinkRef.current = null;
+    }
+  });
+});
+	
 
     return () => {
       viewer.destroy();
