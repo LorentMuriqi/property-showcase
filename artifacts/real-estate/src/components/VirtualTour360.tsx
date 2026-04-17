@@ -160,8 +160,23 @@ const orientViewer = async (yaw: number, pitch: number) => {
 
   
   
-  
-  const getHotspotTransitionOrientation = (
+  const clampPitch = (pitch: number) => {
+  const limit = Math.PI / 2 - 0.02;
+  return Math.max(-limit, Math.min(limit, pitch));
+};
+
+const normalizeYaw = (yaw: number) => {
+  let value = yaw;
+  while (value <= -Math.PI) value += Math.PI * 2;
+  while (value > Math.PI) value -= Math.PI * 2;
+  return value;
+};
+
+const shortestAngleDelta = (from: number, to: number) => {
+  return normalizeYaw(to - from);
+};
+
+const getHotspotTransitionOrientation = (
   fromSceneId: number,
   toSceneId: number,
   hotspotYaw: number,
@@ -170,26 +185,28 @@ const orientViewer = async (yaw: number, pitch: number) => {
   currentPitch: number,
 ) => {
   const fromScene = scenes.find((s) => s.id === fromSceneId);
-  if (!fromScene) return null;
+  if (!fromScene) return getSceneStartOrientation(toSceneId);
 
-  const hotspot = fromScene.hotspots.find(
-    (h) =>
-      h.toSceneId === toSceneId &&
-      h.yaw === hotspotYaw &&
-      h.pitch === hotspotPitch,
-  );
+  const hotspot = fromScene.hotspots.find((h) => {
+    const sameTarget = h.toSceneId === toSceneId;
+    const sameYaw = Math.abs(h.yaw - hotspotYaw) < 0.0001;
+    const samePitch = Math.abs(h.pitch - hotspotPitch) < 0.0001;
+    return sameTarget && sameYaw && samePitch;
+  });
 
   if (!hotspot) return getSceneStartOrientation(toSceneId);
+
+  const targetSceneStart = getSceneStartOrientation(toSceneId);
 
   const baseYaw =
     typeof hotspot.targetYaw === "number" && Number.isFinite(hotspot.targetYaw)
       ? hotspot.targetYaw
-      : getSceneStartOrientation(toSceneId)?.yaw;
+      : targetSceneStart?.yaw;
 
   const basePitch =
     typeof hotspot.targetPitch === "number" && Number.isFinite(hotspot.targetPitch)
       ? hotspot.targetPitch
-      : getSceneStartOrientation(toSceneId)?.pitch;
+      : targetSceneStart?.pitch;
 
   if (
     typeof baseYaw !== "number" ||
@@ -200,14 +217,15 @@ const orientViewer = async (yaw: number, pitch: number) => {
     return null;
   }
 
-  const deltaYaw = currentYaw - hotspotYaw;
-  const deltaPitch = currentPitch - hotspotPitch;
+  const yawDelta = shortestAngleDelta(hotspotYaw, currentYaw);
+  const pitchDelta = currentPitch - hotspotPitch;
 
   return {
-    yaw: baseYaw + deltaYaw,
-    pitch: basePitch + deltaPitch,
+    yaw: normalizeYaw(baseYaw + yawDelta),
+    pitch: clampPitch(basePitch + pitchDelta),
   };
 };
+
   
   
   
@@ -234,46 +252,69 @@ const orientViewer = async (yaw: number, pitch: number) => {
           nodes,
           preload: true,
           transitionOptions: (toNode: any, fromNode?: any, fromLink?: any) => {
-            const targetYaw =
-              typeof fromLink?.data?.targetYaw === "number" && Number.isFinite(fromLink.data.targetYaw)
-                ? fromLink.data.targetYaw
-                : typeof toNode?.data?.initialYaw === "number" && Number.isFinite(toNode.data.initialYaw)
-                ? toNode.data.initialYaw
-                : null;
+  const currentPosition = viewer.getPosition?.();
 
-            const targetPitch =
-              typeof fromLink?.data?.targetPitch === "number" && Number.isFinite(fromLink.data.targetPitch)
-                ? fromLink.data.targetPitch
-                : typeof toNode?.data?.initialPitch === "number" && Number.isFinite(toNode.data.initialPitch)
-                ? toNode.data.initialPitch
-                : null;
+  if (
+    currentPosition &&
+    fromNode &&
+    fromLink?.position &&
+    Number.isFinite(currentPosition.yaw) &&
+    Number.isFinite(currentPosition.pitch) &&
+    Number.isFinite(fromLink.position.yaw) &&
+    Number.isFinite(fromLink.position.pitch)
+  ) {
+    const computedOrientation = getHotspotTransitionOrientation(
+      Number(fromNode.id),
+      Number(toNode.id),
+      Number(fromLink.position.yaw),
+      Number(fromLink.position.pitch),
+      currentPosition.yaw,
+      currentPosition.pitch,
+    );
 
-            if (targetYaw !== null && targetPitch !== null) {
-              pendingOrientationRef.current = {
-                nodeId: Number(toNode.id),
-                yaw: targetYaw,
-                pitch: targetPitch,
-              };
-            } else {
-              pendingOrientationRef.current = null;
-            }
+    if (computedOrientation) {
+      pendingOrientationRef.current = {
+        nodeId: Number(toNode.id),
+        yaw: computedOrientation.yaw,
+        pitch: computedOrientation.pitch,
+      };
+    } else {
+      const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+      pendingOrientationRef.current = fallbackOrientation
+        ? {
+            nodeId: Number(toNode.id),
+            yaw: fallbackOrientation.yaw,
+            pitch: fallbackOrientation.pitch,
+          }
+        : null;
+    }
+  } else {
+    const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+    pendingOrientationRef.current = fallbackOrientation
+      ? {
+          nodeId: Number(toNode.id),
+          yaw: fallbackOrientation.yaw,
+          pitch: fallbackOrientation.pitch,
+        }
+      : null;
+  }
 
-            return {
-              showLoader: false,
-              effect: "fade",
-              speed: 650,
-              rotation: true,
-              rotateTo:
-                fromLink?.position &&
-                Number.isFinite(fromLink.position.yaw) &&
-                Number.isFinite(fromLink.position.pitch)
-                  ? {
-                      yaw: fromLink.position.yaw,
-                      pitch: fromLink.position.pitch,
-                    }
-                  : undefined,
-            };
-          },
+  return {
+    showLoader: false,
+    effect: "fade",
+    speed: 650,
+    rotation: true,
+    rotateTo:
+      fromLink?.position &&
+      Number.isFinite(fromLink.position.yaw) &&
+      Number.isFinite(fromLink.position.pitch)
+        ? {
+            yaw: fromLink.position.yaw,
+            pitch: fromLink.position.pitch,
+          }
+        : undefined,
+  };
+},
         },
       ],
     ],
@@ -294,13 +335,22 @@ const orientViewer = async (yaw: number, pitch: number) => {
     };
   }
 
-  vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-    const nextId = Number(node.id);
-    setCurrentSceneId(nextId);
 
-    const pending = pendingOrientationRef.current;
-    if (pending && pending.nodeId === nextId) {
-      requestAnimationFrame(() => {
+
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  setCurrentSceneId(nextId);
+
+  const pending = pendingOrientationRef.current;
+  if (pending && pending.nodeId === nextId) {
+    requestAnimationFrame(async () => {
+      try {
+        await viewer.animate({
+          yaw: pending.yaw,
+          pitch: pending.pitch,
+          speed: "20rpm",
+        });
+      } catch {
         try {
           viewer.rotate({
             yaw: pending.yaw,
@@ -309,13 +359,21 @@ const orientViewer = async (yaw: number, pitch: number) => {
         } catch (error) {
           console.error("Pending orientation apply error:", error);
         }
-      });
-      return;
-    }
+      }
+    });
+    return;
+  }
 
-    const fallbackOrientation = getSceneStartOrientation(nextId);
-    if (fallbackOrientation) {
-      requestAnimationFrame(() => {
+  const fallbackOrientation = getSceneStartOrientation(nextId);
+  if (fallbackOrientation) {
+    requestAnimationFrame(async () => {
+      try {
+        await viewer.animate({
+          yaw: fallbackOrientation.yaw,
+          pitch: fallbackOrientation.pitch,
+          speed: "20rpm",
+        });
+      } catch {
         try {
           viewer.rotate({
             yaw: fallbackOrientation.yaw,
@@ -324,9 +382,13 @@ const orientViewer = async (yaw: number, pitch: number) => {
         } catch (error) {
           console.error("Fallback orientation apply error:", error);
         }
-      });
-    }
-  });
+      }
+    });
+  }
+});
+
+
+
 
   return () => {
     viewer.destroy();
