@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Viewer } from "@photo-sphere-viewer/core";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Cache, Viewer } from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
@@ -37,30 +37,77 @@ export function VirtualTour360({
   defaultSceneId,
   onClose,
 }: VirtualTour360Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Viewer | null>(null);
-  const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
-  const [showMap, setShowMap] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+const containerRef = useRef<HTMLDivElement>(null);
+const viewerRef = useRef<Viewer | null>(null);
+const pendingOrientationRef = useRef<{ nodeId: number; yaw: number; pitch: number } | null>(null);
+const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
+
+const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
+const [showMap, setShowMap] = useState(false);
+const [isFullscreen, setIsFullscreen] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
+  
+  const preloadPanorama = useCallback((url: string) => {
+  if (!url) return Promise.resolve();
 
-  const nodes = useMemo(() => {
-    return scenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.imageUrl,
-      thumbnail: scene.thumbnailUrl || scene.imageUrl,
-      name: scene.title,
-      links: scene.hotspots.map((hotspot) => ({
-        nodeId: String(hotspot.toSceneId),
-        position: {
-          yaw: hotspot.yaw,
-          pitch: hotspot.pitch,
-        },
-        name: hotspot.label || undefined,
-      })),
-    }));
-  }, [scenes]);
+  const existing = preloadedPanoramasRef.current.get(url);
+  if (existing) return existing;
+
+  const promise = new Promise<void>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = async () => {
+      try {
+        if ("decode" in img) {
+          await img.decode();
+        }
+      } catch {
+        // ignore decode errors
+      }
+      resolve();
+    };
+
+    img.onerror = () => resolve();
+    img.src = url;
+  });
+
+  preloadedPanoramasRef.current.set(url, promise);
+  return promise;
+}, []);
+
+
+
+const nodes = useMemo(() => {
+  return scenes.map((scene) => ({
+    id: String(scene.id),
+    panorama: scene.imageUrl,
+    thumbnail: scene.thumbnailUrl || scene.imageUrl,
+    name: scene.title,
+    data: {
+      initialYaw: scene.initialYaw ?? null,
+      initialPitch: scene.initialPitch ?? null,
+    },
+    links: scene.hotspots.map((hotspot) => ({
+      nodeId: String(hotspot.toSceneId),
+      position: {
+        yaw: hotspot.yaw,
+        pitch: hotspot.pitch,
+      },
+      name: hotspot.label || undefined,
+      data: {
+        hotspotId: hotspot.id,
+        fromSceneId: hotspot.fromSceneId,
+        toSceneId: hotspot.toSceneId,
+        targetYaw: hotspot.targetYaw ?? null,
+        targetPitch: hotspot.targetPitch ?? null,
+      },
+    })),
+  }));
+}, [scenes]);
+
+
 
   const resolvedStartNodeId = useMemo(() => {
     const defaultScene =
@@ -110,12 +157,7 @@ const orientViewer = async (yaw: number, pitch: number) => {
   }
 };
 
-const orientToSceneStart = async (sceneId: number) => {
-  const orientation = getSceneStartOrientation(sceneId);
-  if (!orientation) return;
 
-  await orientViewer(orientation.yaw, orientation.pitch);
-};
   
   
   
@@ -170,88 +212,185 @@ const orientToSceneStart = async (sceneId: number) => {
   
   
 
-  useEffect(() => {
-    if (!containerRef.current || nodes.length === 0 || !resolvedStartNodeId) return;
+ 
+ useEffect(() => {
+  if (!containerRef.current || nodes.length === 0 || !resolvedStartNodeId) return;
 
-    if (viewerRef.current) {
-      viewerRef.current.destroy();
-      viewerRef.current = null;
+  if (viewerRef.current) {
+    viewerRef.current.destroy();
+    viewerRef.current = null;
+  }
+
+  const viewer = new Viewer({
+    container: containerRef.current,
+    navbar: ["zoom", "move", "fullscreen"],
+    plugins: [
+      [
+        VirtualTourPlugin,
+        {
+          positionMode: "manual",
+          renderMode: "3d",
+          startNodeId: resolvedStartNodeId,
+          nodes,
+          preload: true,
+          transitionOptions: (toNode: any, fromNode?: any, fromLink?: any) => {
+            const targetYaw =
+              typeof fromLink?.data?.targetYaw === "number" && Number.isFinite(fromLink.data.targetYaw)
+                ? fromLink.data.targetYaw
+                : typeof toNode?.data?.initialYaw === "number" && Number.isFinite(toNode.data.initialYaw)
+                ? toNode.data.initialYaw
+                : null;
+
+            const targetPitch =
+              typeof fromLink?.data?.targetPitch === "number" && Number.isFinite(fromLink.data.targetPitch)
+                ? fromLink.data.targetPitch
+                : typeof toNode?.data?.initialPitch === "number" && Number.isFinite(toNode.data.initialPitch)
+                ? toNode.data.initialPitch
+                : null;
+
+            if (targetYaw !== null && targetPitch !== null) {
+              pendingOrientationRef.current = {
+                nodeId: Number(toNode.id),
+                yaw: targetYaw,
+                pitch: targetPitch,
+              };
+            } else {
+              pendingOrientationRef.current = null;
+            }
+
+            return {
+              showLoader: false,
+              effect: "fade",
+              speed: 650,
+              rotation: true,
+              rotateTo:
+                fromLink?.position &&
+                Number.isFinite(fromLink.position.yaw) &&
+                Number.isFinite(fromLink.position.pitch)
+                  ? {
+                      yaw: fromLink.position.yaw,
+                      pitch: fromLink.position.pitch,
+                    }
+                  : undefined,
+            };
+          },
+        },
+      ],
+    ],
+  });
+
+  viewerRef.current = viewer;
+
+  const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+
+  setCurrentSceneId(Number(resolvedStartNodeId));
+
+  const initialOrientation = getSceneStartOrientation(Number(resolvedStartNodeId));
+  if (initialOrientation) {
+    pendingOrientationRef.current = {
+      nodeId: Number(resolvedStartNodeId),
+      yaw: initialOrientation.yaw,
+      pitch: initialOrientation.pitch,
+    };
+  }
+
+  vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+    const nextId = Number(node.id);
+    setCurrentSceneId(nextId);
+
+    const pending = pendingOrientationRef.current;
+    if (pending && pending.nodeId === nextId) {
+      requestAnimationFrame(() => {
+        try {
+          viewer.rotate({
+            yaw: pending.yaw,
+            pitch: pending.pitch,
+          });
+        } catch (error) {
+          console.error("Pending orientation apply error:", error);
+        }
+      });
+      return;
     }
 
-    const viewer = new Viewer({
-      container: containerRef.current,
-      navbar: ["zoom", "move", "fullscreen"],
-      plugins: [
-        [
-          VirtualTourPlugin,
-          {
-            positionMode: "manual",
-            renderMode: "3d",
-            startNodeId: resolvedStartNodeId,
-            nodes,
-          },
-        ],
-      ],
-    });
+    const fallbackOrientation = getSceneStartOrientation(nextId);
+    if (fallbackOrientation) {
+      requestAnimationFrame(() => {
+        try {
+          viewer.rotate({
+            yaw: fallbackOrientation.yaw,
+            pitch: fallbackOrientation.pitch,
+          });
+        } catch (error) {
+          console.error("Fallback orientation apply error:", error);
+        }
+      });
+    }
+  });
 
-    viewerRef.current = viewer;
+  return () => {
+    viewer.destroy();
+    viewerRef.current = null;
+  };
+}, [nodes, resolvedStartNodeId]);
+ 
+ 
+ 
+  
+  
+  
+  
+  useEffect(() => {
+  Cache.enabled = true;
+  Cache.ttl = 60 * 24; // 24 orë
+  Cache.maxItems = Math.max(20, scenes.length + 5);
+}, [scenes.length]);
 
-    const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+useEffect(() => {
+  if (scenes.length === 0) return;
 
-    setCurrentSceneId(Number(resolvedStartNodeId));
+  let cancelled = false;
 
-    window.setTimeout(() => {
-      orientToSceneStart(Number(resolvedStartNodeId));
-    }, 120);
+  const run = async () => {
+    const validUrls = scenes
+      .map((scene) => scene.imageUrl)
+      .filter((url): url is string => !!url && url.trim() !== "");
 
-vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-  const nextId = Number(node.id);
-  setCurrentSceneId(nextId);
-});
+    await Promise.allSettled(validUrls.map((url) => preloadPanorama(url)));
 
+    if (cancelled) return;
+  };
 
+  run();
 
-vtPlugin.addEventListener("enter-arrow", ({ fromNode, link, toNode }: any) => {
-  const viewer = viewerRef.current;
-  if (!viewer) return;
+  return () => {
+    cancelled = true;
+  };
+}, [scenes, preloadPanorama]);
+  
+  
 
-  const currentPosition = viewer.getPosition?.();
-  if (!currentPosition) return;
-
-  const orientation = getHotspotTransitionOrientation(
-    Number(fromNode.id),
-    Number(toNode.id),
-    Number(link.position?.yaw),
-    Number(link.position?.pitch),
-    currentPosition.yaw,
-    currentPosition.pitch,
-  );
-
-  if (!orientation) return;
-
-  window.setTimeout(() => {
-    orientViewer(orientation.yaw, orientation.pitch);
-  }, 120);
-});
-
-
-
-    return () => {
-      viewer.destroy();
-      viewerRef.current = null;
-    };
-  }, [nodes, resolvedStartNodeId]);
 
 const handleSceneChange = async (id: number) => {
   if (!viewerRef.current) return;
+
   const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
+  const startOrientation = getSceneStartOrientation(id);
+
+  if (startOrientation) {
+    pendingOrientationRef.current = {
+      nodeId: id,
+      yaw: startOrientation.yaw,
+      pitch: startOrientation.pitch,
+    };
+  } else {
+    pendingOrientationRef.current = null;
+  }
 
   await vtPlugin.setCurrentNode(String(id));
-
-  window.setTimeout(() => {
-    orientToSceneStart(id);
-  }, 120);
 };
+
+
 
   const toggleFullscreen = async () => {
     try {
@@ -281,9 +420,18 @@ const handleSceneChange = async (id: number) => {
     );
   }
 
-  return (
-    <div className="relative w-full h-full min-h-[100dvh] md:min-h-[500px] flex flex-col bg-black overflow-hidden font-sans group">
-      {onClose && (
+  
+	return (
+  <div className="relative w-full h-full min-h-[100dvh] md:min-h-[500px] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
+    <style>{`
+      .virtual-tour-shell .psv-loader-container,
+      .virtual-tour-shell .psv-loader {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+      }
+    `}</style>
+	{onClose && (
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-50 w-10 h-10 bg-black/50 hover:bg-primary text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-md"
