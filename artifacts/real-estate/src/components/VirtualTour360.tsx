@@ -40,6 +40,7 @@ export function VirtualTour360({
 const containerRef = useRef<HTMLDivElement>(null);
 const viewerRef = useRef<Viewer | null>(null);
 const pendingOrientationRef = useRef<{ nodeId: number; yaw: number; pitch: number } | null>(null);
+const lastClickedLinkRef = useRef<any | null>(null);
 const preloadedPanoramasRef = useRef<Map<string, Promise<void>>>(new Map());
 
 const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
@@ -158,6 +159,69 @@ const orientViewer = async (yaw: number, pitch: number) => {
 };
 
 
+
+
+const goThroughHotspot = useCallback(
+  async (link: any) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+    if (!vtPlugin || !link?.nodeId || !link?.position) return;
+
+    const currentPosition = viewer.getPosition?.();
+    if (!currentPosition) return;
+
+    const hotspotYaw = Number(link.position.yaw);
+    const hotspotPitch = Number(link.position.pitch);
+    const targetNodeId = Number(link.nodeId);
+
+    const computedOrientation = getHotspotTransitionOrientation(
+      currentSceneId ?? Number.NaN,
+      targetNodeId,
+      hotspotYaw,
+      hotspotPitch,
+      currentPosition.yaw,
+      currentPosition.pitch,
+    );
+
+    pendingOrientationRef.current = computedOrientation
+      ? {
+          nodeId: targetNodeId,
+          yaw: computedOrientation.yaw,
+          pitch: computedOrientation.pitch,
+        }
+      : (() => {
+          const fallback = getSceneStartOrientation(targetNodeId);
+          return fallback
+            ? {
+                nodeId: targetNodeId,
+                yaw: fallback.yaw,
+                pitch: fallback.pitch,
+              }
+            : null;
+        })();
+
+    lastClickedLinkRef.current = link;
+
+    try {
+      await vtPlugin.gotoLink(link.nodeId, "30rpm");
+    } catch (error) {
+      console.error("gotoLink error:", error);
+    }
+
+    await vtPlugin.setCurrentNode(link.nodeId, {
+      showLoader: false,
+      effect: "fade",
+      speed: 650,
+      rotation: false,
+    });
+  },
+  [currentSceneId, getHotspotTransitionOrientation],
+);
+
+
+
   
   
   const clampPitch = (pitch: number) => {
@@ -251,68 +315,12 @@ const getHotspotTransitionOrientation = (
           startNodeId: resolvedStartNodeId,
           nodes,
           preload: true,
-          transitionOptions: (toNode: any, fromNode?: any, fromLink?: any) => {
-  const currentPosition = viewer.getPosition?.();
-
-  if (
-    currentPosition &&
-    fromNode &&
-    fromLink?.position &&
-    Number.isFinite(currentPosition.yaw) &&
-    Number.isFinite(currentPosition.pitch) &&
-    Number.isFinite(fromLink.position.yaw) &&
-    Number.isFinite(fromLink.position.pitch)
-  ) {
-    const computedOrientation = getHotspotTransitionOrientation(
-      Number(fromNode.id),
-      Number(toNode.id),
-      Number(fromLink.position.yaw),
-      Number(fromLink.position.pitch),
-      currentPosition.yaw,
-      currentPosition.pitch,
-    );
-
-    if (computedOrientation) {
-      pendingOrientationRef.current = {
-        nodeId: Number(toNode.id),
-        yaw: computedOrientation.yaw,
-        pitch: computedOrientation.pitch,
-      };
-    } else {
-      const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
-      pendingOrientationRef.current = fallbackOrientation
-        ? {
-            nodeId: Number(toNode.id),
-            yaw: fallbackOrientation.yaw,
-            pitch: fallbackOrientation.pitch,
-          }
-        : null;
-    }
-  } else {
-    const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
-    pendingOrientationRef.current = fallbackOrientation
-      ? {
-          nodeId: Number(toNode.id),
-          yaw: fallbackOrientation.yaw,
-          pitch: fallbackOrientation.pitch,
-        }
-      : null;
-  }
-
+          transitionOptions: () => {
   return {
     showLoader: false,
     effect: "fade",
     speed: 650,
-    rotation: true,
-    rotateTo:
-      fromLink?.position &&
-      Number.isFinite(fromLink.position.yaw) &&
-      Number.isFinite(fromLink.position.pitch)
-        ? {
-            yaw: fromLink.position.yaw,
-            pitch: fromLink.position.pitch,
-          }
-        : undefined,
+    rotation: false,
   };
 },
         },
@@ -323,6 +331,18 @@ const getHotspotTransitionOrientation = (
   viewerRef.current = viewer;
 
   const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+  
+  
+  
+  vtPlugin.addEventListener("select-link", async ({ link }: any) => {
+  if (!link) return;
+
+  try {
+    await goThroughHotspot(link);
+  } catch (error) {
+    console.error("Hotspot transition error:", error);
+  }
+});
 
   setCurrentSceneId(Number(resolvedStartNodeId));
 
@@ -359,6 +379,8 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
         } catch (error) {
           console.error("Pending orientation apply error:", error);
         }
+      } finally {
+        lastClickedLinkRef.current = null;
       }
     });
     return;
@@ -382,8 +404,12 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
         } catch (error) {
           console.error("Fallback orientation apply error:", error);
         }
+      } finally {
+        lastClickedLinkRef.current = null;
       }
     });
+  } else {
+    lastClickedLinkRef.current = null;
   }
 });
 
@@ -449,7 +475,12 @@ const handleSceneChange = async (id: number) => {
     pendingOrientationRef.current = null;
   }
 
-  await vtPlugin.setCurrentNode(String(id));
+  await vtPlugin.setCurrentNode(String(id), {
+    showLoader: false,
+    effect: "fade",
+    speed: 650,
+    rotation: false,
+  });
 };
 
 
