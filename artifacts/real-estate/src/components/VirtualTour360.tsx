@@ -324,11 +324,11 @@ export function VirtualTour360({
               }
 
               return {
-                showLoader: false,
-                effect: "fade",
-                speed: 650,
-                rotation: false,
-              };
+  showLoader: false,
+  effect: "fade",
+  speed: 1100,
+  rotation: false,
+};
             },
           },
         ],
@@ -345,9 +345,9 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
   lastClickedLinkRef.current = link;
 
   try {
-    await vtPlugin.gotoLink(link.nodeId, 0);
+    await vtPlugin.gotoLink(link.nodeId, "4rpm");
   } catch (error) {
-    console.error("Immediate gotoLink error:", error);
+    console.error("gotoLink smoothing error:", error);
   }
 });
 
