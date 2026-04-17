@@ -371,16 +371,15 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
 
     const currentZoom = currentViewer.getZoomLevel?.() ?? 0;
 
-    try {
-      await currentViewer.animate({
-        yaw: Number(link.position?.yaw),
-        pitch: Number(link.position?.pitch),
-        zoom: Math.min(20, currentZoom + 6),
-        speed: 140,
-      });
-    } catch (error) {
-      console.error("Pre-transition pull error:", error);
-    }
+try {
+  await currentViewer.animate({
+    yaw: Number(link.position?.yaw),
+    pitch: Number(link.position?.pitch),
+    speed: 140,
+  });
+} catch (error) {
+  console.error("Pre-transition pull error:", error);
+}
 
     requestAnimationFrame(() => {
       overlay.style.opacity = "1";
@@ -396,11 +395,7 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
       rotation: false,
     });
 
-    try {
-      currentViewer.zoom(0);
-    } catch (error) {
-      console.error("Zoom reset after transition error:", error);
-    }
+
 
     await new Promise((resolve) => setTimeout(resolve, 60));
 
@@ -434,14 +429,6 @@ vtPlugin.addEventListener("select-link", async ({ link }: any) => {
 vtPlugin.addEventListener("node-changed", ({ node }: any) => {
   const nextId = Number(node.id);
   setCurrentSceneId(nextId);
-
-  if (!isCustomTransitionRef.current) {
-    try {
-      viewer.zoom(0);
-    } catch (error) {
-      console.error("Node changed zoom reset error:", error);
-    }
-  }
 
   pendingOrientationRef.current = null;
   lastClickedLinkRef.current = null;
