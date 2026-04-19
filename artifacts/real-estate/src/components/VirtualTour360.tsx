@@ -325,8 +325,8 @@ const handleSelectLink = async ({ link }: any) => {
   const targetNodeId = Number(link.nodeId);
   const targetScene = scenes.find((scene) => scene.id === targetNodeId);
 
-  if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
-    showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
+  if (targetScene?.imageUrl) {
+    showTransitionOverlay(targetScene.imageUrl);
   }
 
   try {
@@ -420,10 +420,10 @@ const handleNodeChanged = ({ node }: any) => {
     const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
     lastClickedLinkRef.current = null;
 
-    const targetScene = scenes.find((scene) => scene.id === id);
-    if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
-      showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
-    }
+const targetScene = scenes.find((scene) => scene.id === id);
+if (targetScene?.imageUrl) {
+  showTransitionOverlay(targetScene.imageUrl);
+}
 
     try {
 await vtPlugin.setCurrentNode(String(id), {
