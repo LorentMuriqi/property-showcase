@@ -194,13 +194,11 @@ const showTransitionOverlay = useCallback((targetImage?: string | null) => {
   overlay.style.transition = "none";
   overlay.style.backgroundImage = `url("${targetImage}")`;
   overlay.style.opacity = "1";
-  overlay.style.transform = "scale(1.01)";
+  overlay.style.transform = "scale(1)";
   overlay.style.filter = "blur(0px)";
 
   requestAnimationFrame(() => {
-    overlay.style.transition =
-      "opacity 180ms ease, transform 220ms ease, filter 220ms ease";
-    overlay.style.transform = "scale(1)";
+    overlay.style.transition = "opacity 140ms ease";
   });
 }, []);
 
@@ -212,8 +210,6 @@ const hideTransitionOverlay = useCallback(() => {
 
   transitionTimeoutRef.current = window.setTimeout(() => {
     overlay.style.opacity = "0";
-    overlay.style.transform = "scale(1)";
-    overlay.style.filter = "blur(0px)";
   }, 0);
 }, []);
 
@@ -299,12 +295,12 @@ if (
     : null;
 }
 
-              return {
-                showLoader: false,
-                effect: "fade",
-                speed: 170,
-                rotation: false,
-              };
+return {
+  showLoader: false,
+  effect: "fade",
+  speed: 0,
+  rotation: false,
+};
             },
           },
         ],
@@ -321,22 +317,27 @@ if (
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
-    const handleSelectLink = ({ link }: any) => {
-      if (!link) return;
+const handleSelectLink = async ({ link }: any) => {
+  if (!link) return;
 
-      lastClickedLinkRef.current = link || null;
+  lastClickedLinkRef.current = link || null;
 
-      const targetNodeId = Number(link.nodeId);
-      const targetScene = scenes.find((scene) => scene.id === targetNodeId);
+  const targetNodeId = Number(link.nodeId);
+  const targetScene = scenes.find((scene) => scene.id === targetNodeId);
 
-      if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
-        showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
-      }
-    };
+  if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
+    showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
+  }
+
+  try {
+    await vtPlugin.gotoLink(link.nodeId, 0);
+  } catch (error) {
+    console.error("gotoLink error:", error);
+  }
+};
 
 const handleNodeChanged = ({ node }: any) => {
   const nextId = Number(node.id);
-  setCurrentSceneId(nextId);
 
   const applyOrientation = () => {
     const pending = pendingOrientationRef.current;
@@ -366,9 +367,12 @@ const handleNodeChanged = ({ node }: any) => {
 
     pendingOrientationRef.current = null;
     lastClickedLinkRef.current = null;
+    setCurrentSceneId(nextId);
 
     requestAnimationFrame(() => {
-      hideTransitionOverlay();
+      requestAnimationFrame(() => {
+        hideTransitionOverlay();
+      });
     });
   };
 
@@ -422,12 +426,12 @@ const handleNodeChanged = ({ node }: any) => {
     }
 
     try {
-      await vtPlugin.setCurrentNode(String(id), {
-        showLoader: false,
-        effect: "fade",
-        speed: 170,
-        rotation: false,
-      });
+await vtPlugin.setCurrentNode(String(id), {
+  showLoader: false,
+  effect: "fade",
+  speed: 0,
+  rotation: false,
+});
     } catch (error) {
       console.error("Scene change error:", error);
       hideTransitionOverlay();
