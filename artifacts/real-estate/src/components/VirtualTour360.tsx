@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Cache, Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
+import {
+  Cache,
+  Viewer,
+  EquirectangularAdapter,
+} from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
@@ -39,7 +43,16 @@ export function VirtualTour360({
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const pendingOrientationRef = useRef<{
+    nodeId: number;
+    yaw: number;
+    pitch: number;
+  } | null>(null);
+
   const lastClickedLinkRef = useRef<any | null>(null);
+  const transitionTimeoutRef = useRef<number | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -165,6 +178,44 @@ export function VirtualTour360({
     [getSceneStartOrientation],
   );
 
+  const clearTransitionTimeout = () => {
+    if (transitionTimeoutRef.current !== null) {
+      window.clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = null;
+    }
+  };
+
+  const showTransitionOverlay = useCallback((targetImage?: string | null) => {
+    const overlay = overlayRef.current;
+    if (!overlay || !targetImage) return;
+
+    clearTransitionTimeout();
+
+    overlay.style.backgroundImage = `url("${targetImage}")`;
+    overlay.style.opacity = "0";
+    overlay.style.transform = "scale(1.018)";
+    overlay.style.filter = "blur(0px)";
+
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "0.28";
+      overlay.style.transform = "scale(1)";
+      overlay.style.filter = "blur(0.4px)";
+    });
+  }, []);
+
+  const hideTransitionOverlay = useCallback(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    clearTransitionTimeout();
+
+    transitionTimeoutRef.current = window.setTimeout(() => {
+      overlay.style.opacity = "0";
+      overlay.style.transform = "scale(0.998)";
+      overlay.style.filter = "blur(0px)";
+    }, 80);
+  }, []);
+
   useEffect(() => {
     Cache.enabled = true;
     Cache.ttl = 10;
@@ -181,13 +232,13 @@ export function VirtualTour360({
 
     setIsInitialLoading(true);
 
- const viewer = new Viewer({
-  container: containerRef.current,
-  navbar: ["zoom", "move", "fullscreen"],
-  adapter: EquirectangularAdapter.withConfig({
-    resolution: 32,
-  }),
-  plugins: [
+    const viewer = new Viewer({
+      container: containerRef.current,
+      adapter: EquirectangularAdapter.withConfig({
+        resolution: 32,
+      }),
+      navbar: ["zoom", "move", "fullscreen"],
+      plugins: [
         [
           VirtualTourPlugin,
           {
@@ -210,7 +261,7 @@ export function VirtualTour360({
                 Number.isFinite(Number(clickedLink.position.yaw)) &&
                 Number.isFinite(Number(clickedLink.position.pitch))
               ) {
-                getHotspotTransitionOrientation(
+                const computedOrientation = getHotspotTransitionOrientation(
                   Number(toNode.id),
                   Number(clickedLink.position.yaw),
                   Number(clickedLink.position.pitch),
@@ -219,12 +270,38 @@ export function VirtualTour360({
                   clickedLink.data?.targetYaw ?? null,
                   clickedLink.data?.targetPitch ?? null,
                 );
+
+                if (computedOrientation) {
+                  pendingOrientationRef.current = {
+                    nodeId: Number(toNode.id),
+                    yaw: computedOrientation.yaw,
+                    pitch: computedOrientation.pitch,
+                  };
+                } else {
+                  const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+                  pendingOrientationRef.current = fallbackOrientation
+                    ? {
+                        nodeId: Number(toNode.id),
+                        yaw: fallbackOrientation.yaw,
+                        pitch: fallbackOrientation.pitch,
+                      }
+                    : null;
+                }
+              } else {
+                const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+                pendingOrientationRef.current = fallbackOrientation
+                  ? {
+                      nodeId: Number(toNode.id),
+                      yaw: fallbackOrientation.yaw,
+                      pitch: fallbackOrientation.pitch,
+                    }
+                  : null;
               }
 
               return {
                 showLoader: false,
                 effect: "fade",
-                speed: 220,
+                speed: 170,
                 rotation: false,
               };
             },
@@ -235,16 +312,62 @@ export function VirtualTour360({
 
     viewerRef.current = viewer;
 
-    viewer.addEventListener("ready", () => {
+    const handleReady = () => {
       setIsInitialLoading(false);
-    });
+    };
+
+    viewer.addEventListener("ready", handleReady);
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
-    vtPlugin.addEventListener("select-link", ({ link }: any) => {
+    const handleSelectLink = ({ link }: any) => {
       if (!link) return;
+
       lastClickedLinkRef.current = link || null;
-    });
+
+      const targetNodeId = Number(link.nodeId);
+      const targetScene = scenes.find((scene) => scene.id === targetNodeId);
+
+      if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
+        showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
+      }
+    };
+
+    const handleNodeChanged = ({ node }: any) => {
+      const nextId = Number(node.id);
+      setCurrentSceneId(nextId);
+
+      const pending = pendingOrientationRef.current;
+      if (pending && pending.nodeId === nextId) {
+        try {
+          viewer.rotate({
+            yaw: pending.yaw,
+            pitch: pending.pitch,
+          });
+        } catch (error) {
+          console.error("Node changed orientation apply error:", error);
+        }
+      } else {
+        const fallbackOrientation = getSceneStartOrientation(nextId);
+        if (fallbackOrientation) {
+          try {
+            viewer.rotate({
+              yaw: fallbackOrientation.yaw,
+              pitch: fallbackOrientation.pitch,
+            });
+          } catch (error) {
+            console.error("Fallback orientation apply error:", error);
+          }
+        }
+      }
+
+      pendingOrientationRef.current = null;
+      lastClickedLinkRef.current = null;
+      hideTransitionOverlay();
+    };
+
+    vtPlugin.addEventListener("select-link", handleSelectLink);
+    vtPlugin.addEventListener("node-changed", handleNodeChanged);
 
     setCurrentSceneId(Number(resolvedStartNodeId));
 
@@ -260,17 +383,23 @@ export function VirtualTour360({
       }
     }
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      const nextId = Number(node.id);
-      setCurrentSceneId(nextId);
-      lastClickedLinkRef.current = null;
-    });
-
     return () => {
+      clearTransitionTimeout();
+      viewer.removeEventListener("ready", handleReady);
+      vtPlugin.removeEventListener("select-link", handleSelectLink);
+      vtPlugin.removeEventListener("node-changed", handleNodeChanged);
       viewer.destroy();
       viewerRef.current = null;
     };
-  }, [nodes, resolvedStartNodeId, getSceneStartOrientation, getHotspotTransitionOrientation]);
+  }, [
+    nodes,
+    resolvedStartNodeId,
+    scenes,
+    getSceneStartOrientation,
+    getHotspotTransitionOrientation,
+    showTransitionOverlay,
+    hideTransitionOverlay,
+  ]);
 
   const handleSceneChange = async (id: number) => {
     if (!viewerRef.current) return;
@@ -278,12 +407,22 @@ export function VirtualTour360({
     const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
     lastClickedLinkRef.current = null;
 
-    await vtPlugin.setCurrentNode(String(id), {
-      showLoader: false,
-      effect: "fade",
-      speed: 220,
-      rotation: false,
-    });
+    const targetScene = scenes.find((scene) => scene.id === id);
+    if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
+      showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
+    }
+
+    try {
+      await vtPlugin.setCurrentNode(String(id), {
+        showLoader: false,
+        effect: "fade",
+        speed: 170,
+        rotation: false,
+      });
+    } catch (error) {
+      console.error("Scene change error:", error);
+      hideTransitionOverlay();
+    }
   };
 
   const toggleFullscreen = async () => {
@@ -335,6 +474,22 @@ export function VirtualTour360({
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
         <div ref={containerRef} className="w-full h-full" />
+
+        <div
+          ref={overlayRef}
+          className="absolute inset-0 pointer-events-none z-20"
+          style={{
+            opacity: 0,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            backgroundSize: "cover",
+            transform: "scale(1)",
+            filter: "blur(0px)",
+            transition:
+              "opacity 160ms ease, transform 220ms ease, filter 220ms ease",
+            willChange: "opacity, transform, filter",
+          }}
+        />
 
         {isInitialLoading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
