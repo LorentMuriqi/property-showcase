@@ -185,36 +185,37 @@ export function VirtualTour360({
     }
   };
 
-  const showTransitionOverlay = useCallback((targetImage?: string | null) => {
-    const overlay = overlayRef.current;
-    if (!overlay || !targetImage) return;
+const showTransitionOverlay = useCallback((targetImage?: string | null) => {
+  const overlay = overlayRef.current;
+  if (!overlay || !targetImage) return;
 
-    clearTransitionTimeout();
+  clearTransitionTimeout();
 
-    overlay.style.backgroundImage = `url("${targetImage}")`;
+  overlay.style.transition = "none";
+  overlay.style.backgroundImage = `url("${targetImage}")`;
+  overlay.style.opacity = "1";
+  overlay.style.transform = "scale(1.01)";
+  overlay.style.filter = "blur(0px)";
+
+  requestAnimationFrame(() => {
+    overlay.style.transition =
+      "opacity 180ms ease, transform 220ms ease, filter 220ms ease";
+    overlay.style.transform = "scale(1)";
+  });
+}, []);
+
+const hideTransitionOverlay = useCallback(() => {
+  const overlay = overlayRef.current;
+  if (!overlay) return;
+
+  clearTransitionTimeout();
+
+  transitionTimeoutRef.current = window.setTimeout(() => {
     overlay.style.opacity = "0";
-    overlay.style.transform = "scale(1.018)";
+    overlay.style.transform = "scale(1)";
     overlay.style.filter = "blur(0px)";
-
-    requestAnimationFrame(() => {
-      overlay.style.opacity = "0.28";
-      overlay.style.transform = "scale(1)";
-      overlay.style.filter = "blur(0.4px)";
-    });
-  }, []);
-
-  const hideTransitionOverlay = useCallback(() => {
-    const overlay = overlayRef.current;
-    if (!overlay) return;
-
-    clearTransitionTimeout();
-
-    transitionTimeoutRef.current = window.setTimeout(() => {
-      overlay.style.opacity = "0";
-      overlay.style.transform = "scale(0.998)";
-      overlay.style.filter = "blur(0px)";
-    }, 80);
-  }, []);
+  }, 0);
+}, []);
 
   useEffect(() => {
     Cache.enabled = true;
@@ -251,52 +252,52 @@ export function VirtualTour360({
               const viewerPosition = viewer.getPosition?.();
               const clickedLink = lastClickedLinkRef.current;
 
-              if (
-                clickedLink &&
-                viewerPosition &&
-                fromNode &&
-                Number.isFinite(viewerPosition.yaw) &&
-                Number.isFinite(viewerPosition.pitch) &&
-                clickedLink.position &&
-                Number.isFinite(Number(clickedLink.position.yaw)) &&
-                Number.isFinite(Number(clickedLink.position.pitch))
-              ) {
-                const computedOrientation = getHotspotTransitionOrientation(
-                  Number(toNode.id),
-                  Number(clickedLink.position.yaw),
-                  Number(clickedLink.position.pitch),
-                  viewerPosition.yaw,
-                  viewerPosition.pitch,
-                  clickedLink.data?.targetYaw ?? null,
-                  clickedLink.data?.targetPitch ?? null,
-                );
+if (
+  clickedLink &&
+  viewerPosition &&
+  fromNode &&
+  Number.isFinite(viewerPosition.yaw) &&
+  Number.isFinite(viewerPosition.pitch) &&
+  clickedLink.position &&
+  Number.isFinite(Number(clickedLink.position.yaw)) &&
+  Number.isFinite(Number(clickedLink.position.pitch))
+) {
+  const computedOrientation = getHotspotTransitionOrientation(
+    Number(toNode.id),
+    Number(clickedLink.position.yaw),
+    Number(clickedLink.position.pitch),
+    viewerPosition.yaw,
+    viewerPosition.pitch,
+    clickedLink.data?.targetYaw ?? null,
+    clickedLink.data?.targetPitch ?? null,
+  );
 
-                if (computedOrientation) {
-                  pendingOrientationRef.current = {
-                    nodeId: Number(toNode.id),
-                    yaw: computedOrientation.yaw,
-                    pitch: computedOrientation.pitch,
-                  };
-                } else {
-                  const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
-                  pendingOrientationRef.current = fallbackOrientation
-                    ? {
-                        nodeId: Number(toNode.id),
-                        yaw: fallbackOrientation.yaw,
-                        pitch: fallbackOrientation.pitch,
-                      }
-                    : null;
-                }
-              } else {
-                const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
-                pendingOrientationRef.current = fallbackOrientation
-                  ? {
-                      nodeId: Number(toNode.id),
-                      yaw: fallbackOrientation.yaw,
-                      pitch: fallbackOrientation.pitch,
-                    }
-                  : null;
-              }
+  if (computedOrientation) {
+    pendingOrientationRef.current = {
+      nodeId: Number(toNode.id),
+      yaw: computedOrientation.yaw,
+      pitch: computedOrientation.pitch,
+    };
+  } else {
+    const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+    pendingOrientationRef.current = fallbackOrientation
+      ? {
+          nodeId: Number(toNode.id),
+          yaw: fallbackOrientation.yaw,
+          pitch: fallbackOrientation.pitch,
+        }
+      : null;
+  }
+} else {
+  const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+  pendingOrientationRef.current = fallbackOrientation
+    ? {
+        nodeId: Number(toNode.id),
+        yaw: fallbackOrientation.yaw,
+        pitch: fallbackOrientation.pitch,
+      }
+    : null;
+}
 
               return {
                 showLoader: false,
@@ -333,38 +334,46 @@ export function VirtualTour360({
       }
     };
 
-    const handleNodeChanged = ({ node }: any) => {
-      const nextId = Number(node.id);
-      setCurrentSceneId(nextId);
+const handleNodeChanged = ({ node }: any) => {
+  const nextId = Number(node.id);
+  setCurrentSceneId(nextId);
 
-      const pending = pendingOrientationRef.current;
-      if (pending && pending.nodeId === nextId) {
+  const applyOrientation = () => {
+    const pending = pendingOrientationRef.current;
+
+    if (pending && pending.nodeId === nextId) {
+      try {
+        viewer.rotate({
+          yaw: pending.yaw,
+          pitch: pending.pitch,
+        });
+      } catch (error) {
+        console.error("Node changed orientation apply error:", error);
+      }
+    } else {
+      const fallbackOrientation = getSceneStartOrientation(nextId);
+      if (fallbackOrientation) {
         try {
           viewer.rotate({
-            yaw: pending.yaw,
-            pitch: pending.pitch,
+            yaw: fallbackOrientation.yaw,
+            pitch: fallbackOrientation.pitch,
           });
         } catch (error) {
-          console.error("Node changed orientation apply error:", error);
-        }
-      } else {
-        const fallbackOrientation = getSceneStartOrientation(nextId);
-        if (fallbackOrientation) {
-          try {
-            viewer.rotate({
-              yaw: fallbackOrientation.yaw,
-              pitch: fallbackOrientation.pitch,
-            });
-          } catch (error) {
-            console.error("Fallback orientation apply error:", error);
-          }
+          console.error("Fallback orientation apply error:", error);
         }
       }
+    }
 
-      pendingOrientationRef.current = null;
-      lastClickedLinkRef.current = null;
+    pendingOrientationRef.current = null;
+    lastClickedLinkRef.current = null;
+
+    requestAnimationFrame(() => {
       hideTransitionOverlay();
-    };
+    });
+  };
+
+  requestAnimationFrame(applyOrientation);
+};
 
     vtPlugin.addEventListener("select-link", handleSelectLink);
     vtPlugin.addEventListener("node-changed", handleNodeChanged);
