@@ -45,14 +45,19 @@ export function VirtualTour360({
   const viewerRef = useRef<Viewer | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const pendingOrientationRef = useRef<{
-    nodeId: number;
-    yaw: number;
-    pitch: number;
-  } | null>(null);
+const pendingOrientationRef = useRef<{
+  nodeId: number;
+  yaw: number;
+  pitch: number;
+} | null>(null);
 
-  const lastClickedLinkRef = useRef<any | null>(null);
-  const transitionTimeoutRef = useRef<number | null>(null);
+const transitionSourcePositionRef = useRef<{
+  yaw: number;
+  pitch: number;
+} | null>(null);
+
+const lastClickedLinkRef = useRef<any | null>(null);
+const transitionTimeoutRef = useRef<number | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -185,17 +190,14 @@ export function VirtualTour360({
     }
   };
 
-const showTransitionOverlay = useCallback((targetImage?: string | null) => {
+const showTransitionOverlay = useCallback(() => {
   const overlay = overlayRef.current;
-  if (!overlay || !targetImage) return;
+  if (!overlay) return;
 
   clearTransitionTimeout();
 
   overlay.style.transition = "none";
-  overlay.style.backgroundImage = `url("${targetImage}")`;
   overlay.style.opacity = "1";
-  overlay.style.transform = "scale(1)";
-  overlay.style.filter = "blur(0px)";
 
   requestAnimationFrame(() => {
     overlay.style.transition = "opacity 120ms ease";
@@ -245,8 +247,8 @@ const hideTransitionOverlay = useCallback(() => {
             nodes,
             preload: true,
             transitionOptions: (toNode: any, fromNode?: any) => {
-              const viewerPosition = viewer.getPosition?.();
-              const clickedLink = lastClickedLinkRef.current;
+const viewerPosition = transitionSourcePositionRef.current || viewer.getPosition?.();
+const clickedLink = lastClickedLinkRef.current;
 
 if (
   clickedLink &&
@@ -322,12 +324,21 @@ const handleSelectLink = async ({ link }: any) => {
 
   lastClickedLinkRef.current = link || null;
 
-  const targetNodeId = Number(link.nodeId);
-  const targetScene = scenes.find((scene) => scene.id === targetNodeId);
-
-  if (targetScene?.imageUrl) {
-    showTransitionOverlay(targetScene.imageUrl);
+  const currentPosition = viewer.getPosition?.();
+  if (
+    currentPosition &&
+    Number.isFinite(currentPosition.yaw) &&
+    Number.isFinite(currentPosition.pitch)
+  ) {
+    transitionSourcePositionRef.current = {
+      yaw: currentPosition.yaw,
+      pitch: currentPosition.pitch,
+    };
+  } else {
+    transitionSourcePositionRef.current = null;
   }
+
+  showTransitionOverlay();
 
   try {
     await vtPlugin.gotoLink(link.nodeId, 0);
@@ -366,6 +377,7 @@ const handleNodeChanged = ({ node }: any) => {
     }
 
     pendingOrientationRef.current = null;
+    transitionSourcePositionRef.current = null;
     lastClickedLinkRef.current = null;
     setCurrentSceneId(nextId);
 
@@ -420,10 +432,21 @@ const handleNodeChanged = ({ node }: any) => {
     const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
     lastClickedLinkRef.current = null;
 
-const targetScene = scenes.find((scene) => scene.id === id);
-if (targetScene?.imageUrl) {
-  showTransitionOverlay(targetScene.imageUrl);
+const currentPosition = viewerRef.current.getPosition?.();
+if (
+  currentPosition &&
+  Number.isFinite(currentPosition.yaw) &&
+  Number.isFinite(currentPosition.pitch)
+) {
+  transitionSourcePositionRef.current = {
+    yaw: currentPosition.yaw,
+    pitch: currentPosition.pitch,
+  };
+} else {
+  transitionSourcePositionRef.current = null;
 }
+
+showTransitionOverlay();
 
 try {
   await vtPlugin.setCurrentNode(String(id), {
@@ -488,21 +511,16 @@ try {
       <div className="relative w-full h-full flex-1 overflow-hidden">
         <div ref={containerRef} className="w-full h-full" />
 
-        <div
-          ref={overlayRef}
-          className="absolute inset-0 pointer-events-none z-20"
-          style={{
-            opacity: 0,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center",
-            backgroundSize: "cover",
-            transform: "scale(1)",
-            filter: "blur(0px)",
-            transition:
-              "opacity 160ms ease, transform 220ms ease, filter 220ms ease",
-            willChange: "opacity, transform, filter",
-          }}
-        />
+<div
+  ref={overlayRef}
+  className="absolute inset-0 pointer-events-none z-20"
+  style={{
+    opacity: 0,
+    background: "rgba(0, 0, 0, 0.96)",
+    transition: "opacity 120ms ease",
+    willChange: "opacity",
+  }}
+/>
 
         {isInitialLoading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
