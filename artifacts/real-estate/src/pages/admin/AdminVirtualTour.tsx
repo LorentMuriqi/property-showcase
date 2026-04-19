@@ -236,21 +236,20 @@ export default function AdminVirtualTour() {
     return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
   }, [scenes, selectedSceneId]);
 
-const [viewerError, setViewerError] = useState("");
-const [isPlacementMode, setIsPlacementMode] = useState(false);
-const [draft, setDraft] = useState<PlacementDraft>({
-  to_scene_id: "",
-  label: "",
-  yaw: null,
-  pitch: null,
-});
+  const [viewerError, setViewerError] = useState("");
+  const [isPlacementMode, setIsPlacementMode] = useState(false);
+  const [draft, setDraft] = useState<PlacementDraft>({
+    to_scene_id: "",
+    label: "",
+    yaw: null,
+    pitch: null,
+  });
 
-const [cameraCenter, setCameraCenter] = useState<{ yaw: number; pitch: number } | null>(null);
-const [previewCurrentSceneId, setPreviewCurrentSceneId] = useState<number | null>(null);
+  const [cameraCenter, setCameraCenter] = useState<{ yaw: number; pitch: number } | null>(null);
 
-const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
-const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
-const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] = useState(false);
+  const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
+  const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
+  const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] = useState(false);
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -300,31 +299,6 @@ const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] = useState(false
       return null;
     }
   };
-  
-  
-  
-  
-  const getPreviewViewerPosition = () => {
-  try {
-    const viewer = previewViewerRef.current;
-    if (!viewer) return null;
-
-    const position = viewer.getPosition();
-    if (!position) return null;
-
-    if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
-      return null;
-    }
-
-    return {
-      yaw: position.yaw,
-      pitch: position.pitch,
-    };
-  } catch (error) {
-    console.error("Preview viewer position read error:", error);
-    return null;
-  }
-};
 
   const usedTargetSceneIds = useMemo(() => {
     if (!selectedScene) return new Set<number>();
@@ -655,89 +629,6 @@ setEditingHotspot({
       });
     }
   };
-  
-  
-  
-  const handleSaveHotspotTargetView = async (
-  hotspotId: number,
-  targetSceneId: number,
-) => {
-  const livePosition = getPreviewViewerPosition();
-
-  if (!livePosition) {
-    toast({
-      title: "Gabim",
-      description: "Preview i turit nuk është gati.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  if (previewCurrentSceneId !== targetSceneId) {
-    const targetScene = scenes.find((scene) => scene.id === targetSceneId);
-
-    toast({
-      title: "Zgjidh skenën target në preview",
-      description: targetScene
-        ? `Në preview, hap skenën "${targetScene.title}", orientoje kamerën si hyrje dhe pastaj ruaje.`
-        : "Hap skenën target në preview dhe provo përsëri.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  try {
-    const { error } = await supabase
-      .from("virtual_tour_hotspots")
-      .update({
-        target_yaw: livePosition.yaw,
-        target_pitch: livePosition.pitch,
-      })
-      .eq("id", hotspotId);
-
-    if (error) throw error;
-
-    setScenes((prev) =>
-      prev.map((scene) => ({
-        ...scene,
-        hotspots: scene.hotspots.map((hotspot) =>
-          hotspot.id === hotspotId
-            ? {
-                ...hotspot,
-                target_yaw: livePosition.yaw,
-                target_pitch: livePosition.pitch,
-              }
-            : hotspot,
-        ),
-      })),
-    );
-
-    if (editingHotspot?.id === hotspotId) {
-      setEditingHotspot((prev) =>
-        prev
-          ? {
-              ...prev,
-              target_yaw: livePosition.yaw,
-              target_pitch: livePosition.pitch,
-            }
-          : prev,
-      );
-    }
-
-    toast({
-      title: "Sukses",
-      description: "Drejtimi i hyrjes u ruajt saktë nga preview i skenës target.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Ruajtja e target view dështoi.",
-      variant: "destructive",
-    });
-  }
-};
-  
-  
 
   const handleSetDefaultScene = async (sceneId: number) => {
     try {
@@ -852,7 +743,68 @@ setEditingHotspot({
     if (!editingHotspot) return;
 	
 	
-	
+	const handleSaveHotspotTargetView = async (hotspotId: number) => {
+  const livePosition = getLiveViewerPosition();
+
+  if (!livePosition) {
+    toast({
+      title: "Gabim",
+      description: "Pozicioni aktual i kamerës nuk u lexua.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from("virtual_tour_hotspots")
+      .update({
+        target_yaw: livePosition.yaw,
+        target_pitch: livePosition.pitch,
+      })
+      .eq("id", hotspotId);
+
+    if (error) throw error;
+
+    setScenes((prev) =>
+      prev.map((scene) => ({
+        ...scene,
+        hotspots: scene.hotspots.map((hotspot) =>
+          hotspot.id === hotspotId
+            ? {
+                ...hotspot,
+                target_yaw: livePosition.yaw,
+                target_pitch: livePosition.pitch,
+              }
+            : hotspot,
+        ),
+      })),
+    );
+
+    if (editingHotspot?.id === hotspotId) {
+      setEditingHotspot((prev) =>
+        prev
+          ? {
+              ...prev,
+              target_yaw: livePosition.yaw,
+              target_pitch: livePosition.pitch,
+            }
+          : prev,
+      );
+    }
+
+    toast({
+      title: "Sukses",
+      description: "Target view i hotspot-it u ruajt.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Ruajtja e target view dështoi.",
+      variant: "destructive",
+    });
+  }
+};
 	
 	
 
@@ -1291,13 +1243,7 @@ hotspots: scene.hotspots.map((hotspot) =>
         ],
       });
 
-            previewViewerRef.current = viewer;
-      setPreviewCurrentSceneId(Number(defaultScene.id));
-
-      const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
-      vtPlugin?.addEventListener("node-changed", ({ node }: any) => {
-        setPreviewCurrentSceneId(Number(node.id));
-      });
+      previewViewerRef.current = viewer;
     } catch (error) {
       console.error("Preview viewer init error:", error);
     }
@@ -1718,7 +1664,7 @@ hotspots: scene.hotspots.map((hotspot) =>
                               </button>
 
   <button
-    onClick={() => handleSaveHotspotTargetView(hotspot.id, hotspot.to_scene_id)}
+    onClick={() => handleSaveHotspotTargetView(hotspot.id)}
     className="p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white"
     title="Ruaj drejtimin e hyrjes"
   >
@@ -2098,14 +2044,7 @@ hotspots: scene.hotspots.map((hotspot) =>
 
 
   <button
-    onClick={() =>
-      editingHotspot?.to_scene_id !== ""
-        ? handleSaveHotspotTargetView(
-            editingHotspot.id,
-            Number(editingHotspot.to_scene_id),
-          )
-        : null
-    }
+    onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
     className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
   >
     Ruaj drejtimin e hyrjes për këtë hotspot
