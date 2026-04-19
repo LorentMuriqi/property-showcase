@@ -45,19 +45,14 @@ export function VirtualTour360({
   const viewerRef = useRef<Viewer | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-const pendingOrientationRef = useRef<{
-  nodeId: number;
-  yaw: number;
-  pitch: number;
-} | null>(null);
+  const pendingOrientationRef = useRef<{
+    nodeId: number;
+    yaw: number;
+    pitch: number;
+  } | null>(null);
 
-const transitionSourcePositionRef = useRef<{
-  yaw: number;
-  pitch: number;
-} | null>(null);
-
-const lastClickedLinkRef = useRef<any | null>(null);
-const transitionTimeoutRef = useRef<number | null>(null);
+  const lastClickedLinkRef = useRef<any | null>(null);
+  const transitionTimeoutRef = useRef<number | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -190,30 +185,36 @@ const transitionTimeoutRef = useRef<number | null>(null);
     }
   };
 
-const showTransitionOverlay = useCallback(() => {
-  const overlay = overlayRef.current;
-  if (!overlay) return;
+  const showTransitionOverlay = useCallback((targetImage?: string | null) => {
+    const overlay = overlayRef.current;
+    if (!overlay || !targetImage) return;
 
-  clearTransitionTimeout();
+    clearTransitionTimeout();
 
-  overlay.style.transition = "none";
-  overlay.style.opacity = "1";
-
-  requestAnimationFrame(() => {
-    overlay.style.transition = "opacity 120ms ease";
-  });
-}, []);
-
-const hideTransitionOverlay = useCallback(() => {
-  const overlay = overlayRef.current;
-  if (!overlay) return;
-
-  clearTransitionTimeout();
-
-  transitionTimeoutRef.current = window.setTimeout(() => {
+    overlay.style.backgroundImage = `url("${targetImage}")`;
     overlay.style.opacity = "0";
-  }, 0);
-}, []);
+    overlay.style.transform = "scale(1.018)";
+    overlay.style.filter = "blur(0px)";
+
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "0.28";
+      overlay.style.transform = "scale(1)";
+      overlay.style.filter = "blur(0.4px)";
+    });
+  }, []);
+
+  const hideTransitionOverlay = useCallback(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    clearTransitionTimeout();
+
+    transitionTimeoutRef.current = window.setTimeout(() => {
+      overlay.style.opacity = "0";
+      overlay.style.transform = "scale(0.998)";
+      overlay.style.filter = "blur(0px)";
+    }, 80);
+  }, []);
 
   useEffect(() => {
     Cache.enabled = true;
@@ -247,62 +248,62 @@ const hideTransitionOverlay = useCallback(() => {
             nodes,
             preload: true,
             transitionOptions: (toNode: any, fromNode?: any) => {
-const viewerPosition = transitionSourcePositionRef.current || viewer.getPosition?.();
-const clickedLink = lastClickedLinkRef.current;
+              const viewerPosition = viewer.getPosition?.();
+              const clickedLink = lastClickedLinkRef.current;
 
-if (
-  clickedLink &&
-  viewerPosition &&
-  fromNode &&
-  Number.isFinite(viewerPosition.yaw) &&
-  Number.isFinite(viewerPosition.pitch) &&
-  clickedLink.position &&
-  Number.isFinite(Number(clickedLink.position.yaw)) &&
-  Number.isFinite(Number(clickedLink.position.pitch))
-) {
-  const computedOrientation = getHotspotTransitionOrientation(
-    Number(toNode.id),
-    Number(clickedLink.position.yaw),
-    Number(clickedLink.position.pitch),
-    viewerPosition.yaw,
-    viewerPosition.pitch,
-    clickedLink.data?.targetYaw ?? null,
-    clickedLink.data?.targetPitch ?? null,
-  );
+              if (
+                clickedLink &&
+                viewerPosition &&
+                fromNode &&
+                Number.isFinite(viewerPosition.yaw) &&
+                Number.isFinite(viewerPosition.pitch) &&
+                clickedLink.position &&
+                Number.isFinite(Number(clickedLink.position.yaw)) &&
+                Number.isFinite(Number(clickedLink.position.pitch))
+              ) {
+                const computedOrientation = getHotspotTransitionOrientation(
+                  Number(toNode.id),
+                  Number(clickedLink.position.yaw),
+                  Number(clickedLink.position.pitch),
+                  viewerPosition.yaw,
+                  viewerPosition.pitch,
+                  clickedLink.data?.targetYaw ?? null,
+                  clickedLink.data?.targetPitch ?? null,
+                );
 
-  if (computedOrientation) {
-    pendingOrientationRef.current = {
-      nodeId: Number(toNode.id),
-      yaw: computedOrientation.yaw,
-      pitch: computedOrientation.pitch,
-    };
-  } else {
-    const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
-    pendingOrientationRef.current = fallbackOrientation
-      ? {
-          nodeId: Number(toNode.id),
-          yaw: fallbackOrientation.yaw,
-          pitch: fallbackOrientation.pitch,
-        }
-      : null;
-  }
-} else {
-  const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
-  pendingOrientationRef.current = fallbackOrientation
-    ? {
-        nodeId: Number(toNode.id),
-        yaw: fallbackOrientation.yaw,
-        pitch: fallbackOrientation.pitch,
-      }
-    : null;
-}
+                if (computedOrientation) {
+                  pendingOrientationRef.current = {
+                    nodeId: Number(toNode.id),
+                    yaw: computedOrientation.yaw,
+                    pitch: computedOrientation.pitch,
+                  };
+                } else {
+                  const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+                  pendingOrientationRef.current = fallbackOrientation
+                    ? {
+                        nodeId: Number(toNode.id),
+                        yaw: fallbackOrientation.yaw,
+                        pitch: fallbackOrientation.pitch,
+                      }
+                    : null;
+                }
+              } else {
+                const fallbackOrientation = getSceneStartOrientation(Number(toNode.id));
+                pendingOrientationRef.current = fallbackOrientation
+                  ? {
+                      nodeId: Number(toNode.id),
+                      yaw: fallbackOrientation.yaw,
+                      pitch: fallbackOrientation.pitch,
+                    }
+                  : null;
+              }
 
-return {
-  showLoader: false,
-  effect: "fade",
-  speed: 0,
-  rotation: false,
-};
+              return {
+                showLoader: false,
+                effect: "fade",
+                speed: 170,
+                rotation: false,
+              };
             },
           },
         ],
@@ -319,77 +320,51 @@ return {
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
-const handleSelectLink = async ({ link }: any) => {
-  if (!link) return;
+    const handleSelectLink = ({ link }: any) => {
+      if (!link) return;
 
-  lastClickedLinkRef.current = link || null;
+      lastClickedLinkRef.current = link || null;
 
-  const currentPosition = viewer.getPosition?.();
-  if (
-    currentPosition &&
-    Number.isFinite(currentPosition.yaw) &&
-    Number.isFinite(currentPosition.pitch)
-  ) {
-    transitionSourcePositionRef.current = {
-      yaw: currentPosition.yaw,
-      pitch: currentPosition.pitch,
-    };
-  } else {
-    transitionSourcePositionRef.current = null;
-  }
+      const targetNodeId = Number(link.nodeId);
+      const targetScene = scenes.find((scene) => scene.id === targetNodeId);
 
-  showTransitionOverlay();
-
-  try {
-    await vtPlugin.gotoLink(link.nodeId, 0);
-  } catch (error) {
-    console.error("gotoLink error:", error);
-  }
-};
-
-const handleNodeChanged = ({ node }: any) => {
-  const nextId = Number(node.id);
-
-  const applyOrientation = () => {
-    const pending = pendingOrientationRef.current;
-
-    if (pending && pending.nodeId === nextId) {
-      try {
-        viewer.rotate({
-          yaw: pending.yaw,
-          pitch: pending.pitch,
-        });
-      } catch (error) {
-        console.error("Node changed orientation apply error:", error);
+      if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
+        showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
       }
-    } else {
-      const fallbackOrientation = getSceneStartOrientation(nextId);
-      if (fallbackOrientation) {
+    };
+
+    const handleNodeChanged = ({ node }: any) => {
+      const nextId = Number(node.id);
+      setCurrentSceneId(nextId);
+
+      const pending = pendingOrientationRef.current;
+      if (pending && pending.nodeId === nextId) {
         try {
           viewer.rotate({
-            yaw: fallbackOrientation.yaw,
-            pitch: fallbackOrientation.pitch,
+            yaw: pending.yaw,
+            pitch: pending.pitch,
           });
         } catch (error) {
-          console.error("Fallback orientation apply error:", error);
+          console.error("Node changed orientation apply error:", error);
+        }
+      } else {
+        const fallbackOrientation = getSceneStartOrientation(nextId);
+        if (fallbackOrientation) {
+          try {
+            viewer.rotate({
+              yaw: fallbackOrientation.yaw,
+              pitch: fallbackOrientation.pitch,
+            });
+          } catch (error) {
+            console.error("Fallback orientation apply error:", error);
+          }
         }
       }
-    }
 
-    pendingOrientationRef.current = null;
-    transitionSourcePositionRef.current = null;
-    lastClickedLinkRef.current = null;
-    setCurrentSceneId(nextId);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        hideTransitionOverlay();
-      });
-    });
-  };
-
-  requestAnimationFrame(applyOrientation);
-};
+      pendingOrientationRef.current = null;
+      lastClickedLinkRef.current = null;
+      hideTransitionOverlay();
+    };
 
     vtPlugin.addEventListener("select-link", handleSelectLink);
     vtPlugin.addEventListener("node-changed", handleNodeChanged);
@@ -432,33 +407,22 @@ const handleNodeChanged = ({ node }: any) => {
     const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
     lastClickedLinkRef.current = null;
 
-const currentPosition = viewerRef.current.getPosition?.();
-if (
-  currentPosition &&
-  Number.isFinite(currentPosition.yaw) &&
-  Number.isFinite(currentPosition.pitch)
-) {
-  transitionSourcePositionRef.current = {
-    yaw: currentPosition.yaw,
-    pitch: currentPosition.pitch,
-  };
-} else {
-  transitionSourcePositionRef.current = null;
-}
+    const targetScene = scenes.find((scene) => scene.id === id);
+    if (targetScene?.thumbnailUrl || targetScene?.imageUrl) {
+      showTransitionOverlay(targetScene.thumbnailUrl || targetScene.imageUrl);
+    }
 
-showTransitionOverlay();
-
-try {
-  await vtPlugin.setCurrentNode(String(id), {
-    showLoader: false,
-    effect: "fade",
-    speed: 0,
-    rotation: false,
-  });
-} catch (error) {
-  console.error("Scene change error:", error);
-  hideTransitionOverlay();
-}
+    try {
+      await vtPlugin.setCurrentNode(String(id), {
+        showLoader: false,
+        effect: "fade",
+        speed: 170,
+        rotation: false,
+      });
+    } catch (error) {
+      console.error("Scene change error:", error);
+      hideTransitionOverlay();
+    }
   };
 
   const toggleFullscreen = async () => {
@@ -511,16 +475,21 @@ try {
       <div className="relative w-full h-full flex-1 overflow-hidden">
         <div ref={containerRef} className="w-full h-full" />
 
-<div
-  ref={overlayRef}
-  className="absolute inset-0 pointer-events-none z-20"
-  style={{
-    opacity: 0,
-    background: "rgba(0, 0, 0, 0.96)",
-    transition: "opacity 120ms ease",
-    willChange: "opacity",
-  }}
-/>
+        <div
+          ref={overlayRef}
+          className="absolute inset-0 pointer-events-none z-20"
+          style={{
+            opacity: 0,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            backgroundSize: "cover",
+            transform: "scale(1)",
+            filter: "blur(0px)",
+            transition:
+              "opacity 160ms ease, transform 220ms ease, filter 220ms ease",
+            willChange: "opacity, transform, filter",
+          }}
+        />
 
         {isInitialLoading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
