@@ -198,7 +198,7 @@ const showTransitionOverlay = useCallback((targetImage?: string | null) => {
   overlay.style.filter = "blur(0px)";
 
   requestAnimationFrame(() => {
-    overlay.style.transition = "opacity 140ms ease";
+    overlay.style.transition = "opacity 120ms ease";
   });
 }, []);
 
@@ -425,17 +425,17 @@ if (targetScene?.imageUrl) {
   showTransitionOverlay(targetScene.imageUrl);
 }
 
-    try {
-await vtPlugin.setCurrentNode(String(id), {
-  showLoader: false,
-  effect: "fade",
-  speed: 0,
-  rotation: false,
-});
-    } catch (error) {
-      console.error("Scene change error:", error);
-      hideTransitionOverlay();
-    }
+try {
+  await vtPlugin.setCurrentNode(String(id), {
+    showLoader: false,
+    effect: "fade",
+    speed: 0,
+    rotation: false,
+  });
+} catch (error) {
+  console.error("Scene change error:", error);
+  hideTransitionOverlay();
+}
   };
 
   const toggleFullscreen = async () => {
