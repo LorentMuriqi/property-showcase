@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Cache, Viewer } from "@photo-sphere-viewer/core";
+import { Cache, Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
@@ -181,13 +181,13 @@ export function VirtualTour360({
 
     setIsInitialLoading(true);
 
-    const viewer = new Viewer({
-      container: containerRef.current,
-      navbar: ["zoom", "move", "fullscreen"],
-      adapter: {
-        resolution: 32,
-      },
-      plugins: [
+ const viewer = new Viewer({
+  container: containerRef.current,
+  navbar: ["zoom", "move", "fullscreen"],
+  adapter: EquirectangularAdapter.withConfig({
+    resolution: 32,
+  }),
+  plugins: [
         [
           VirtualTourPlugin,
           {
