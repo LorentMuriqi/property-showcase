@@ -48,10 +48,12 @@ export function VirtualTour360({
   defaultSceneId,
   onClose,
 }: VirtualTour360Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
+   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
+  const lastClickedLinkRef = useRef<any | null>(null);
+  const isDirectSceneChangeRef = useRef(false);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -168,13 +170,15 @@ export function VirtualTour360({
         await preloadPanorama(targetScene.imageUrl);
 
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+        isDirectSceneChangeRef.current = true;
+        lastClickedLinkRef.current = null;
 
-await vtPlugin.setCurrentNode(String(targetSceneId), {
-  showLoader: false,
-  effect: "fade",
-  speed: 360,
-  rotation: false,
-});
+        await vtPlugin.setCurrentNode(String(targetSceneId), {
+          showLoader: false,
+          effect: "fade",
+          speed: 320,
+          rotation: false,
+        });
       } catch (error) {
         console.error("Scene change error:", error);
       } finally {
@@ -232,12 +236,17 @@ await vtPlugin.setCurrentNode(String(targetSceneId), {
             startNodeId: String(resolvedStartScene.id),
             nodes,
             preload: true,
-transitionOptions: () => ({
-  showLoader: false,
-  effect: "fade",
-  speed: 360,
-  rotation: false,
-}),
+transitionOptions: () => {
+  const clickedLink = lastClickedLinkRef.current;
+
+  return {
+    showLoader: false,
+    effect: "fade",
+    speed: 320,
+    rotation: !!clickedLink,
+    rotateTo: clickedLink?.position,
+  };
+},
           },
         ],
       ],
@@ -248,12 +257,8 @@ transitionOptions: () => ({
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
     vtPlugin.addEventListener("select-link", ({ link }: any) => {
-      const hotspot = sortedScenes
-        .flatMap((scene) => scene.hotspots)
-        .find((h) => h.id === link?.data?.hotspotId);
-
-      if (!hotspot) return;
-      currentSceneRef.current = getSceneById(hotspot.toSceneId);
+      lastClickedLinkRef.current = link || null;
+      isDirectSceneChangeRef.current = false;
     });
 
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
@@ -263,17 +268,8 @@ transitionOptions: () => ({
       currentSceneRef.current = nextScene;
       setCurrentSceneId(nextId);
 
-      if (nextScene) {
-        const targetYaw = node?.data?.targetYaw;
-        const targetPitch = node?.data?.targetPitch;
-
-        const entryOrientation =
-          typeof targetYaw === "number" &&
-          typeof targetPitch === "number" &&
-          Number.isFinite(targetYaw) &&
-          Number.isFinite(targetPitch)
-            ? { yaw: targetYaw, pitch: targetPitch }
-            : getSceneStartOrientation(nextId);
+      if (isDirectSceneChangeRef.current) {
+        const entryOrientation = getSceneStartOrientation(nextId);
 
         if (entryOrientation) {
           try {
@@ -282,10 +278,13 @@ transitionOptions: () => ({
               pitch: entryOrientation.pitch,
             });
           } catch (error) {
-            console.error("Apply node orientation error:", error);
+            console.error("Apply direct scene orientation error:", error);
           }
         }
       }
+
+      lastClickedLinkRef.current = null;
+      isDirectSceneChangeRef.current = false;
     });
 
     const revealTimer = window.setTimeout(() => {
