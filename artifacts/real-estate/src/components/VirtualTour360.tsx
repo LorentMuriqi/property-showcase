@@ -262,7 +262,9 @@ export function VirtualTour360({
         } catch (error) {
           console.error("Scene marker render error:", error);
         }
-    },
+      } finally {
+        isNavigatingRef.current = false;
+      }
     [
       getEntryOrientation,
       getSceneById,
