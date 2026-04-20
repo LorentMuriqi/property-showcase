@@ -414,7 +414,14 @@ adapter: EquirectangularAdapter.withConfig({
       )}
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
-        <div ref={containerRef} className="w-full h-full" />
+                <div
+          ref={containerRef}
+          className="w-full h-full bg-black"
+          style={{
+            opacity: isViewerVisible ? 1 : 0,
+            transition: "opacity 120ms linear",
+          }}
+        />
 
         {isInitialLoading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
