@@ -365,9 +365,8 @@ adapter: EquirectangularAdapter.withConfig({
     }
   };
   
-  const handleCloseTour = useCallback(() => {
+const handleCloseTour = useCallback(() => {
   if (onClose) onClose();
-  else window.history.back();
 }, [onClose]);
 
 useEffect(() => {

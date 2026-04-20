@@ -760,11 +760,12 @@ export default function ProjectDetails() {
           </div>
 
           <div className="flex-1 p-4 overflow-auto">
-            <PropertyVirtualTourViewer
-              propertyId={project.id as any}
-              fallbackUrl={project.virtualTourUrl}
-              fallbackEmbedCode={project.virtualTourEmbedCode}
-            />
+<PropertyVirtualTourViewer
+  propertyId={project.id as any}
+  fallbackUrl={project.virtualTourUrl}
+  fallbackEmbedCode={project.virtualTourEmbedCode}
+  onClose={() => setShowVirtualTour(false)}
+/>
           </div>
         </div>
       )}
