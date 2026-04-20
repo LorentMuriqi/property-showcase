@@ -32,6 +32,11 @@ interface VirtualTour360Props {
   onClose?: () => void;
 }
 
+type Orientation = {
+  yaw: number;
+  pitch: number;
+};
+
 export function VirtualTour360({
   scenes,
   defaultSceneId,
@@ -40,6 +45,8 @@ export function VirtualTour360({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const lastClickedLinkRef = useRef<any | null>(null);
+  const pendingOrientationRef = useRef<Orientation | null>(null);
+  const isProgrammaticNodeChangeRef = useRef(false);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -85,9 +92,16 @@ export function VirtualTour360({
     return defaultScene ? String(defaultScene.id) : null;
   }, [scenes, defaultSceneId]);
 
-  const getSceneStartOrientation = useCallback(
+  const getSceneById = useCallback(
     (sceneId: number) => {
-      const scene = scenes.find((s) => s.id === sceneId);
+      return scenes.find((s) => s.id === sceneId) || null;
+    },
+    [scenes],
+  );
+
+  const getSceneStartOrientation = useCallback(
+    (sceneId: number): Orientation | null => {
+      const scene = getSceneById(sceneId);
       if (!scene) return null;
 
       if (
@@ -104,7 +118,7 @@ export function VirtualTour360({
 
       return null;
     },
-    [scenes],
+    [getSceneById],
   );
 
   const clampPitch = (pitch: number) => {
@@ -132,7 +146,7 @@ export function VirtualTour360({
       currentPitch: number,
       targetYaw?: number | null,
       targetPitch?: number | null,
-    ) => {
+    ): Orientation | null => {
       const targetSceneStart = getSceneStartOrientation(toSceneId);
 
       const baseYaw =
@@ -165,10 +179,35 @@ export function VirtualTour360({
     [getSceneStartOrientation],
   );
 
+  const rotateViewerSmoothly = useCallback(
+    async (orientation: Orientation | null, speed = 700) => {
+      if (!viewerRef.current || !orientation) return;
+
+      try {
+        await viewerRef.current.animate({
+          yaw: orientation.yaw,
+          pitch: orientation.pitch,
+          speed,
+        });
+      } catch (error) {
+        console.error("Viewer animate error:", error);
+        try {
+          viewerRef.current.rotate({
+            yaw: orientation.yaw,
+            pitch: orientation.pitch,
+          });
+        } catch (rotateError) {
+          console.error("Viewer rotate fallback error:", rotateError);
+        }
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     Cache.enabled = true;
-    Cache.ttl = 10;
-    Cache.maxItems = 3;
+    Cache.ttl = 15 * 60 * 1000;
+    Cache.maxItems = 12;
   }, []);
 
   useEffect(() => {
@@ -179,15 +218,22 @@ export function VirtualTour360({
       viewerRef.current = null;
     }
 
+    pendingOrientationRef.current = null;
+    lastClickedLinkRef.current = null;
+    isProgrammaticNodeChangeRef.current = false;
     setIsInitialLoading(true);
 
-const viewer = new Viewer({
-  container: containerRef.current,
-  navbar: ["zoom", "move", "fullscreen"],
-  adapter: EquirectangularAdapter.withConfig({
-    resolution: 32,
-  }),
-  plugins: [
+    const viewer = new Viewer({
+      container: containerRef.current,
+      navbar: ["zoom", "move", "fullscreen"],
+      adapter: EquirectangularAdapter.withConfig({
+        resolution: 128,
+      }),
+      defaultZoomLvl: 0,
+      moveInertia: true,
+      mousewheelCtrlKey: false,
+      touchmoveTwoFingers: false,
+      plugins: [
         [
           VirtualTourPlugin,
           {
@@ -199,6 +245,7 @@ const viewer = new Viewer({
             transitionOptions: (toNode: any, fromNode?: any) => {
               const viewerPosition = viewer.getPosition?.();
               const clickedLink = lastClickedLinkRef.current;
+              let computedOrientation: Orientation | null = null;
 
               if (
                 clickedLink &&
@@ -210,7 +257,7 @@ const viewer = new Viewer({
                 Number.isFinite(Number(clickedLink.position.yaw)) &&
                 Number.isFinite(Number(clickedLink.position.pitch))
               ) {
-                getHotspotTransitionOrientation(
+                computedOrientation = getHotspotTransitionOrientation(
                   Number(toNode.id),
                   Number(clickedLink.position.yaw),
                   Number(clickedLink.position.pitch),
@@ -221,11 +268,14 @@ const viewer = new Viewer({
                 );
               }
 
+              pendingOrientationRef.current =
+                computedOrientation || getSceneStartOrientation(Number(toNode.id));
+
               return {
                 showLoader: false,
                 effect: "fade",
-                speed: 220,
-                rotation: false,
+                speed: 420,
+                rotation: true,
               };
             },
           },
@@ -235,8 +285,13 @@ const viewer = new Viewer({
 
     viewerRef.current = viewer;
 
-    viewer.addEventListener("ready", () => {
+    viewer.addEventListener("ready", async () => {
       setIsInitialLoading(false);
+
+      const initialOrientation = getSceneStartOrientation(Number(resolvedStartNodeId));
+      if (initialOrientation) {
+        await rotateViewerSmoothly(initialOrientation, 0);
+      }
     });
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
@@ -244,45 +299,49 @@ const viewer = new Viewer({
     vtPlugin.addEventListener("select-link", ({ link }: any) => {
       if (!link) return;
       lastClickedLinkRef.current = link || null;
+      isProgrammaticNodeChangeRef.current = false;
     });
 
     setCurrentSceneId(Number(resolvedStartNodeId));
 
-    const initialOrientation = getSceneStartOrientation(Number(resolvedStartNodeId));
-    if (initialOrientation) {
-      try {
-        viewer.rotate({
-          yaw: initialOrientation.yaw,
-          pitch: initialOrientation.pitch,
-        });
-      } catch (error) {
-        console.error("Initial orientation apply error:", error);
-      }
-    }
-
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+    vtPlugin.addEventListener("node-changed", async ({ node }: any) => {
       const nextId = Number(node.id);
       setCurrentSceneId(nextId);
+
+      const orientation =
+        pendingOrientationRef.current || getSceneStartOrientation(nextId);
+
+      pendingOrientationRef.current = null;
       lastClickedLinkRef.current = null;
+
+      if (!isProgrammaticNodeChangeRef.current) {
+        await rotateViewerSmoothly(orientation, 850);
+      } else {
+        await rotateViewerSmoothly(orientation, 650);
+      }
+
+      isProgrammaticNodeChangeRef.current = false;
     });
 
     return () => {
       viewer.destroy();
       viewerRef.current = null;
     };
-  }, [nodes, resolvedStartNodeId, getSceneStartOrientation, getHotspotTransitionOrientation]);
+  }, [nodes, resolvedStartNodeId, getSceneStartOrientation, getHotspotTransitionOrientation, rotateViewerSmoothly]);
 
   const handleSceneChange = async (id: number) => {
     if (!viewerRef.current) return;
 
     const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
     lastClickedLinkRef.current = null;
+    isProgrammaticNodeChangeRef.current = true;
+    pendingOrientationRef.current = getSceneStartOrientation(id);
 
     await vtPlugin.setCurrentNode(String(id), {
       showLoader: false,
       effect: "fade",
-      speed: 220,
-      rotation: false,
+      speed: 380,
+      rotation: true,
     });
   };
 

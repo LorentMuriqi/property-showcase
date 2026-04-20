@@ -21,7 +21,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Viewer } from "@photo-sphere-viewer/core";
+import { Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
@@ -1067,14 +1067,20 @@ hotspots: scene.hotspots.map((hotspot) =>
     let cameraInterval: number | null = null;
 
     try {
-      viewer = new Viewer({
-        container: editorContainerRef.current,
-        panorama: selectedScene.image_url,
-        navbar: ["zoom", "move", "fullscreen"],
-        defaultYaw: selectedScene.initial_yaw ?? 0,
-        defaultPitch: selectedScene.initial_pitch ?? 0,
-        plugins: [[MarkersPlugin, {}]],
-      });
+viewer = new Viewer({
+  container: editorContainerRef.current,
+  panorama: selectedScene.image_url,
+  navbar: ["zoom", "move", "fullscreen"],
+  adapter: EquirectangularAdapter.withConfig({
+    resolution: 128,
+  }),
+  defaultYaw: selectedScene.initial_yaw ?? 0,
+  defaultPitch: selectedScene.initial_pitch ?? 0,
+  moveInertia: true,
+  mousewheelCtrlKey: false,
+  touchmoveTwoFingers: false,
+  plugins: [[MarkersPlugin, {}]],
+});
 
       editorViewerRef.current = viewer;
       const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
@@ -1168,34 +1174,42 @@ hotspots: scene.hotspots.map((hotspot) =>
     isEditingHotspotPlacement,
   ]);
 
-  const virtualTourNodes = useMemo(() => {
-    const validScenes = scenes.filter(
-      (scene) => scene.image_url && String(scene.image_url).trim() !== "",
-    );
+const virtualTourNodes = useMemo(() => {
+  const validScenes = scenes.filter(
+    (scene) => scene.image_url && String(scene.image_url).trim() !== "",
+  );
 
-    const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
+  const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
 
-    return validScenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.image_url,
-      name: scene.title,
-      thumbnail: scene.thumbnail_url || scene.image_url,
-      links: scene.hotspots
-        .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
-        .map((hotspot) => ({
-          nodeId: String(hotspot.to_scene_id),
-          position: {
-            yaw: hotspot.yaw,
-            pitch: hotspot.pitch,
-          },
-          name:
-            hotspot.label ||
-            validScenes.find((target) => Number(target.id) === Number(hotspot.to_scene_id))
-              ?.title ||
-            "Lidhje",
-        })),
-    }));
-  }, [scenes]);
+  return validScenes.map((scene) => ({
+    id: String(scene.id),
+    panorama: scene.image_url,
+    name: scene.title,
+    thumbnail: scene.thumbnail_url || scene.image_url,
+    data: {
+      initialYaw: scene.initial_yaw ?? null,
+      initialPitch: scene.initial_pitch ?? null,
+    },
+    links: scene.hotspots
+      .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
+      .map((hotspot) => ({
+        nodeId: String(hotspot.to_scene_id),
+        position: {
+          yaw: hotspot.yaw,
+          pitch: hotspot.pitch,
+        },
+        name:
+          hotspot.label ||
+          validScenes.find((target) => Number(target.id) === Number(hotspot.to_scene_id))
+            ?.title ||
+          "Lidhje",
+        data: {
+          targetYaw: hotspot.target_yaw ?? null,
+          targetPitch: hotspot.target_pitch ?? null,
+        },
+      })),
+  }));
+}, [scenes]);
 
   useEffect(() => {
     if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
