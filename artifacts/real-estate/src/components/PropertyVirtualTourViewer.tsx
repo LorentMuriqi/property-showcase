@@ -6,10 +6,12 @@ export default function PropertyVirtualTourViewer({
   propertyId,
   fallbackUrl,
   fallbackEmbedCode,
+  onClose,
 }: {
   propertyId: string | number;
   fallbackUrl?: string;
   fallbackEmbedCode?: string;
+  onClose?: () => void;
 }) {
   const [scenes, setScenes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
