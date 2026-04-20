@@ -392,14 +392,17 @@ useEffect(() => {
         }
       `}</style>
 
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-50 w-10 h-10 bg-black/50 hover:bg-primary text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-md"
-        >
-          <X size={20} />
-        </button>
-      )}
+      <button
+        onClick={() => {
+          if (onClose) onClose();
+          else window.history.back();
+        }}
+        className="absolute top-4 right-4 z-50 w-12 h-12 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg"
+        aria-label="Mbyll turin virtual"
+        type="button"
+      >
+        <X size={22} />
+      </button>
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
                 <div
