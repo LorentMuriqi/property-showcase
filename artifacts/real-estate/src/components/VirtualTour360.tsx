@@ -48,13 +48,14 @@ export function VirtualTour360({
   defaultSceneId,
   onClose,
 }: VirtualTour360Props) {
-   const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
   const lastClickedLinkRef = useRef<any | null>(null);
   const pendingEntryOrientationRef = useRef<Orientation | null>(null);
   const isDirectSceneChangeRef = useRef(false);
+  const transitionHideTimerRef = useRef<number | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -201,7 +202,7 @@ export function VirtualTour360({
         await vtPlugin.setCurrentNode(String(targetSceneId), {
           showLoader: false,
           effect: "fade",
-          speed: 320,
+          speed: 260,
           rotation: false,
         });
       } catch (error) {
@@ -262,17 +263,12 @@ export function VirtualTour360({
             startNodeId: String(resolvedStartScene.id),
             nodes,
             preload: true,
-transitionOptions: () => {
-  const clickedLink = lastClickedLinkRef.current;
-
-  return {
-    showLoader: false,
-    effect: "fade",
-    speed: 320,
-    rotation: !!clickedLink,
-    rotateTo: clickedLink?.position,
-  };
-},
+transitionOptions: () => ({
+  showLoader: false,
+  effect: "fade",
+  speed: 260,
+  rotation: false,
+}),
           },
         ],
       ],
@@ -289,6 +285,12 @@ transitionOptions: () => {
         Number(link?.nodeId),
         link,
       );
+
+      if (transitionHideTimerRef.current) {
+        window.clearTimeout(transitionHideTimerRef.current);
+        transitionHideTimerRef.current = null;
+      }
+
       setIsSceneTransitioning(true);
     });
 
@@ -302,24 +304,40 @@ transitionOptions: () => {
       const entryOrientation =
         pendingEntryOrientationRef.current || getSceneStartOrientation(nextId);
 
+      const finishTransition = () => {
+        pendingEntryOrientationRef.current = null;
+        lastClickedLinkRef.current = null;
+        isDirectSceneChangeRef.current = false;
+
+        if (transitionHideTimerRef.current) {
+          window.clearTimeout(transitionHideTimerRef.current);
+        }
+
+        transitionHideTimerRef.current = window.setTimeout(() => {
+          setIsSceneTransitioning(false);
+          transitionHideTimerRef.current = null;
+        }, 20);
+      };
+
       if (entryOrientation) {
         try {
           viewer.rotate({
             yaw: entryOrientation.yaw,
             pitch: entryOrientation.pitch,
           });
+
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              finishTransition();
+            });
+          });
         } catch (error) {
           console.error("Apply node orientation error:", error);
+          finishTransition();
         }
+      } else {
+        finishTransition();
       }
-
-      pendingEntryOrientationRef.current = null;
-      lastClickedLinkRef.current = null;
-      isDirectSceneChangeRef.current = false;
-
-      window.setTimeout(() => {
-        setIsSceneTransitioning(false);
-      }, 50);
     });
 
     const revealTimer = window.setTimeout(() => {
@@ -338,6 +356,12 @@ transitionOptions: () => {
     return () => {
       window.clearTimeout(revealTimer);
       window.clearTimeout(fallbackTimer);
+
+      if (transitionHideTimerRef.current) {
+        window.clearTimeout(transitionHideTimerRef.current);
+        transitionHideTimerRef.current = null;
+      }
+
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
