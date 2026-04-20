@@ -266,10 +266,10 @@ const finishInitialLoad = () => {
 adapter: EquirectangularAdapter.withConfig({
   resolution:
     window.innerWidth <= 640
-      ? 64
+      ? 96
       : window.innerWidth <= 1024
-        ? 96
-        : 128,
+        ? 128
+        : 192,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
