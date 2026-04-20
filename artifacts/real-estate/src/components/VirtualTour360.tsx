@@ -341,16 +341,18 @@ adapter: EquirectangularAdapter.withConfig({
 
     return () => {
       window.clearTimeout(fallbackTimer);
-
-      if (transitionHideTimerRef.current) {
-        window.clearTimeout(transitionHideTimerRef.current);
-        transitionHideTimerRef.current = null;
-      }
-
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
     };
+  }, [
+    resolvedStartScene,
+    nodes,
+    getSceneById,
+    getSceneStartOrientation,
+    getHotspotEntryOrientation,
+    updateTargetNodeOrientation,
+  ]);
 
   const handleSceneChange = async (id: number) => {
     await goToScene(id);
