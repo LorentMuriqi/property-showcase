@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Cache, Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
+import {
+  Cache,
+  Viewer,
+  EquirectangularAdapter,
+  events,
+} from "@photo-sphere-viewer/core";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/markers-plugin/index.css";
@@ -35,6 +40,8 @@ interface VirtualTour360Props {
 type SceneType = VirtualTour360Props["scenes"][number];
 type HotspotType = SceneType["hotspots"][number];
 type Orientation = { yaw: number; pitch: number };
+
+const INITIAL_LOADING_FALLBACK_MS = 2500;
 
 const HOTSPOT_HTML = `
   <div style="
@@ -272,7 +279,7 @@ export function VirtualTour360({
     Cache.maxItems = 12;
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!containerRef.current || !resolvedStartScene) return;
 
     if (viewerRef.current) {
@@ -284,6 +291,21 @@ export function VirtualTour360({
     setIsInitialLoading(true);
 
     const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
+    let didFinishInitialLoad = false;
+
+    const finishInitialLoad = () => {
+      if (didFinishInitialLoad) return;
+      didFinishInitialLoad = true;
+
+      currentSceneRef.current = resolvedStartScene;
+      setCurrentSceneId(resolvedStartScene.id);
+      renderMarkersForScene(resolvedStartScene);
+      setIsInitialLoading(false);
+    };
+
+    const fallbackTimer = window.setTimeout(() => {
+      finishInitialLoad();
+    }, INITIAL_LOADING_FALLBACK_MS);
 
     const viewer = new Viewer({
       container: containerRef.current,
@@ -312,14 +334,21 @@ export function VirtualTour360({
       await goToScene(hotspot.toSceneId, hotspot);
     });
 
-    viewer.addEventListener("ready", () => {
-      currentSceneRef.current = resolvedStartScene;
-      setCurrentSceneId(resolvedStartScene.id);
-      renderMarkersForScene(resolvedStartScene);
-      setIsInitialLoading(false);
+    viewer.addEventListener(events.ReadyEvent.type, () => {
+      finishInitialLoad();
+    });
+
+    viewer.addEventListener(events.PanoramaLoadedEvent.type, () => {
+      finishInitialLoad();
+    });
+
+    viewer.addEventListener("panorama-error", (error: any) => {
+      console.error("Initial panorama error:", error);
+      finishInitialLoad();
     });
 
     return () => {
+      window.clearTimeout(fallbackTimer);
       viewer.destroy();
       viewerRef.current = null;
       markersPluginRef.current = null;
