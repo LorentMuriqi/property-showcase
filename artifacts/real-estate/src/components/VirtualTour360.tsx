@@ -3,7 +3,6 @@ import {
   Cache,
   Viewer,
   EquirectangularAdapter,
-  events,
 } from "@photo-sphere-viewer/core";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import "@photo-sphere-viewer/core/index.css";
@@ -279,7 +278,7 @@ export function VirtualTour360({
     Cache.maxItems = 12;
   }, []);
 
-    useEffect(() => {
+      useEffect(() => {
     if (!containerRef.current || !resolvedStartScene) return;
 
     if (viewerRef.current) {
@@ -303,10 +302,6 @@ export function VirtualTour360({
       setIsInitialLoading(false);
     };
 
-    const fallbackTimer = window.setTimeout(() => {
-      finishInitialLoad();
-    }, INITIAL_LOADING_FALLBACK_MS);
-
     const viewer = new Viewer({
       container: containerRef.current,
       panorama: resolvedStartScene.imageUrl,
@@ -314,7 +309,7 @@ export function VirtualTour360({
       defaultPitch: initialOrientation?.pitch ?? 0,
       navbar: ["zoom", "move", "fullscreen"],
       adapter: EquirectangularAdapter.withConfig({
-        resolution: 128,
+        resolution: window.innerWidth <= 768 ? 64 : 128,
       }),
       moveInertia: true,
       mousewheelCtrlKey: false,
@@ -334,13 +329,24 @@ export function VirtualTour360({
       await goToScene(hotspot.toSceneId, hotspot);
     });
 
-    viewer.addEventListener(events.ReadyEvent.type, () => {
-      finishInitialLoad();
-    });
+    if (initialOrientation) {
+      try {
+        viewer.rotate({
+          yaw: initialOrientation.yaw,
+          pitch: initialOrientation.pitch,
+        });
+      } catch (error) {
+        console.error("Initial orientation apply error:", error);
+      }
+    }
 
-    viewer.addEventListener(events.PanoramaLoadedEvent.type, () => {
+    const revealTimer = window.setTimeout(() => {
       finishInitialLoad();
-    });
+    }, 150);
+
+    const fallbackTimer = window.setTimeout(() => {
+      finishInitialLoad();
+    }, INITIAL_LOADING_FALLBACK_MS);
 
     viewer.addEventListener("panorama-error", (error: any) => {
       console.error("Initial panorama error:", error);
@@ -348,6 +354,7 @@ export function VirtualTour360({
     });
 
     return () => {
+      window.clearTimeout(revealTimer);
       window.clearTimeout(fallbackTimer);
       viewer.destroy();
       viewerRef.current = null;
