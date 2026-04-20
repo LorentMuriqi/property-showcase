@@ -260,16 +260,16 @@ const finishInitialLoad = () => {
   });
 };
 
-    const viewer = new Viewer({
+    const viewer = new Viewer({  // rezolucioni
       container: containerRef.current,
       navbar: ["zoom", "move", "fullscreen"],
 adapter: EquirectangularAdapter.withConfig({
   resolution:
     window.innerWidth <= 640
-      ? 80
+      ? 128
       : window.innerWidth <= 1024
-        ? 112
-        : 144,
+        ? 128
+        : 256,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
