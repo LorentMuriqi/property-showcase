@@ -4,9 +4,9 @@ import {
   Viewer,
   EquirectangularAdapter,
 } from "@photo-sphere-viewer/core";
-import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
+import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
-import "@photo-sphere-viewer/markers-plugin/index.css";
+import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
 import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
 
 interface VirtualTour360Props {
@@ -37,43 +37,11 @@ interface VirtualTour360Props {
 }
 
 type SceneType = VirtualTour360Props["scenes"][number];
-type HotspotType = SceneType["hotspots"][number];
 type Orientation = { yaw: number; pitch: number };
 
 const INITIAL_LOADING_FALLBACK_MS = 2500;
 
-const HOTSPOT_HTML = `
-  <div style="
-    position: relative;
-    width: 44px;
-    height: 44px;
-    border-radius: 9999px;
-    background: rgba(0,0,0,0.58);
-    border: 3px solid #d4af37;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-size:13px;
-    font-weight:700;
-    box-shadow:
-      0 10px 24px rgba(0,0,0,.38),
-      0 0 0 10px rgba(212,175,55,.10);
-    cursor:pointer;
-    user-select:none;
-    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
-  ">
-    ↗
-    <div style="
-      position:absolute;
-      inset:-10px;
-      border-radius:9999px;
-      border:1px solid rgba(212,175,55,.32);
-      animation: hotspotPulse 1.8s ease-out infinite;
-      pointer-events:none;
-    "></div>
-  </div>
-`;
+
 
 export function VirtualTour360({
   scenes,
@@ -82,21 +50,55 @@ export function VirtualTour360({
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
-  const markersPluginRef = useRef<any | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
+  const lastClickedLinkRef = useRef<any | null>(null);
+  const pendingEntryOrientationRef = useRef<Orientation | null>(null);
+  const isDirectSceneChangeRef = useRef(false);
+  const transitionHideTimerRef = useRef<number | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSceneTransitioning, setIsSceneTransitioning] = useState(false);
 
-  const sortedScenes = useMemo(
+  const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
+  
+  
+    const sortedScenes = useMemo(
     () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
     [scenes],
   );
+  
+    const nodes = useMemo(() => {
+    return sortedScenes.map((scene) => ({
+      id: String(scene.id),
+      panorama: scene.imageUrl,
+      thumbnail: scene.thumbnailUrl || scene.imageUrl,
+      name: scene.title,
+      data: {
+        initialYaw: scene.initialYaw ?? null,
+        initialPitch: scene.initialPitch ?? null,
+      },
+      links: scene.hotspots.map((hotspot) => ({
+        nodeId: String(hotspot.toSceneId),
+        position: {
+          yaw: hotspot.yaw,
+          pitch: hotspot.pitch,
+        },
+        name: hotspot.label || undefined,
+        data: {
+          hotspotId: hotspot.id,
+          fromSceneId: hotspot.fromSceneId,
+          toSceneId: hotspot.toSceneId,
+          targetYaw: hotspot.targetYaw ?? null,
+          targetPitch: hotspot.targetPitch ?? null,
+        },
+      })),
+    }));
+  }, [sortedScenes]);
 
-  const hasMap = sortedScenes.some((s) => s.positionX != null && s.positionY != null);
 
   const resolvedStartScene = useMemo(() => {
     return (
@@ -134,26 +136,6 @@ export function VirtualTour360({
     [getSceneById],
   );
 
-  const getHotspotEntryOrientation = useCallback(
-    (targetSceneId: number, hotspot?: HotspotType | null): Orientation | null => {
-      if (
-        hotspot &&
-        typeof hotspot.targetYaw === "number" &&
-        typeof hotspot.targetPitch === "number" &&
-        Number.isFinite(hotspot.targetYaw) &&
-        Number.isFinite(hotspot.targetPitch)
-      ) {
-        return {
-          yaw: hotspot.targetYaw,
-          pitch: hotspot.targetPitch,
-        };
-      }
-
-      return getSceneStartOrientation(targetSceneId);
-    },
-    [getSceneStartOrientation],
-  );
-
   const preloadPanorama = useCallback((src: string) => {
     return new Promise<void>((resolve) => {
       if (!src) {
@@ -168,53 +150,35 @@ export function VirtualTour360({
     });
   }, []);
 
-  const clearMarkers = useCallback(() => {
-    const markersPlugin = markersPluginRef.current;
-    if (!markersPlugin?.getMarkers || !markersPlugin?.removeMarker) return;
 
-    const existingMarkers = markersPlugin.getMarkers() || [];
-    existingMarkers.forEach((marker: any) => {
-      try {
-        markersPlugin.removeMarker(marker.id);
-      } catch (error) {
-        console.error("Remove marker error:", error);
+  const getHotspotEntryOrientation = useCallback(
+    (targetSceneId: number, link: any | null): Orientation | null => {
+      const targetYaw = link?.data?.targetYaw;
+      const targetPitch = link?.data?.targetPitch;
+
+      if (
+        typeof targetYaw === "number" &&
+        typeof targetPitch === "number" &&
+        Number.isFinite(targetYaw) &&
+        Number.isFinite(targetPitch)
+      ) {
+        return {
+          yaw: targetYaw,
+          pitch: targetPitch,
+        };
       }
-    });
-  }, []);
 
-  const renderMarkersForScene = useCallback(
-    (scene: SceneType) => {
-      const markersPlugin = markersPluginRef.current;
-      if (!markersPlugin?.addMarker) return;
-
-      clearMarkers();
-
-      scene.hotspots.forEach((hotspot) => {
-        const targetScene = getSceneById(hotspot.toSceneId);
-
-        try {
-          markersPlugin.addMarker({
-            id: `hotspot-${hotspot.id}`,
-            position: {
-              yaw: hotspot.yaw,
-              pitch: hotspot.pitch,
-            },
-            html: HOTSPOT_HTML,
-            tooltip: hotspot.label || targetScene?.title || "Lidhje",
-            data: {
-              hotspot,
-            },
-          });
-        } catch (error) {
-          console.error("Add hotspot marker error:", hotspot, error);
-        }
-      });
+      return getSceneStartOrientation(targetSceneId);
     },
-    [clearMarkers, getSceneById],
+    [getSceneStartOrientation],
   );
 
+
+
+
+
   const goToScene = useCallback(
-    async (targetSceneId: number, viaHotspot?: HotspotType | null) => {
+    async (targetSceneId: number) => {
       const viewer = viewerRef.current;
       if (!viewer || isNavigatingRef.current) return;
 
@@ -228,33 +192,27 @@ export function VirtualTour360({
       try {
         await preloadPanorama(targetScene.imageUrl);
 
-        const entryOrientation = getHotspotEntryOrientation(targetSceneId, viaHotspot);
+        const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
-        await viewer.setPanorama(targetScene.imageUrl, {
-          position: entryOrientation || undefined,
+        isDirectSceneChangeRef.current = true;
+        lastClickedLinkRef.current = null;
+        pendingEntryOrientationRef.current = getSceneStartOrientation(targetSceneId);
+        setIsSceneTransitioning(true);
+
+        await vtPlugin.setCurrentNode(String(targetSceneId), {
           showLoader: false,
-          transition: {
-            effect: "fade",
-            speed: 240,
-            rotation: false,
-          },
+          effect: "fade",
+          speed: 260,
+          rotation: false,
         });
-
-        currentSceneRef.current = targetScene;
-        setCurrentSceneId(targetScene.id);
-
-        try {
-          renderMarkersForScene(targetScene);
-        } catch (error) {
-          console.error("Scene marker render error:", error);
-        }
       } catch (error) {
         console.error("Scene change error:", error);
+        setIsSceneTransitioning(false);
       } finally {
         isNavigatingRef.current = false;
       }
     },
-    [getSceneById, preloadPanorama, getHotspotEntryOrientation, renderMarkersForScene],
+    [getSceneById, preloadPanorama, getSceneStartOrientation],
   );
 
   useEffect(() => {
@@ -263,13 +221,12 @@ export function VirtualTour360({
     Cache.maxItems = 12;
   }, []);
 
-  useEffect(() => {
-    if (!containerRef.current || !resolvedStartScene) return;
+        useEffect(() => {
+    if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
 
     if (viewerRef.current) {
       viewerRef.current.destroy();
       viewerRef.current = null;
-      markersPluginRef.current = null;
     }
 
     setIsInitialLoading(true);
@@ -284,63 +241,108 @@ export function VirtualTour360({
       currentSceneRef.current = resolvedStartScene;
       setCurrentSceneId(resolvedStartScene.id);
       setIsInitialLoading(false);
-
-      try {
-        renderMarkersForScene(resolvedStartScene);
-      } catch (error) {
-        console.error("Initial marker render error:", error);
-      }
     };
 
     const viewer = new Viewer({
       container: containerRef.current,
-      panorama: resolvedStartScene.imageUrl,
-      defaultYaw: initialOrientation?.yaw ?? 0,
-      defaultPitch: initialOrientation?.pitch ?? 0,
       navbar: ["zoom", "move", "fullscreen"],
       adapter: EquirectangularAdapter.withConfig({
         resolution: window.innerWidth <= 768 ? 64 : 128,
       }),
+      defaultYaw: initialOrientation?.yaw ?? 0,
+      defaultPitch: initialOrientation?.pitch ?? 0,
       moveInertia: true,
       mousewheelCtrlKey: false,
       touchmoveTwoFingers: false,
-      plugins: [[MarkersPlugin, {}]],
+      plugins: [
+        [
+          VirtualTourPlugin,
+          {
+            positionMode: "manual",
+            renderMode: "3d",
+            startNodeId: String(resolvedStartScene.id),
+            nodes,
+            preload: true,
+transitionOptions: () => ({
+  showLoader: false,
+  effect: "fade",
+  speed: 260,
+  rotation: false,
+}),
+          },
+        ],
+      ],
     });
 
     viewerRef.current = viewer;
 
-    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
-    markersPluginRef.current = markersPlugin;
+    const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
-    markersPlugin.addEventListener("select-marker", async ({ marker }: any) => {
-      const hotspot = marker?.data?.hotspot as HotspotType | undefined;
-      if (!hotspot) return;
+    vtPlugin.addEventListener("select-link", ({ link }: any) => {
+      lastClickedLinkRef.current = link || null;
+      isDirectSceneChangeRef.current = false;
+      pendingEntryOrientationRef.current = getHotspotEntryOrientation(
+        Number(link?.nodeId),
+        link,
+      );
 
-      await goToScene(hotspot.toSceneId, hotspot);
+      if (transitionHideTimerRef.current) {
+        window.clearTimeout(transitionHideTimerRef.current);
+        transitionHideTimerRef.current = null;
+      }
+
+      setIsSceneTransitioning(true);
     });
 
-    if (initialOrientation) {
-      try {
-        viewer.rotate({
-          yaw: initialOrientation.yaw,
-          pitch: initialOrientation.pitch,
-        });
-      } catch (error) {
-        console.error("Initial orientation apply error:", error);
+    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+      const nextId = Number(node.id);
+      const nextScene = getSceneById(nextId);
+
+      currentSceneRef.current = nextScene;
+      setCurrentSceneId(nextId);
+
+      const entryOrientation =
+        pendingEntryOrientationRef.current || getSceneStartOrientation(nextId);
+
+      const finishTransition = () => {
+        pendingEntryOrientationRef.current = null;
+        lastClickedLinkRef.current = null;
+        isDirectSceneChangeRef.current = false;
+
+        if (transitionHideTimerRef.current) {
+          window.clearTimeout(transitionHideTimerRef.current);
+        }
+
+        transitionHideTimerRef.current = window.setTimeout(() => {
+          setIsSceneTransitioning(false);
+          transitionHideTimerRef.current = null;
+        }, 20);
+      };
+
+      if (entryOrientation) {
+        try {
+          viewer.rotate({
+            yaw: entryOrientation.yaw,
+            pitch: entryOrientation.pitch,
+          });
+
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              finishTransition();
+            });
+          });
+        } catch (error) {
+          console.error("Apply node orientation error:", error);
+          finishTransition();
+        }
+      } else {
+        finishTransition();
       }
-    }
+    });
 
     const revealTimer = window.setTimeout(() => {
       finishInitialLoad();
     }, 150);
-	
-	    const markerInitTimer = window.setTimeout(() => {
-      try {
-        renderMarkersForScene(resolvedStartScene);
-      } catch (error) {
-        console.error("Initial hotspot render retry error:", error);
-      }
-    }, 300);
 
     const fallbackTimer = window.setTimeout(() => {
       finishInitialLoad();
@@ -353,17 +355,21 @@ export function VirtualTour360({
 
     return () => {
       window.clearTimeout(revealTimer);
-      window.clearTimeout(markerInitTimer);
       window.clearTimeout(fallbackTimer);
+
+      if (transitionHideTimerRef.current) {
+        window.clearTimeout(transitionHideTimerRef.current);
+        transitionHideTimerRef.current = null;
+      }
+
       viewer.destroy();
       viewerRef.current = null;
-      markersPluginRef.current = null;
       currentSceneRef.current = null;
     };
-  }, [resolvedStartScene, getSceneStartOrientation, renderMarkersForScene, goToScene]);
+  }, [resolvedStartScene, nodes, sortedScenes, getSceneById, getSceneStartOrientation, getHotspotEntryOrientation]);
 
   const handleSceneChange = async (id: number) => {
-    await goToScene(id, null);
+    await goToScene(id);
   };
 
   const toggleFullscreen = async () => {
@@ -402,21 +408,6 @@ export function VirtualTour360({
         .virtual-tour-shell .psv-loader {
           display: none !important;
         }
-
-        @keyframes hotspotPulse {
-          0% {
-            transform: scale(0.9);
-            opacity: 0.8;
-          }
-          70% {
-            transform: scale(1.25);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(1.25);
-            opacity: 0;
-          }
-        }
       `}</style>
 
       {onClose && (
@@ -430,6 +421,10 @@ export function VirtualTour360({
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
         <div ref={containerRef} className="w-full h-full" />
+		
+		        {isSceneTransitioning && !isInitialLoading && (
+          <div className="absolute inset-0 z-20 bg-black pointer-events-none" />
+        )}
 
         {isInitialLoading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
