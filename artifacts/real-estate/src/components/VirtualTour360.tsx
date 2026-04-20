@@ -394,12 +394,8 @@ useEffect(() => {
 	  
 	  
 <button
-  onClick={(e) => {
-    e.stopPropagation();
-    if (onClose) onClose();
-    else window.history.back();
-  }}
   onPointerUp={(e) => {
+    e.preventDefault();
     e.stopPropagation();
     if (onClose) onClose();
     else window.history.back();
