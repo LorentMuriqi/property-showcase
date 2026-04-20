@@ -247,22 +247,18 @@ export function VirtualTour360({
     const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
     let didFinishInitialLoad = false;
 
-    const finishInitialLoad = () => {
-      if (didFinishInitialLoad) return;
-      didFinishInitialLoad = true;
+const finishInitialLoad = () => {
+  if (didFinishInitialLoad) return;
+  didFinishInitialLoad = true;
 
-      currentSceneRef.current = resolvedStartScene;
-      setCurrentSceneId(resolvedStartScene.id);
+  currentSceneRef.current = resolvedStartScene;
+  setCurrentSceneId(resolvedStartScene.id);
 
-      window.setTimeout(() => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setIsViewerVisible(true);
-            setIsInitialLoading(false);
-          });
-        });
-      }, 120);
-    };
+  requestAnimationFrame(() => {
+    setIsViewerVisible(true);
+    setIsInitialLoading(false);
+  });
+};
 
     const viewer = new Viewer({
       container: containerRef.current,
