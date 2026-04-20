@@ -397,7 +397,11 @@ useEffect(() => {
           if (onClose) onClose();
           else window.history.back();
         }}
-        className="absolute top-4 right-4 z-50 w-12 h-12 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg"
+        className="absolute z-[10001] w-12 h-12 bg-black/60 hover:bg-black/75 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto touch-manipulation"
+        style={{
+          top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+          right: "calc(env(safe-area-inset-right, 0px) + 12px)",
+        }}
         aria-label="Mbyll turin virtual"
         type="button"
       >
