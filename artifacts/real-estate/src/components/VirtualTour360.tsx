@@ -58,6 +58,7 @@ export function VirtualTour360({
   const [isViewerVisible, setIsViewerVisible] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
+const [canUseFullscreen, setCanUseFullscreen] = useState(false);
 
   const sortedScenes = useMemo(
     () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -260,13 +261,13 @@ const finishInitialLoad = () => {
   });
 };
 
-    const viewer = new Viewer({  // rezolucioni
+    const viewer = new Viewer({  // rezolucioni ne fuqin 2 bon veq, 64 / 128 / 128
       container: containerRef.current,
       navbar: ["zoom", "move", "fullscreen"],
 adapter: EquirectangularAdapter.withConfig({
   resolution:
     window.innerWidth <= 640
-      ? 128
+      ? 64
       : window.innerWidth <= 1024
         ? 128
         : 256,
@@ -363,14 +364,16 @@ adapter: EquirectangularAdapter.withConfig({
     }
   };
 
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+useEffect(() => {
+  setCanUseFullscreen(!!document.fullscreenEnabled);
 
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
+  const onFullscreenChange = () => {
+    setIsFullscreen(!!document.fullscreenElement);
+  };
+
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+}, []);
 
   if (sortedScenes.length === 0) {
     return (
@@ -381,7 +384,7 @@ adapter: EquirectangularAdapter.withConfig({
   }
 
   return (
-    <div className="relative w-full h-full min-h-[100dvh] md:min-h-[500px] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
+    <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
       <style>{`
         .virtual-tour-shell .psv-loader-container,
         .virtual-tour-shell .psv-loader {
@@ -438,12 +441,14 @@ adapter: EquirectangularAdapter.withConfig({
             </button>
           )}
 
-          <button
-            onClick={toggleFullscreen}
-            className="w-12 h-12 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg"
-          >
-            {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-          </button>
+{canUseFullscreen && (
+  <button
+    onClick={toggleFullscreen}
+    className="w-12 h-12 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg"
+  >
+    {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+  </button>
+)}
         </div>
 
         {hasMap && (
