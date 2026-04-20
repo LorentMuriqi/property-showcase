@@ -264,7 +264,12 @@ export function VirtualTour360({
 
       currentSceneRef.current = resolvedStartScene;
       setCurrentSceneId(resolvedStartScene.id);
-      setIsInitialLoading(false);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsInitialLoading(false);
+        });
+      });
     };
 
     const viewer = new Viewer({
