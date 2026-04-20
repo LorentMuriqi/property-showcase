@@ -39,7 +39,7 @@ interface VirtualTour360Props {
 type SceneType = VirtualTour360Props["scenes"][number];
 type Orientation = { yaw: number; pitch: number };
 
-const INITIAL_LOADING_FALLBACK_MS = 2500;
+const INITIAL_LOADING_FALLBACK_MS = 15000;
 
 export function VirtualTour360({
   scenes,
@@ -155,19 +155,7 @@ export function VirtualTour360({
     [getSceneStartOrientation],
   );
 
-  const preloadPanorama = useCallback((src: string) => {
-    return new Promise<void>((resolve) => {
-      if (!src) {
-        resolve();
-        return;
-      }
 
-      const img = new Image();
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-      img.src = src;
-    });
-  }, []);
 
   const updateTargetNodeOrientation = useCallback(
     (
@@ -234,7 +222,6 @@ export function VirtualTour360({
     },
     [
       getSceneById,
-      preloadPanorama,
       getSceneStartOrientation,
       updateTargetNodeOrientation,
     ],
@@ -267,12 +254,14 @@ export function VirtualTour360({
       currentSceneRef.current = resolvedStartScene;
       setCurrentSceneId(resolvedStartScene.id);
 
-      requestAnimationFrame(() => {
+      window.setTimeout(() => {
         requestAnimationFrame(() => {
-          setIsViewerVisible(true);
-          setIsInitialLoading(false);
+          requestAnimationFrame(() => {
+            setIsViewerVisible(true);
+            setIsInitialLoading(false);
+          });
         });
-      });
+      }, 120);
     };
 
     const viewer = new Viewer({
@@ -339,7 +328,7 @@ adapter: EquirectangularAdapter.withConfig({
     });
 
     const fallbackTimer = window.setTimeout(() => {
-      finishInitialLoad();
+      console.warn("Initial panorama load is taking longer than expected.");
     }, INITIAL_LOADING_FALLBACK_MS);
 
     viewer.addEventListener("panorama-error", (error: any) => {
