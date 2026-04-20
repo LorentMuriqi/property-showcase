@@ -306,6 +306,10 @@ adapter: EquirectangularAdapter.withConfig({
     viewerRef.current = viewer;
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+	
+	    viewer.addEventListener("panorama-loaded", () => {
+      finishInitialLoad();
+    });
 
     vtPlugin.addEventListener("select-link", ({ link }: any) => {
       const targetSceneId = Number(link?.nodeId);
@@ -326,10 +330,6 @@ adapter: EquirectangularAdapter.withConfig({
       setCurrentSceneId(nextId);
     });
 
-    const revealTimer = window.setTimeout(() => {
-      finishInitialLoad();
-    }, 150);
-
     const fallbackTimer = window.setTimeout(() => {
       finishInitialLoad();
     }, INITIAL_LOADING_FALLBACK_MS);
@@ -340,20 +340,17 @@ adapter: EquirectangularAdapter.withConfig({
     });
 
     return () => {
-      window.clearTimeout(revealTimer);
       window.clearTimeout(fallbackTimer);
+
+      if (transitionHideTimerRef.current) {
+        window.clearTimeout(transitionHideTimerRef.current);
+        transitionHideTimerRef.current = null;
+      }
+
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
     };
-  }, [
-    resolvedStartScene,
-    nodes,
-    getSceneById,
-    getSceneStartOrientation,
-    getHotspotEntryOrientation,
-    updateTargetNodeOrientation,
-  ]);
 
   const handleSceneChange = async (id: number) => {
     await goToScene(id);
