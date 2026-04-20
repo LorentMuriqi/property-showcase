@@ -51,10 +51,11 @@ export function VirtualTour360({
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
 
-  const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
+   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isViewerVisible, setIsViewerVisible] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
 
@@ -253,7 +254,8 @@ export function VirtualTour360({
       viewerRef.current = null;
     }
 
-    setIsInitialLoading(true);
+        setIsInitialLoading(true);
+    setIsViewerVisible(false);
 
     const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
     let didFinishInitialLoad = false;
@@ -267,6 +269,7 @@ export function VirtualTour360({
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          setIsViewerVisible(true);
           setIsInitialLoading(false);
         });
       });
