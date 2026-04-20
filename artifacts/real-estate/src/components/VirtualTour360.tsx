@@ -179,30 +179,18 @@ export function VirtualTour360({
     [getSceneStartOrientation],
   );
 
-  const rotateViewerSmoothly = useCallback(
-    async (orientation: Orientation | null, speed = 700) => {
-      if (!viewerRef.current || !orientation) return;
+const applyViewerOrientation = useCallback((orientation: Orientation | null) => {
+  if (!viewerRef.current || !orientation) return;
 
-      try {
-        await viewerRef.current.animate({
-          yaw: orientation.yaw,
-          pitch: orientation.pitch,
-          speed,
-        });
-      } catch (error) {
-        console.error("Viewer animate error:", error);
-        try {
-          viewerRef.current.rotate({
-            yaw: orientation.yaw,
-            pitch: orientation.pitch,
-          });
-        } catch (rotateError) {
-          console.error("Viewer rotate fallback error:", rotateError);
-        }
-      }
-    },
-    [],
-  );
+  try {
+    viewerRef.current.rotate({
+      yaw: orientation.yaw,
+      pitch: orientation.pitch,
+    });
+  } catch (error) {
+    console.error("Viewer rotate error:", error);
+  }
+}, []);
 
   useEffect(() => {
     Cache.enabled = true;
@@ -285,14 +273,14 @@ export function VirtualTour360({
 
     viewerRef.current = viewer;
 
-    viewer.addEventListener("ready", async () => {
-      setIsInitialLoading(false);
+viewer.addEventListener("ready", () => {
+  setIsInitialLoading(false);
 
-      const initialOrientation = getSceneStartOrientation(Number(resolvedStartNodeId));
-      if (initialOrientation) {
-        await rotateViewerSmoothly(initialOrientation, 0);
-      }
-    });
+  const initialOrientation = getSceneStartOrientation(Number(resolvedStartNodeId));
+  if (initialOrientation) {
+    applyViewerOrientation(initialOrientation);
+  }
+});
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
@@ -304,30 +292,25 @@ export function VirtualTour360({
 
     setCurrentSceneId(Number(resolvedStartNodeId));
 
-    vtPlugin.addEventListener("node-changed", async ({ node }: any) => {
-      const nextId = Number(node.id);
-      setCurrentSceneId(nextId);
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  setCurrentSceneId(nextId);
 
-      const orientation =
-        pendingOrientationRef.current || getSceneStartOrientation(nextId);
+  const orientation =
+    pendingOrientationRef.current || getSceneStartOrientation(nextId);
 
-      pendingOrientationRef.current = null;
-      lastClickedLinkRef.current = null;
+  applyViewerOrientation(orientation);
 
-      if (!isProgrammaticNodeChangeRef.current) {
-        await rotateViewerSmoothly(orientation, 850);
-      } else {
-        await rotateViewerSmoothly(orientation, 650);
-      }
-
-      isProgrammaticNodeChangeRef.current = false;
-    });
+  pendingOrientationRef.current = null;
+  lastClickedLinkRef.current = null;
+  isProgrammaticNodeChangeRef.current = false;
+});
 
     return () => {
       viewer.destroy();
       viewerRef.current = null;
     };
-  }, [nodes, resolvedStartNodeId, getSceneStartOrientation, getHotspotTransitionOrientation, rotateViewerSmoothly]);
+  }, [nodes, resolvedStartNodeId, getSceneStartOrientation, getHotspotTransitionOrientation, applyViewerOrientation]);
 
   const handleSceneChange = async (id: number) => {
     if (!viewerRef.current) return;
