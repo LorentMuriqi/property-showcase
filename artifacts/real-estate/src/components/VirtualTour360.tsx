@@ -44,8 +44,9 @@ const INITIAL_LOADING_FALLBACK_MS = 2500;
 
 const HOTSPOT_HTML = `
   <div style="
-    width: 42px;
-    height: 42px;
+    position: relative;
+    width: 44px;
+    height: 44px;
     border-radius: 9999px;
     background: rgba(0,0,0,0.58);
     border: 3px solid #d4af37;
@@ -53,13 +54,24 @@ const HOTSPOT_HTML = `
     align-items:center;
     justify-content:center;
     color:white;
-    font-size:12px;
+    font-size:13px;
     font-weight:700;
-    box-shadow:0 10px 24px rgba(0,0,0,.38);
+    box-shadow:
+      0 10px 24px rgba(0,0,0,.38),
+      0 0 0 10px rgba(212,175,55,.10);
     cursor:pointer;
     user-select:none;
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
   ">
     ↗
+    <div style="
+      position:absolute;
+      inset:-10px;
+      border-radius:9999px;
+      border:1px solid rgba(212,175,55,.32);
+      animation: hotspotPulse 1.8s ease-out infinite;
+      pointer-events:none;
+    "></div>
   </div>
 `;
 
@@ -186,7 +198,10 @@ export function VirtualTour360({
           latitude: hotspot.pitch,
           html: HOTSPOT_HTML,
           tooltip: hotspot.label || targetScene?.title || "Lidhje",
-          data: { hotspot },
+          anchor: "center center",
+          data: {
+            hotspot,
+          },
         });
       });
     },
@@ -295,6 +310,7 @@ export function VirtualTour360({
     markersPlugin.addEventListener("select-marker", async ({ marker }: any) => {
       const hotspot = marker?.data?.hotspot as HotspotType | undefined;
       if (!hotspot) return;
+
       await goToScene(hotspot.toSceneId, hotspot);
     });
 
@@ -371,6 +387,21 @@ export function VirtualTour360({
         .virtual-tour-shell .psv-loader-container,
         .virtual-tour-shell .psv-loader {
           display: none !important;
+        }
+
+        @keyframes hotspotPulse {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.8;
+          }
+          70% {
+            transform: scale(1.25);
+            opacity: 0;
+          }
+          100% {
+            transform: scale(1.25);
+            opacity: 0;
+          }
         }
       `}</style>
 
