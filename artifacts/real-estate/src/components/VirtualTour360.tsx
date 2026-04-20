@@ -220,7 +220,7 @@ export function VirtualTour360({
     }
   }, []);
 
-  const goToScene = useCallback(
+    const goToScene = useCallback(
     async (targetSceneId: number, viaHotspot?: HotspotType | null) => {
       const viewer = viewerRef.current;
       if (!viewer || isNavigatingRef.current) return;
@@ -265,6 +265,7 @@ export function VirtualTour360({
       } finally {
         isNavigatingRef.current = false;
       }
+    },
     [
       getEntryOrientation,
       getSceneById,
