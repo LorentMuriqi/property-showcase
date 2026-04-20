@@ -50,6 +50,7 @@ export function VirtualTour360({
   const viewerRef = useRef<Viewer | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
+  const closeTouchHandledRef = useRef(false);
 
    const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -363,6 +364,11 @@ adapter: EquirectangularAdapter.withConfig({
       console.error("Fullscreen error:", error);
     }
   };
+  
+  const handleCloseTour = useCallback(() => {
+  if (onClose) onClose();
+  else window.history.back();
+}, [onClose]);
 
 useEffect(() => {
   setCanUseFullscreen(!!document.fullscreenEnabled);
@@ -394,17 +400,29 @@ useEffect(() => {
 	  
 	  
 <button
-  onPointerUp={(e) => {
+  onClick={(e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onClose) onClose();
-    else window.history.back();
+
+    if (closeTouchHandledRef.current) {
+      closeTouchHandledRef.current = false;
+      return;
+    }
+
+    handleCloseTour();
   }}
-  className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg"
+  onTouchEnd={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeTouchHandledRef.current = true;
+    handleCloseTour();
+  }}
+  className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
   style={{
     top: "max(12px, env(safe-area-inset-top))",
     right: "max(12px, env(safe-area-inset-right))",
     touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
   }}
   aria-label="Mbyll turin virtual"
   type="button"
