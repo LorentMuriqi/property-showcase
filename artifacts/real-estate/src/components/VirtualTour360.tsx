@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Cache, Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
-import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
+import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import "@photo-sphere-viewer/core/index.css";
-import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
+import "@photo-sphere-viewer/markers-plugin/index.css";
 import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
 
 interface VirtualTour360Props {
@@ -32,10 +32,30 @@ interface VirtualTour360Props {
   onClose?: () => void;
 }
 
-type Orientation = {
-  yaw: number;
-  pitch: number;
-};
+type SceneType = VirtualTour360Props["scenes"][number];
+type HotspotType = SceneType["hotspots"][number];
+type Orientation = { yaw: number; pitch: number };
+
+const HOTSPOT_HTML = `
+  <div style="
+    width: 42px;
+    height: 42px;
+    border-radius: 9999px;
+    background: rgba(0,0,0,0.58);
+    border: 3px solid #d4af37;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:0 10px 24px rgba(0,0,0,.38);
+    cursor:pointer;
+    user-select:none;
+  ">
+    ↗
+  </div>
+`;
 
 export function VirtualTour360({
   scenes,
@@ -44,9 +64,9 @@ export function VirtualTour360({
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
-  const lastClickedLinkRef = useRef<any | null>(null);
-  const pendingOrientationRef = useRef<Orientation | null>(null);
-  const isProgrammaticNodeChangeRef = useRef(false);
+  const markersPluginRef = useRef<any | null>(null);
+  const currentSceneRef = useRef<SceneType | null>(null);
+  const isNavigatingRef = useRef(false);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -55,48 +75,23 @@ export function VirtualTour360({
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
 
-  const nodes = useMemo(() => {
-    return scenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.imageUrl,
-      thumbnail: scene.thumbnailUrl || scene.imageUrl,
-      name: scene.title,
-      data: {
-        initialYaw: scene.initialYaw ?? null,
-        initialPitch: scene.initialPitch ?? null,
-      },
-      links: scene.hotspots.map((hotspot) => ({
-        nodeId: String(hotspot.toSceneId),
-        position: {
-          yaw: hotspot.yaw,
-          pitch: hotspot.pitch,
-        },
-        name: hotspot.label || undefined,
-        data: {
-          hotspotId: hotspot.id,
-          fromSceneId: hotspot.fromSceneId,
-          toSceneId: hotspot.toSceneId,
-          targetYaw: hotspot.targetYaw ?? null,
-          targetPitch: hotspot.targetPitch ?? null,
-        },
-      })),
-    }));
-  }, [scenes]);
+  const sortedScenes = useMemo(
+    () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
+    [scenes],
+  );
 
-  const resolvedStartNodeId = useMemo(() => {
-    const defaultScene =
-      scenes.find((s) => s.id === defaultSceneId) ||
-      scenes.find((s) => s.isDefault) ||
-      scenes[0];
-
-    return defaultScene ? String(defaultScene.id) : null;
-  }, [scenes, defaultSceneId]);
+  const resolvedStartScene = useMemo(() => {
+    return (
+      sortedScenes.find((s) => s.id === defaultSceneId) ||
+      sortedScenes.find((s) => s.isDefault) ||
+      sortedScenes[0] ||
+      null
+    );
+  }, [sortedScenes, defaultSceneId]);
 
   const getSceneById = useCallback(
-    (sceneId: number) => {
-      return scenes.find((s) => s.id === sceneId) || null;
-    },
-    [scenes],
+    (id: number) => sortedScenes.find((scene) => scene.id === id) || null,
+    [sortedScenes],
   );
 
   const getSceneStartOrientation = useCallback(
@@ -121,76 +116,155 @@ export function VirtualTour360({
     [getSceneById],
   );
 
-  const clampPitch = (pitch: number) => {
-    const limit = Math.PI / 2 - 0.02;
-    return Math.max(-limit, Math.min(limit, pitch));
-  };
-
-  const normalizeYaw = (yaw: number) => {
-    let value = yaw;
-    while (value <= -Math.PI) value += Math.PI * 2;
-    while (value > Math.PI) value -= Math.PI * 2;
-    return value;
-  };
-
-  const shortestAngleDelta = (from: number, to: number) => {
-    return normalizeYaw(to - from);
-  };
-
-  const getHotspotTransitionOrientation = useCallback(
-    (
-      toSceneId: number,
-      hotspotYaw: number,
-      hotspotPitch: number,
-      currentYaw: number,
-      currentPitch: number,
-      targetYaw?: number | null,
-      targetPitch?: number | null,
-    ): Orientation | null => {
-      const targetSceneStart = getSceneStartOrientation(toSceneId);
-
-      const baseYaw =
-        typeof targetYaw === "number" && Number.isFinite(targetYaw)
-          ? targetYaw
-          : targetSceneStart?.yaw;
-
-      const basePitch =
-        typeof targetPitch === "number" && Number.isFinite(targetPitch)
-          ? targetPitch
-          : targetSceneStart?.pitch;
-
-      if (
-        typeof baseYaw !== "number" ||
-        typeof basePitch !== "number" ||
-        !Number.isFinite(baseYaw) ||
-        !Number.isFinite(basePitch)
-      ) {
-        return null;
+  const preloadPanorama = useCallback((src: string) => {
+    return new Promise<void>((resolve) => {
+      if (!src) {
+        resolve();
+        return;
       }
 
-      const yawDelta = shortestAngleDelta(hotspotYaw, currentYaw);
-      const pitchDelta = currentPitch - hotspotPitch;
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = src;
+    });
+  }, []);
 
-      return {
-        yaw: normalizeYaw(baseYaw + yawDelta),
-        pitch: clampPitch(basePitch + pitchDelta),
-      };
+  const clearMarkers = useCallback(() => {
+    const markersPlugin = markersPluginRef.current;
+    if (!markersPlugin?.getMarkers || !markersPlugin?.removeMarker) return;
+
+    const existingMarkers = markersPlugin.getMarkers() || [];
+    existingMarkers.forEach((marker: any) => {
+      try {
+        markersPlugin.removeMarker(marker.id);
+      } catch (error) {
+        console.error("Remove marker error:", error);
+      }
+    });
+  }, []);
+
+  const renderMarkersForScene = useCallback(
+    (scene: SceneType) => {
+      const markersPlugin = markersPluginRef.current;
+      if (!markersPlugin?.addMarker) return;
+
+      clearMarkers();
+
+      scene.hotspots.forEach((hotspot) => {
+        const targetScene = getSceneById(hotspot.toSceneId);
+
+        markersPlugin.addMarker({
+          id: `hotspot-${hotspot.id}`,
+          longitude: hotspot.yaw,
+          latitude: hotspot.pitch,
+          html: HOTSPOT_HTML,
+          tooltip: hotspot.label || targetScene?.title || "Lidhje",
+          data: {
+            hotspot,
+          },
+        });
+      });
+    },
+    [clearMarkers, getSceneById],
+  );
+
+  const getEntryOrientation = useCallback(
+    (
+      targetSceneId: number,
+      viaHotspot?: HotspotType | null,
+    ): Orientation | null => {
+      if (
+        viaHotspot &&
+        typeof viaHotspot.targetYaw === "number" &&
+        typeof viaHotspot.targetPitch === "number" &&
+        Number.isFinite(viaHotspot.targetYaw) &&
+        Number.isFinite(viaHotspot.targetPitch)
+      ) {
+        return {
+          yaw: viaHotspot.targetYaw,
+          pitch: viaHotspot.targetPitch,
+        };
+      }
+
+      return getSceneStartOrientation(targetSceneId);
     },
     [getSceneStartOrientation],
   );
 
-const applyViewerOrientation = useCallback((orientation: Orientation | null) => {
-  if (!viewerRef.current || !orientation) return;
+  const rotateCurrentViewerTo = useCallback(async (orientation: Orientation | null) => {
+    const viewer = viewerRef.current;
+    if (!viewer || !orientation) return;
 
-  try {
-    viewerRef.current.rotate({
-      yaw: orientation.yaw,
-      pitch: orientation.pitch,
-    });
-  } catch (error) {
-    console.error("Viewer rotate error:", error);
-  }
-}, []);
+    try {
+      await viewer.animate({
+        yaw: orientation.yaw,
+        pitch: orientation.pitch,
+        speed: 500,
+      });
+    } catch (error) {
+      try {
+        viewer.rotate({
+          yaw: orientation.yaw,
+          pitch: orientation.pitch,
+        });
+      } catch (rotateError) {
+        console.error("Rotate current viewer error:", rotateError);
+      }
+    }
+  }, []);
+
+  const goToScene = useCallback(
+    async (targetSceneId: number, viaHotspot?: HotspotType | null) => {
+      const viewer = viewerRef.current;
+      if (!viewer || isNavigatingRef.current) return;
+
+      const targetScene = getSceneById(targetSceneId);
+      if (!targetScene) return;
+
+      if (currentSceneRef.current?.id === targetSceneId) return;
+
+      isNavigatingRef.current = true;
+
+      try {
+        if (viaHotspot) {
+          await rotateCurrentViewerTo({
+            yaw: viaHotspot.yaw,
+            pitch: viaHotspot.pitch,
+          });
+        }
+
+        await preloadPanorama(targetScene.imageUrl);
+
+        const entryOrientation = getEntryOrientation(targetSceneId, viaHotspot);
+
+        await viewer.setPanorama(targetScene.imageUrl, {
+          position: entryOrientation || undefined,
+          showLoader: false,
+          transition: {
+            effect: "fade",
+            speed: 320,
+            rotation: false,
+          },
+        });
+
+        currentSceneRef.current = targetScene;
+        setCurrentSceneId(targetScene.id);
+        renderMarkersForScene(targetScene);
+      } catch (error) {
+        console.error("Panorama transition error:", error);
+      } finally {
+        isNavigatingRef.current = false;
+      }
+    },
+    [
+      getEntryOrientation,
+      getSceneById,
+      preloadPanorama,
+      renderMarkersForScene,
+      rotateCurrentViewerTo,
+    ],
+  );
 
   useEffect(() => {
     Cache.enabled = true;
@@ -199,133 +273,62 @@ const applyViewerOrientation = useCallback((orientation: Orientation | null) => 
   }, []);
 
   useEffect(() => {
-    if (!containerRef.current || nodes.length === 0 || !resolvedStartNodeId) return;
+    if (!containerRef.current || !resolvedStartScene) return;
 
     if (viewerRef.current) {
       viewerRef.current.destroy();
       viewerRef.current = null;
+      markersPluginRef.current = null;
     }
 
-    pendingOrientationRef.current = null;
-    lastClickedLinkRef.current = null;
-    isProgrammaticNodeChangeRef.current = false;
     setIsInitialLoading(true);
+
+    const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
 
     const viewer = new Viewer({
       container: containerRef.current,
+      panorama: resolvedStartScene.imageUrl,
+      defaultYaw: initialOrientation?.yaw ?? 0,
+      defaultPitch: initialOrientation?.pitch ?? 0,
       navbar: ["zoom", "move", "fullscreen"],
       adapter: EquirectangularAdapter.withConfig({
         resolution: 128,
       }),
-      defaultZoomLvl: 0,
       moveInertia: true,
       mousewheelCtrlKey: false,
       touchmoveTwoFingers: false,
-      plugins: [
-        [
-          VirtualTourPlugin,
-          {
-            positionMode: "manual",
-            renderMode: "3d",
-            startNodeId: resolvedStartNodeId,
-            nodes,
-            preload: true,
-            transitionOptions: (toNode: any, fromNode?: any) => {
-              const viewerPosition = viewer.getPosition?.();
-              const clickedLink = lastClickedLinkRef.current;
-              let computedOrientation: Orientation | null = null;
-
-              if (
-                clickedLink &&
-                viewerPosition &&
-                fromNode &&
-                Number.isFinite(viewerPosition.yaw) &&
-                Number.isFinite(viewerPosition.pitch) &&
-                clickedLink.position &&
-                Number.isFinite(Number(clickedLink.position.yaw)) &&
-                Number.isFinite(Number(clickedLink.position.pitch))
-              ) {
-                computedOrientation = getHotspotTransitionOrientation(
-                  Number(toNode.id),
-                  Number(clickedLink.position.yaw),
-                  Number(clickedLink.position.pitch),
-                  viewerPosition.yaw,
-                  viewerPosition.pitch,
-                  clickedLink.data?.targetYaw ?? null,
-                  clickedLink.data?.targetPitch ?? null,
-                );
-              }
-
-              pendingOrientationRef.current =
-                computedOrientation || getSceneStartOrientation(Number(toNode.id));
-
-              return {
-                showLoader: false,
-                effect: "fade",
-                speed: 420,
-                rotation: true,
-              };
-            },
-          },
-        ],
-      ],
+      plugins: [[MarkersPlugin, {}]],
     });
 
     viewerRef.current = viewer;
 
-viewer.addEventListener("ready", () => {
-  setIsInitialLoading(false);
+    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
+    markersPluginRef.current = markersPlugin;
 
-  const initialOrientation = getSceneStartOrientation(Number(resolvedStartNodeId));
-  if (initialOrientation) {
-    applyViewerOrientation(initialOrientation);
-  }
-});
+    markersPlugin.addEventListener("select-marker", async ({ marker }: any) => {
+      const hotspot = marker?.data?.hotspot as HotspotType | undefined;
+      if (!hotspot) return;
 
-    const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
-
-    vtPlugin.addEventListener("select-link", ({ link }: any) => {
-      if (!link) return;
-      lastClickedLinkRef.current = link || null;
-      isProgrammaticNodeChangeRef.current = false;
+      await goToScene(hotspot.toSceneId, hotspot);
     });
 
-    setCurrentSceneId(Number(resolvedStartNodeId));
-
-vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-  const nextId = Number(node.id);
-  setCurrentSceneId(nextId);
-
-  const orientation =
-    pendingOrientationRef.current || getSceneStartOrientation(nextId);
-
-  applyViewerOrientation(orientation);
-
-  pendingOrientationRef.current = null;
-  lastClickedLinkRef.current = null;
-  isProgrammaticNodeChangeRef.current = false;
-});
+    viewer.addEventListener("ready", () => {
+      currentSceneRef.current = resolvedStartScene;
+      setCurrentSceneId(resolvedStartScene.id);
+      renderMarkersForScene(resolvedStartScene);
+      setIsInitialLoading(false);
+    });
 
     return () => {
       viewer.destroy();
       viewerRef.current = null;
+      markersPluginRef.current = null;
+      currentSceneRef.current = null;
     };
-  }, [nodes, resolvedStartNodeId, getSceneStartOrientation, getHotspotTransitionOrientation, applyViewerOrientation]);
+  }, [resolvedStartScene, getSceneStartOrientation, renderMarkersForScene, goToScene]);
 
   const handleSceneChange = async (id: number) => {
-    if (!viewerRef.current) return;
-
-    const vtPlugin = viewerRef.current.getPlugin(VirtualTourPlugin) as any;
-    lastClickedLinkRef.current = null;
-    isProgrammaticNodeChangeRef.current = true;
-    pendingOrientationRef.current = getSceneStartOrientation(id);
-
-    await vtPlugin.setCurrentNode(String(id), {
-      showLoader: false,
-      effect: "fade",
-      speed: 380,
-      rotation: true,
-    });
+    await goToScene(id, null);
   };
 
   const toggleFullscreen = async () => {
@@ -349,7 +352,7 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
-  if (scenes.length === 0) {
+  if (sortedScenes.length === 0) {
     return (
       <div className="w-full h-full min-h-[100dvh] md:min-h-[500px] flex items-center justify-center bg-black text-white">
         Asnjë skenë e disponueshme.
@@ -391,7 +394,7 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
 
         <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none max-w-[80%]">
           <h2 className="text-white font-display text-xl">
-            {scenes.find((s) => s.id === currentSceneId)?.title || "Tur 360°"}
+            {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Tur 360°"}
           </h2>
         </div>
 
@@ -400,9 +403,7 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
             <button
               onClick={() => setShowMap(!showMap)}
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg ${
-                showMap
-                  ? "bg-primary text-black"
-                  : "bg-black/50 text-white hover:bg-black/70"
+                showMap ? "bg-primary text-black" : "bg-black/50 text-white hover:bg-black/70"
               }`}
               title="Plani i Katit"
             >
@@ -427,12 +428,11 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
             <div
               className="w-full h-full relative border border-white/5 rounded-xl overflow-hidden bg-white/5"
               style={{
-                backgroundImage:
-                  "radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)",
+                backgroundImage: "radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)",
                 backgroundSize: "10px 10px",
               }}
             >
-              {scenes
+              {sortedScenes
                 .filter((s) => s.positionX != null && s.positionY != null)
                 .map((scene) => (
                   <button
@@ -453,7 +453,7 @@ vtPlugin.addEventListener("node-changed", ({ node }: any) => {
 
         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
           <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
-            {scenes.map((scene) => (
+            {sortedScenes.map((scene) => (
               <button
                 key={scene.id}
                 onClick={() => handleSceneChange(scene.id)}
