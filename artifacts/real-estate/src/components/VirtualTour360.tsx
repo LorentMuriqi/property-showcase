@@ -192,17 +192,22 @@ export function VirtualTour360({
       scene.hotspots.forEach((hotspot) => {
         const targetScene = getSceneById(hotspot.toSceneId);
 
-        markersPlugin.addMarker({
-          id: `hotspot-${hotspot.id}`,
-          longitude: hotspot.yaw,
-          latitude: hotspot.pitch,
-          html: HOTSPOT_HTML,
-          tooltip: hotspot.label || targetScene?.title || "Lidhje",
-          anchor: "center center",
-          data: {
-            hotspot,
-          },
-        });
+        try {
+          markersPlugin.addMarker({
+            id: `hotspot-${hotspot.id}`,
+            position: {
+              yaw: hotspot.yaw,
+              pitch: hotspot.pitch,
+            },
+            html: HOTSPOT_HTML,
+            tooltip: hotspot.label || targetScene?.title || "Lidhje",
+            data: {
+              hotspot,
+            },
+          });
+        } catch (error) {
+          console.error("Add hotspot marker error:", hotspot, error);
+        }
       });
     },
     [clearMarkers, getSceneById],
@@ -328,6 +333,14 @@ export function VirtualTour360({
     const revealTimer = window.setTimeout(() => {
       finishInitialLoad();
     }, 150);
+	
+	    const markerInitTimer = window.setTimeout(() => {
+      try {
+        renderMarkersForScene(resolvedStartScene);
+      } catch (error) {
+        console.error("Initial hotspot render retry error:", error);
+      }
+    }, 300);
 
     const fallbackTimer = window.setTimeout(() => {
       finishInitialLoad();
@@ -340,6 +353,7 @@ export function VirtualTour360({
 
     return () => {
       window.clearTimeout(revealTimer);
+      window.clearTimeout(markerInitTimer);
       window.clearTimeout(fallbackTimer);
       viewer.destroy();
       viewerRef.current = null;
