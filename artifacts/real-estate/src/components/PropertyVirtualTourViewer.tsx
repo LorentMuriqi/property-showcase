@@ -93,6 +93,7 @@ const normalized = sceneData.map((scene) => ({
       <VirtualTour360
         scenes={scenes}
         defaultSceneId={defaultScene?.id ?? scenes[0]?.id}
+        onClose={onClose}
       />
     );
   }
