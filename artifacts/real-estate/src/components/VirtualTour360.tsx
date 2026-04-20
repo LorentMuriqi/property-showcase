@@ -209,7 +209,6 @@ export function VirtualTour360({
       isNavigatingRef.current = true;
 
       try {
-        await preloadPanorama(targetScene.imageUrl);
 
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
         const entryOrientation = getSceneStartOrientation(targetSceneId);
@@ -271,9 +270,14 @@ export function VirtualTour360({
     const viewer = new Viewer({
       container: containerRef.current,
       navbar: ["zoom", "move", "fullscreen"],
-      adapter: EquirectangularAdapter.withConfig({
-        resolution: window.innerWidth <= 768 ? 64 : 128,
-      }),
+adapter: EquirectangularAdapter.withConfig({
+  resolution:
+    window.innerWidth <= 640
+      ? 64
+      : window.innerWidth <= 1024
+        ? 96
+        : 128,
+}),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
       moveInertia: true,
@@ -287,7 +291,7 @@ export function VirtualTour360({
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-            preload: true,
+            preload: false,
             transitionOptions: () => ({
               showLoader: false,
               effect: "fade",
