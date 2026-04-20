@@ -41,8 +41,6 @@ type Orientation = { yaw: number; pitch: number };
 
 const INITIAL_LOADING_FALLBACK_MS = 2500;
 
-
-
 export function VirtualTour360({
   scenes,
   defaultSceneId,
@@ -52,26 +50,20 @@ export function VirtualTour360({
   const viewerRef = useRef<Viewer | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
-  const lastClickedLinkRef = useRef<any | null>(null);
-  const pendingEntryOrientationRef = useRef<Orientation | null>(null);
-  const isDirectSceneChangeRef = useRef(false);
-  const transitionHideTimerRef = useRef<number | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isSceneTransitioning, setIsSceneTransitioning] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
-  
-  
-    const sortedScenes = useMemo(
+
+  const sortedScenes = useMemo(
     () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
     [scenes],
   );
-  
-    const nodes = useMemo(() => {
+
+  const nodes = useMemo(() => {
     return sortedScenes.map((scene) => ({
       id: String(scene.id),
       panorama: scene.imageUrl,
@@ -99,7 +91,6 @@ export function VirtualTour360({
     }));
   }, [sortedScenes]);
 
-
   const resolvedStartScene = useMemo(() => {
     return (
       sortedScenes.find((s) => s.id === defaultSceneId) ||
@@ -112,6 +103,11 @@ export function VirtualTour360({
   const getSceneById = useCallback(
     (id: number) => sortedScenes.find((scene) => scene.id === id) || null,
     [sortedScenes],
+  );
+
+  const getNodeById = useCallback(
+    (id: string) => nodes.find((node) => node.id === id) || null,
+    [nodes],
   );
 
   const getSceneStartOrientation = useCallback(
@@ -136,21 +132,6 @@ export function VirtualTour360({
     [getSceneById],
   );
 
-  const preloadPanorama = useCallback((src: string) => {
-    return new Promise<void>((resolve) => {
-      if (!src) {
-        resolve();
-        return;
-      }
-
-      const img = new Image();
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-      img.src = src;
-    });
-  }, []);
-
-
   const getHotspotEntryOrientation = useCallback(
     (targetSceneId: number, link: any | null): Orientation | null => {
       const targetYaw = link?.data?.targetYaw;
@@ -173,9 +154,47 @@ export function VirtualTour360({
     [getSceneStartOrientation],
   );
 
+  const preloadPanorama = useCallback((src: string) => {
+    return new Promise<void>((resolve) => {
+      if (!src) {
+        resolve();
+        return;
+      }
 
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = src;
+    });
+  }, []);
 
+  const updateTargetNodeOrientation = useCallback(
+    (
+      vtPlugin: any,
+      targetNodeId: string,
+      orientation: Orientation | null,
+    ) => {
+      const existingNode = getNodeById(targetNodeId);
 
+      if (!existingNode) return;
+
+      vtPlugin.updateNode({
+        id: targetNodeId,
+        data: {
+          ...(existingNode.data || {}),
+          initialYaw:
+            typeof orientation?.yaw === "number" && Number.isFinite(orientation.yaw)
+              ? orientation.yaw
+              : existingNode.data?.initialYaw ?? null,
+          initialPitch:
+            typeof orientation?.pitch === "number" && Number.isFinite(orientation.pitch)
+              ? orientation.pitch
+              : existingNode.data?.initialPitch ?? null,
+        },
+      });
+    },
+    [getNodeById],
+  );
 
   const goToScene = useCallback(
     async (targetSceneId: number) => {
@@ -193,11 +212,13 @@ export function VirtualTour360({
         await preloadPanorama(targetScene.imageUrl);
 
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+        const entryOrientation = getSceneStartOrientation(targetSceneId);
 
-        isDirectSceneChangeRef.current = true;
-        lastClickedLinkRef.current = null;
-        pendingEntryOrientationRef.current = getSceneStartOrientation(targetSceneId);
-        setIsSceneTransitioning(true);
+        updateTargetNodeOrientation(
+          vtPlugin,
+          String(targetSceneId),
+          entryOrientation,
+        );
 
         await vtPlugin.setCurrentNode(String(targetSceneId), {
           showLoader: false,
@@ -207,12 +228,16 @@ export function VirtualTour360({
         });
       } catch (error) {
         console.error("Scene change error:", error);
-        setIsSceneTransitioning(false);
       } finally {
         isNavigatingRef.current = false;
       }
     },
-    [getSceneById, preloadPanorama, getSceneStartOrientation],
+    [
+      getSceneById,
+      preloadPanorama,
+      getSceneStartOrientation,
+      updateTargetNodeOrientation,
+    ],
   );
 
   useEffect(() => {
@@ -221,7 +246,7 @@ export function VirtualTour360({
     Cache.maxItems = 12;
   }, []);
 
-        useEffect(() => {
+  useEffect(() => {
     if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
 
     if (viewerRef.current) {
@@ -263,12 +288,12 @@ export function VirtualTour360({
             startNodeId: String(resolvedStartScene.id),
             nodes,
             preload: true,
-transitionOptions: () => ({
-  showLoader: false,
-  effect: "fade",
-  speed: 260,
-  rotation: false,
-}),
+            transitionOptions: () => ({
+              showLoader: false,
+              effect: "fade",
+              speed: 260,
+              rotation: false,
+            }),
           },
         ],
       ],
@@ -279,19 +304,14 @@ transitionOptions: () => ({
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
 
     vtPlugin.addEventListener("select-link", ({ link }: any) => {
-      lastClickedLinkRef.current = link || null;
-      isDirectSceneChangeRef.current = false;
-      pendingEntryOrientationRef.current = getHotspotEntryOrientation(
-        Number(link?.nodeId),
-        link,
+      const targetSceneId = Number(link?.nodeId);
+      const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
+
+      updateTargetNodeOrientation(
+        vtPlugin,
+        String(targetSceneId),
+        entryOrientation,
       );
-
-      if (transitionHideTimerRef.current) {
-        window.clearTimeout(transitionHideTimerRef.current);
-        transitionHideTimerRef.current = null;
-      }
-
-      setIsSceneTransitioning(true);
     });
 
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
@@ -300,44 +320,6 @@ transitionOptions: () => ({
 
       currentSceneRef.current = nextScene;
       setCurrentSceneId(nextId);
-
-      const entryOrientation =
-        pendingEntryOrientationRef.current || getSceneStartOrientation(nextId);
-
-      const finishTransition = () => {
-        pendingEntryOrientationRef.current = null;
-        lastClickedLinkRef.current = null;
-        isDirectSceneChangeRef.current = false;
-
-        if (transitionHideTimerRef.current) {
-          window.clearTimeout(transitionHideTimerRef.current);
-        }
-
-        transitionHideTimerRef.current = window.setTimeout(() => {
-          setIsSceneTransitioning(false);
-          transitionHideTimerRef.current = null;
-        }, 20);
-      };
-
-      if (entryOrientation) {
-        try {
-          viewer.rotate({
-            yaw: entryOrientation.yaw,
-            pitch: entryOrientation.pitch,
-          });
-
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              finishTransition();
-            });
-          });
-        } catch (error) {
-          console.error("Apply node orientation error:", error);
-          finishTransition();
-        }
-      } else {
-        finishTransition();
-      }
     });
 
     const revealTimer = window.setTimeout(() => {
@@ -356,17 +338,18 @@ transitionOptions: () => ({
     return () => {
       window.clearTimeout(revealTimer);
       window.clearTimeout(fallbackTimer);
-
-      if (transitionHideTimerRef.current) {
-        window.clearTimeout(transitionHideTimerRef.current);
-        transitionHideTimerRef.current = null;
-      }
-
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
     };
-  }, [resolvedStartScene, nodes, sortedScenes, getSceneById, getSceneStartOrientation, getHotspotEntryOrientation]);
+  }, [
+    resolvedStartScene,
+    nodes,
+    getSceneById,
+    getSceneStartOrientation,
+    getHotspotEntryOrientation,
+    updateTargetNodeOrientation,
+  ]);
 
   const handleSceneChange = async (id: number) => {
     await goToScene(id);
@@ -421,10 +404,6 @@ transitionOptions: () => ({
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
         <div ref={containerRef} className="w-full h-full" />
-		
-		        {isSceneTransitioning && !isInitialLoading && (
-          <div className="absolute inset-0 z-20 bg-black pointer-events-none" />
-        )}
 
         {isInitialLoading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
