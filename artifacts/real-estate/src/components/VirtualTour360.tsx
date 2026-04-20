@@ -256,12 +256,12 @@ export function VirtualTour360({
 
         currentSceneRef.current = targetScene;
         setCurrentSceneId(targetScene.id);
-        renderMarkersForScene(targetScene);
-      } catch (error) {
-        console.error("Panorama transition error:", error);
-      } finally {
-        isNavigatingRef.current = false;
-      }
+
+        try {
+          renderMarkersForScene(targetScene);
+        } catch (error) {
+          console.error("Scene marker render error:", error);
+        }
     },
     [
       getEntryOrientation,
@@ -298,8 +298,13 @@ export function VirtualTour360({
 
       currentSceneRef.current = resolvedStartScene;
       setCurrentSceneId(resolvedStartScene.id);
-      renderMarkersForScene(resolvedStartScene);
       setIsInitialLoading(false);
+
+      try {
+        renderMarkersForScene(resolvedStartScene);
+      } catch (error) {
+        console.error("Initial marker render error:", error);
+      }
     };
 
     const viewer = new Viewer({
