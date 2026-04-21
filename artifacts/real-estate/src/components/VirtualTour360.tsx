@@ -275,9 +275,16 @@ adapter: EquirectangularAdapter.withConfig({
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
-      moveInertia: true,
-      mousewheelCtrlKey: false,
-      touchmoveTwoFingers: false,
+	  
+  // Zoom / FOV tuning
+  maxFov: 110,
+  minFov: 30,
+  defaultZoomLvl: 35,
+  zoomSpeed: 1.15,
+
+  moveInertia: true,
+  mousewheelCtrlKey: false,
+  touchmoveTwoFingers: false,
       plugins: [
         [
           VirtualTourPlugin,
