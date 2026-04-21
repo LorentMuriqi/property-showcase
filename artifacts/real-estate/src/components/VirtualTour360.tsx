@@ -262,20 +262,20 @@ const finishInitialLoad = () => {
   });
 };
 
+const dpr = window.devicePixelRatio || 1;
+
     const viewer = new Viewer({  // rezolucioni ne fuqin 2 bon veq, 64 / 128 / 128
       container: containerRef.current,
       navbar: ["zoom", "move"],
 adapter: EquirectangularAdapter.withConfig({
-const dpr = window.devicePixelRatio || 1;
-
-resolution:
-  window.innerWidth <= 640
-    ? 64
-    : window.innerWidth <= 1024
-      ? 128
-      : dpr > 1.5
-        ? 256
-        : 192,
+  resolution:
+    window.innerWidth <= 640
+      ? 64
+      : window.innerWidth <= 1024
+        ? 128
+        : dpr > 1.5
+          ? 256
+          : 192,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
