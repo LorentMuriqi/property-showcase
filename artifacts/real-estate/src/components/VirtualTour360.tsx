@@ -264,7 +264,7 @@ const finishInitialLoad = () => {
 
     const viewer = new Viewer({  // rezolucioni ne fuqin 2 bon veq, 64 / 128 / 128
       container: containerRef.current,
-      navbar: ["zoom", "move", "fullscreen"],
+      navbar: ["zoom", "move"],
 adapter: EquirectangularAdapter.withConfig({
   resolution:
     window.innerWidth <= 640
