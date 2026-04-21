@@ -478,7 +478,7 @@ useEffect(() => {
             </button>
           )}
 
-{canUseFullscreen && (
+{canUseFullscreen && window.innerWidth >= 1024 && (
   <button
     onClick={toggleFullscreen}
     className="w-12 h-12 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors backdrop-blur-md border border-white/10 shadow-lg"
