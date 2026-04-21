@@ -262,8 +262,6 @@ const finishInitialLoad = () => {
   });
 };
 
-const dpr = window.devicePixelRatio || 1;
-
     const viewer = new Viewer({  // rezolucioni ne fuqin 2 bon veq, 64 / 128 / 128
       container: containerRef.current,
       navbar: ["zoom", "move"],
@@ -273,17 +271,15 @@ adapter: EquirectangularAdapter.withConfig({
       ? 64
       : window.innerWidth <= 1024
         ? 128
-        : dpr > 1.5
-          ? 256
-          : 192,
+        : 256,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
 	  
   // Zoom / FOV tuning
-maxFov: window.innerWidth <= 640 ? 110 : 105,
+maxFov: window.innerWidth <= 640 ? 110 : 110,
 minFov: 30,
-defaultZoomLvl: window.innerWidth <= 640 ? 35 : 40,
+defaultZoomLvl: window.innerWidth <= 640 ? 35 : 35,
 zoomSpeed: 1.15,
 
   moveInertia: true,
