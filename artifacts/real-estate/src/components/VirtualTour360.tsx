@@ -277,10 +277,10 @@ adapter: EquirectangularAdapter.withConfig({
       defaultPitch: initialOrientation?.pitch ?? 0,
 	  
   // Zoom / FOV tuning
-  maxFov: 110,
-  minFov: 30,
-  defaultZoomLvl: 35,
-  zoomSpeed: 1.15,
+maxFov: window.innerWidth <= 640 ? 110 : 105,
+minFov: 30,
+defaultZoomLvl: window.innerWidth <= 640 ? 35 : 40,
+zoomSpeed: 1.15,
 
   moveInertia: true,
   mousewheelCtrlKey: false,
