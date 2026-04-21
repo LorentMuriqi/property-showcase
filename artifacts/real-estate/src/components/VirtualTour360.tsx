@@ -266,12 +266,16 @@ const finishInitialLoad = () => {
       container: containerRef.current,
       navbar: ["zoom", "move"],
 adapter: EquirectangularAdapter.withConfig({
-  resolution:
-    window.innerWidth <= 640
-      ? 64
-      : window.innerWidth <= 1024
-        ? 128
-        : 256,
+const dpr = window.devicePixelRatio || 1;
+
+resolution:
+  window.innerWidth <= 640
+    ? 64
+    : window.innerWidth <= 1024
+      ? 128
+      : dpr > 1.5
+        ? 256
+        : 192,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
