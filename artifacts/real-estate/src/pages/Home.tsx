@@ -182,9 +182,9 @@ export default function Home() {
     Pronën Tënde të Ëndrrave
   </span>
 </h1>
-            <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
-              Eksploro prona me ture virtuale 360°
-            </p>
+<p className="text-base md:text-xl text-white/85 font-light mb-10 max-w-2xl mx-auto tracking-wide">
+  Eksploro prona me ture virtuale 360°
+</p>
 
             <form
               onSubmit={handleSearch}
