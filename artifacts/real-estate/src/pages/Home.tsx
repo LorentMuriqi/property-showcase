@@ -291,8 +291,8 @@ export default function Home() {
                 Pronat e Fundit
               </h2>
               <p className="text-muted-foreground text-lg max-w-xl">
-                Eksploroni kryeveprat tona të listuara së fundmi, të zgjedhura me kujdes për
-                blerësin kërkues.
+                Eksploroni pronat tona më të fundit, të zgjedhura me kujdes për
+                blerësit tanë.
               </p>
             </div>
             <Link

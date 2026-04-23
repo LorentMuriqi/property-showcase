@@ -414,11 +414,11 @@ export default function ProjectDetails() {
           <div className="lg:col-span-2 space-y-12">
             <div>
               <div className="flex items-center gap-4 mb-4">
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-muted border border-border text-foreground">
-                  {project.status
-                    ? statusLabels[project.status] || project.status.replaceAll("_", " ")
-                    : "Pa status"}
-                </span>
+<span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+  {project.status
+    ? statusLabels[project.status] || project.status.replaceAll("_", " ")
+    : "Pa status"}
+</span>
                 {project.propertyType && (
                   <span className="text-primary text-sm font-medium tracking-wide uppercase">
                     {project.propertyType}
