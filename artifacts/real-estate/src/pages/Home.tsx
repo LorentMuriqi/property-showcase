@@ -180,9 +180,8 @@ export default function Home() {
               Zbulo <br />
               <span className="text-gold-gradient italic">Pronën Tënde të Ëndrrave</span>
             </h1>
-            <p className="text-lg md:text-xl text-white/80 font-light mb-12 max-w-2xl mx-auto">
-              Prona ekskluzive, ture virtuale mahnitëse dhe përvoja të pashembullta në fushën e
-              pasurive të paluajtshme luksoze.
+            <p className="text-lg md:text-xl text-white/80 font-light mb-12 max-w-xl mx-auto tracking-wide">
+              Eksploro prona me ture virtuale 360°
             </p>
 
             <form
