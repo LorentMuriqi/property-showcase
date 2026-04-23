@@ -1426,11 +1426,11 @@ const virtualTourNodes = useMemo(() => {
                 Ruaj këndin fillestar të kësaj skene
               </button>
 
-              {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
-                className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border"
-                  Start view: {selectedScene.initial_yaw.toFixed(3)} / {selectedScene.initial_pitch.toFixed(3)}
-                </div>
-              )}
+{selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
+  <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
+    Start view: {selectedScene.initial_yaw.toFixed(3)} / {selectedScene.initial_pitch.toFixed(3)}
+  </div>
+)}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
