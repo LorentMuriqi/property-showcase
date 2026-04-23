@@ -95,39 +95,42 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
         </div>
       </header>
 
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl pt-24 pb-8 px-6 flex flex-col"
-          >
-            <nav className="flex flex-col gap-6 items-center justify-center flex-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-className={`price-font font-medium text-3xl transition-colors ${
-  location === link.href ? "text-primary" : "text-white hover:text-primary"
-}`}
-                >
-                  {link.name}
-                </Link>
-              ))}
 
-              {isAdmin && (
-                <button
-                  onClick={logout}
-                  className="price-font text-3xl text-destructive"
-                >
-                  Dalje
-                </button>
-              )}
-            </nav>
-          </motion.div>
+<AnimatePresence>
+  {mobileMenuOpen && (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="fixed inset-0 z-40 bg-[#060913]/96 backdrop-blur-3xl pt-24 pb-8 px-6 flex flex-col"
+    >
+      <nav className="flex flex-col gap-6 items-center justify-center flex-1">
+        {navLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={`price-font font-medium text-3xl transition-colors ${
+              location === link.href ? "text-primary" : "text-white/85 hover:text-primary"
+            }`}
+          >
+            {link.name}
+          </Link>
+        ))}
+
+        {isAdmin && (
+          <button
+            onClick={logout}
+            className="price-font text-3xl text-destructive"
+          >
+            Dalje
+          </button>
         )}
-      </AnimatePresence>
+      </nav>
+    </motion.div>
+  )}
+</AnimatePresence>
+
+
 
       <main className="flex-grow w-full flex flex-col">{children}</main>
 
