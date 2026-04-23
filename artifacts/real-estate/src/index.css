@@ -166,7 +166,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Utility for glassmorphism */
 .glass-panel {
-  @apply bg-white/80 backdrop-blur-xl border border-black/5 shadow-xl;
+  @apply bg-background/60 backdrop-blur-xl border border-white/5 shadow-2xl;
 }
 
 /* Luxury gold gradient text */
