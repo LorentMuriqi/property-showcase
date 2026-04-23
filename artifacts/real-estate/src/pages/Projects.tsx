@@ -217,47 +217,47 @@ export default function Projects() {
         .order("created_at", { ascending: false })
         .range(from, to);
 
-if (error) {
-  console.error("Supabase fetch error:", error);
-  setProjects([]);
-  setTotalCount(0);
-} else {
-  const rows = data || [];
-  const propertyIds = rows.map((item) => item.id);
+      if (error) {
+        console.error("Supabase fetch error:", error);
+        setProjects([]);
+        setTotalCount(0);
+      } else {
+        const rows = data || [];
+        const propertyIds = rows.map((item) => item.id);
 
-  let scenePropertyIds = new Set<string>();
+        let scenePropertyIds = new Set<string>();
 
-  if (propertyIds.length > 0) {
-    const { data: sceneRows, error: sceneError } = await supabase
-      .from("virtual_tour_scenes")
-      .select("property_id")
-      .in("property_id", propertyIds);
+        if (propertyIds.length > 0) {
+          const { data: sceneRows, error: sceneError } = await supabase
+            .from("virtual_tour_scenes")
+            .select("property_id")
+            .in("property_id", propertyIds);
 
-    if (sceneError) {
-      console.error("Supabase virtual tour scenes fetch error:", sceneError);
-    } else {
-      scenePropertyIds = new Set(
-        (sceneRows || []).map((scene) => String(scene.property_id))
-      );
-    }
-  }
+          if (sceneError) {
+            console.error("Supabase virtual tour scenes fetch error:", sceneError);
+          } else {
+            scenePropertyIds = new Set(
+              (sceneRows || []).map((scene) => String(scene.property_id))
+            );
+          }
+        }
 
-  const rowsWithVirtualTour = rows.map((item) => {
-    const hasVirtualTour =
-      !!item.virtual_tour_url ||
-      !!item.virtual_tour_embed_code ||
-      !!item.has_custom_virtual_tour ||
-      scenePropertyIds.has(String(item.id));
+        const rowsWithVirtualTour = rows.map((item) => {
+          const hasVirtualTour =
+            !!item.virtual_tour_url ||
+            !!item.virtual_tour_embed_code ||
+            !!item.has_custom_virtual_tour ||
+            scenePropertyIds.has(String(item.id));
 
-    return {
-      ...item,
-      hasVirtualTour,
-    };
-  });
+          return {
+            ...item,
+            hasVirtualTour,
+          };
+        });
 
-  setProjects(rowsWithVirtualTour);
-  setTotalCount(count || 0);
-}
+        setProjects(rowsWithVirtualTour);
+        setTotalCount(count || 0);
+      }
 
       setIsLoading(false);
 
@@ -354,7 +354,7 @@ if (error) {
       <div ref={pageTopRef} className="pt-32 pb-24 bg-background min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">
+            <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
               Prona
             </h1>
             <p className="text-muted-foreground text-lg">
@@ -364,7 +364,7 @@ if (error) {
 
           <div className="flex flex-col lg:flex-row gap-8 items-start">
             <button
-              className="lg:hidden w-full py-4 border border-white/10 rounded-xl flex items-center justify-center gap-2 text-white font-medium bg-card"
+              className="lg:hidden w-full py-4 border border-border rounded-xl flex items-center justify-center gap-2 text-foreground font-medium bg-card"
               onClick={() => setShowFilters(!showFilters)}
             >
               <Filter size={20} />
@@ -374,11 +374,11 @@ if (error) {
             <div className={`w-full lg:w-80 shrink-0 space-y-8 ${showFilters ? "block" : "hidden lg:block"}`}>
               <div className="glass-panel p-6 rounded-2xl sticky top-24">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-display text-xl text-white">Filtrat</h3>
+                  <h3 className="font-display text-xl text-foreground">Filtrat</h3>
                   {(country || city || search) && (
                     <button
                       onClick={clearFilters}
-                      className="text-sm text-primary hover:text-white flex items-center gap-1"
+                      className="text-sm text-primary hover:text-foreground flex items-center gap-1"
                     >
                       <X size={14} /> Pastro
                     </button>
@@ -387,13 +387,13 @@ if (error) {
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">
+                    <label className="block text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">
                       Kërko
                     </label>
                     <input
                       type="text"
                       placeholder="Fjalë kyçe..."
-                      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-primary"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                       value={search}
                       onChange={(e) => {
                         shouldScrollToTopRef.current = true;
@@ -403,11 +403,11 @@ if (error) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">
+                    <label className="block text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">
                       Shteti
                     </label>
                     <select
-                      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
                       value={country}
                       onChange={(e) => {
                         shouldScrollToTopRef.current = true;
@@ -425,11 +425,11 @@ if (error) {
                   </div>
 
                   <div className={!country ? "opacity-50" : ""}>
-                    <label className="block text-sm font-medium text-white/70 mb-2 uppercase tracking-wider">
+                    <label className="block text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">
                       Qyteti
                     </label>
                     <select
-                      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
                       value={city}
                       onChange={(e) => {
                         shouldScrollToTopRef.current = true;
@@ -478,7 +478,7 @@ if (error) {
                         onClick={() => changePage(Math.max(1, page - 1))}
                         disabled={page === 1}
                         aria-label="Faqja e mëparshme"
-                        className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                        className="w-[42px] h-[42px] flex items-center justify-center border border-border rounded-xl text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
                       >
                         &#8249;
                       </button>
@@ -487,7 +487,7 @@ if (error) {
                         item === "..." ? (
                           <span
                             key={`ellipsis-${index}`}
-                            className="px-3 py-2 text-white/50 select-none"
+                            className="px-3 py-2 text-foreground/50 select-none"
                           >
                             ...
                           </span>
@@ -498,7 +498,7 @@ if (error) {
                             className={`min-w-[42px] h-[42px] px-3 rounded-xl border transition-colors ${
                               page === item
                                 ? "border-primary bg-primary text-primary-foreground font-semibold"
-                                : "border-white/10 text-white hover:border-primary"
+                                : "border-border text-foreground hover:border-primary"
                             }`}
                           >
                             {item}
@@ -510,7 +510,7 @@ if (error) {
                         onClick={() => changePage(Math.min(totalPages, page + 1))}
                         disabled={page === totalPages}
                         aria-label="Faqja tjetër"
-                        className="w-[42px] h-[42px] flex items-center justify-center border border-white/10 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                        className="w-[42px] h-[42px] flex items-center justify-center border border-border rounded-xl text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
                       >
                         &#8250;
                       </button>
@@ -518,11 +518,11 @@ if (error) {
                   )}
                 </>
               ) : (
-                <div className="text-center py-32 bg-card rounded-2xl border border-white/5">
-                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-white/40">
+                <div className="text-center py-32 bg-card rounded-2xl border border-border">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 text-foreground/40">
                     <Search size={24} />
                   </div>
-                  <h3 className="font-display text-2xl text-white mb-2">Asnjë pronë nuk u gjet</h3>
+                  <h3 className="font-display text-2xl text-foreground mb-2">Asnjë pronë nuk u gjet</h3>
                   <p className="text-muted-foreground">Provoni të rregulloni kërkimin ose filtrat.</p>
                   <button
                     onClick={clearFilters}

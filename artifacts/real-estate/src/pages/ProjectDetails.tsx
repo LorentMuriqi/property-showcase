@@ -126,7 +126,6 @@ const formatBathroomLabel = (_value: number | string) => {
   return "Banjo";
 };
 
-
 export default function ProjectDetails() {
   const { id } = useParams();
 
@@ -267,7 +266,7 @@ export default function ProjectDetails() {
       <Layout>
         <div className="min-h-screen pt-32 flex items-center justify-center text-center px-4">
           <div>
-            <h1 className="price-font text-4xl text-white mb-4">
+            <h1 className="price-font text-4xl text-foreground mb-4">
               Prona Nuk U Gjet
             </h1>
             <p className="text-muted-foreground">
@@ -313,7 +312,7 @@ export default function ProjectDetails() {
       <div className="bg-background pt-24 pb-32 min-h-screen">
         <div className="relative w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 mb-12">
           <div
-            className="overflow-hidden rounded-2xl aspect-video md:aspect-[21/9] bg-card border border-white/5 shadow-2xl relative cursor-zoom-in"
+            className="overflow-hidden rounded-2xl aspect-video md:aspect-[21/9] bg-card border border-border shadow-2xl relative cursor-zoom-in"
             ref={emblaRef}
           >
             <div className="flex h-full">
@@ -415,7 +414,7 @@ export default function ProjectDetails() {
           <div className="lg:col-span-2 space-y-12">
             <div>
               <div className="flex items-center gap-4 mb-4">
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-white/80">
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-muted border border-border text-foreground">
                   {project.status
                     ? statusLabels[project.status] || project.status.replaceAll("_", " ")
                     : "Pa status"}
@@ -427,9 +426,9 @@ export default function ProjectDetails() {
                 )}
               </div>
 
-<h1 className="price-font text-4xl md:text-5xl font-semibold text-white mb-4 leading-tight tracking-tight">
-  {project.title}
-</h1>
+              <h1 className="price-font text-4xl md:text-5xl font-bold text-foreground mb-4 leading-tight tracking-tight">
+                {project.title}
+              </h1>
 
               <div className="flex items-center gap-2 text-muted-foreground text-lg">
                 <MapPin className="text-primary" size={20} />
@@ -442,26 +441,26 @@ export default function ProjectDetails() {
 
             {project.description && (
               <div>
-                <h3 className="price-font text-2xl text-white mb-6 border-b border-white/10 pb-4">
+                <h3 className="price-font text-2xl text-foreground mb-6 border-b border-border pb-4 font-bold">
                   Prona
                 </h3>
-<div className="price-font max-w-none text-[17px] leading-8 text-white/70">
-  {String(project.description)
-    .split("\n")
-    .filter((paragraph) => paragraph.trim() !== "")
-    .map((paragraph, i) => (
-      <p key={i} className="mb-5 last:mb-0">
-        {paragraph}
-      </p>
-    ))}
-</div>
+                <div className="price-font max-w-none text-[17px] leading-8 text-muted-foreground">
+                  {String(project.description)
+                    .split("\n")
+                    .filter((paragraph) => paragraph.trim() !== "")
+                    .map((paragraph, i) => (
+                      <p key={i} className="mb-5 last:mb-0">
+                        {paragraph}
+                      </p>
+                    ))}
+                </div>
               </div>
             )}
 
             {project.customFields &&
               Object.keys(project.customFields).length > 0 && (
                 <div>
-                  <h3 className="price-font text-2xl text-white mb-6 border-b border-white/10 pb-4">
+                  <h3 className="price-font text-2xl text-foreground mb-6 border-b border-border pb-4 font-bold">
                     Karakteristikat dhe Lehtësitë
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -472,7 +471,7 @@ export default function ProjectDetails() {
                           className="text-primary shrink-0 mt-0.5"
                         />
                         <div>
-                          <span className="block text-white/90 capitalize">
+                          <span className="block text-foreground capitalize">
                             {key.replace(/_/g, " ")}
                           </span>
                           <span className="text-sm text-muted-foreground">
@@ -489,75 +488,75 @@ export default function ProjectDetails() {
           <div className="lg:col-span-1">
             <div className="sticky top-32 space-y-6">
               <div className="glass-panel rounded-2xl p-8">
-<div className="price-font text-4xl text-primary font-semibold mb-5">
-  {formattedPrice}
-</div>
+                <div className="price-font text-4xl text-primary font-semibold mb-5">
+                  {formattedPrice}
+                </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   {project.areaM2 && (
-                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                    <div className="bg-background/50 p-4 rounded-xl border border-border">
                       <Maximize size={20} className="text-primary mb-2" />
-                      <span className="block text-white text-lg font-medium">
+                      <span className="block text-foreground text-lg font-medium">
                         {project.areaM2}
                       </span>
-<span className="text-xs text-muted-foreground uppercase tracking-wider">
-  {formatAreaLabel(project.areaM2)}
-</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                        {formatAreaLabel(project.areaM2)}
+                      </span>
                     </div>
                   )}
 
                   {project.bedrooms && (
-                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                    <div className="bg-background/50 p-4 rounded-xl border border-border">
                       <BedDouble size={20} className="text-primary mb-2" />
-                      <span className="block text-white text-lg font-medium">
+                      <span className="block text-foreground text-lg font-medium">
                         {project.bedrooms}
                       </span>
-<span className="text-xs text-muted-foreground uppercase tracking-wider">
-  {formatBedroomLabel(project.bedrooms)}
-</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                        {formatBedroomLabel(project.bedrooms)}
+                      </span>
                     </div>
                   )}
 
                   {project.bathrooms && (
-                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                    <div className="bg-background/50 p-4 rounded-xl border border-border">
                       <Bath size={20} className="text-primary mb-2" />
-                      <span className="block text-white text-lg font-medium">
+                      <span className="block text-foreground text-lg font-medium">
                         {project.bathrooms}
                       </span>
-<span className="text-xs text-muted-foreground uppercase tracking-wider">
-  {formatBathroomLabel(project.bathrooms)}
-</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                        {formatBathroomLabel(project.bathrooms)}
+                      </span>
                     </div>
                   )}
 
                   {project.livingRooms && (
-                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                    <div className="bg-background/50 p-4 rounded-xl border border-border">
                       <LayoutGrid size={20} className="text-primary mb-2" />
-                      <span className="block text-white text-lg font-medium">
+                      <span className="block text-foreground text-lg font-medium">
                         {project.livingRooms}
                       </span>
-<span className="text-xs text-muted-foreground uppercase tracking-wider">
-  {formatLivingRoomLabel(project.livingRooms)}
-</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                        {formatLivingRoomLabel(project.livingRooms)}
+                      </span>
                     </div>
                   )}
 
                   {project.floors && (
-                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                    <div className="bg-background/50 p-4 rounded-xl border border-border">
                       <Layers size={20} className="text-primary mb-2" />
-                      <span className="block text-white text-lg font-medium">
+                      <span className="block text-foreground text-lg font-medium">
                         {project.floors}
                       </span>
-<span className="text-xs text-muted-foreground uppercase tracking-wider">
-  {formatFloorLabel(project.floors)}
-</span>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                        {formatFloorLabel(project.floors)}
+                      </span>
                     </div>
                   )}
 
                   {project.yearBuilt && (
-                    <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                    <div className="bg-background/50 p-4 rounded-xl border border-border">
                       <Calendar size={20} className="text-primary mb-2" />
-                      <span className="block text-white text-lg font-medium">
+                      <span className="block text-foreground text-lg font-medium">
                         {project.yearBuilt}
                       </span>
                       <span className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -573,7 +572,7 @@ export default function ProjectDetails() {
                   </button>
                   <button
                     onClick={() => setShowContactModal(true)}
-                    className="w-full py-4 bg-transparent border border-white/20 text-white font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-transparent border border-border text-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
                   >
                     <Phone size={16} /> Kërko Informacion
                   </button>
@@ -594,12 +593,12 @@ export default function ProjectDetails() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-display text-2xl text-white flex items-center gap-2">
+              <h3 className="font-display text-2xl text-foreground flex items-center gap-2">
                 <Building2 size={22} className="text-primary" /> Kërko Informacion
               </h3>
               <button
                 onClick={() => setShowContactModal(false)}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                className="w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-foreground transition-colors"
               >
                 <X size={18} />
               </button>
@@ -608,13 +607,13 @@ export default function ProjectDetails() {
             <p className="text-muted-foreground text-sm mb-6">
               Kontaktoni agjentin për pronën:
               <br />
-              <span className="text-white font-medium">{project.title}</span>
+              <span className="text-foreground font-medium">{project.title}</span>
             </p>
 
             {hasContact ? (
               <div className="space-y-4">
                 {project.contactCompany && (
-                  <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border">
                     <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                       <Building2 size={20} className="text-primary" />
                     </div>
@@ -622,7 +621,7 @@ export default function ProjectDetails() {
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
                         Kompania
                       </p>
-                      <p className="text-white font-semibold text-lg">
+                      <p className="text-foreground font-semibold text-lg">
                         {project.contactCompany}
                       </p>
                     </div>
@@ -632,7 +631,7 @@ export default function ProjectDetails() {
                 {project.contactPhone && (
                   <a
                     href={`tel:${project.contactPhone}`}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                    className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
                   >
                     <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
                       <Phone size={20} className="text-primary" />
@@ -641,7 +640,7 @@ export default function ProjectDetails() {
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
                         Telefoni
                       </p>
-                      <p className="text-white group-hover:text-primary font-semibold text-lg transition-colors">
+                      <p className="text-foreground group-hover:text-primary font-semibold text-lg transition-colors">
                         {project.contactPhone}
                       </p>
                     </div>
@@ -651,7 +650,7 @@ export default function ProjectDetails() {
                 {project.contactEmail && (
                   <a
                     href={`mailto:${project.contactEmail}`}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                    className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
                   >
                     <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
                       <Mail size={20} className="text-primary" />
@@ -660,7 +659,7 @@ export default function ProjectDetails() {
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
                         Email
                       </p>
-                      <p className="text-white group-hover:text-primary font-semibold text-lg transition-colors">
+                      <p className="text-foreground group-hover:text-primary font-semibold text-lg transition-colors">
                         {project.contactEmail}
                       </p>
                     </div>
@@ -669,7 +668,7 @@ export default function ProjectDetails() {
               </div>
             ) : (
               <div className="text-center py-6">
-                <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <Phone size={24} className="text-muted-foreground" />
                 </div>
                 <p className="text-muted-foreground">
@@ -740,9 +739,9 @@ export default function ProjectDetails() {
 
       {showVirtualTour && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col">
-          <div className="flex items-center justify-between p-4 glass-panel border-b border-white/10 z-10">
+          <div className="flex items-center justify-between p-4 glass-panel border-b border-border z-10">
             <div className="flex items-center gap-3">
-              <span className="font-display font-bold text-white text-xl">
+              <span className="font-display font-bold text-foreground text-xl">
                 Tur Virtual 360°
               </span>
               <span className="text-muted-foreground">|</span>
@@ -753,19 +752,19 @@ export default function ProjectDetails() {
 
             <button
               onClick={() => setShowVirtualTour(false)}
-              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              className="w-10 h-10 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-foreground"
             >
               <X size={20} />
             </button>
           </div>
 
           <div className="flex-1 p-4 overflow-auto">
-<PropertyVirtualTourViewer
-  propertyId={project.id as any}
-  fallbackUrl={project.virtualTourUrl}
-  fallbackEmbedCode={project.virtualTourEmbedCode}
-  onClose={() => setShowVirtualTour(false)}
-/>
+            <PropertyVirtualTourViewer
+              propertyId={project.id as any}
+              fallbackUrl={project.virtualTourUrl}
+              fallbackEmbedCode={project.virtualTourEmbedCode}
+              onClose={() => setShowVirtualTour(false)}
+            />
           </div>
         </div>
       )}

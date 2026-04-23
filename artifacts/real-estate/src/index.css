@@ -1,12 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+/* fonti i kaluar dark navy - @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+*/
+
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-@theme inline {
+/* fonti i kaluar dark navy- @theme inline {
   --font-sans: 'Plus Jakarta Sans', sans-serif;
-  --font-display: 'Playfair Display', serif;
+  --font-display: 'Playfair Display', serif;  */
+  
+  @theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Inter', sans-serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -37,27 +44,27 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
-
-/* LUXURY DARK NAVY & GOLD THEME */
+/*
+ LUXURY DARK NAVY & GOLD THEME 
 :root {
-  /* Dark Navy Background */
+  / Dark Navy Background 
   --background: 224 47% 8%; 
   --foreground: 0 0% 98%;
   
-  /* Slightly lighter navy for cards */
+  /* Slightly lighter navy for cards 
   --card: 224 34% 13%;
   --card-foreground: 0 0% 98%;
   
-  /* Deep navy borders */
+  /* Deep navy borders 
   --border: 224 30% 20%;
   --input: 224 30% 20%;
   
-  /* Luxury Gold */
+  /* Luxury Gold 
   --primary: 43 74% 49%;
   --primary-foreground: 224 47% 8%;
   --ring: 43 74% 49%;
   
-  /* Muted Gold / Navy Mix */
+  /* Muted Gold / Navy Mix 
   --secondary: 224 30% 20%;
   --secondary-foreground: 43 74% 80%;
   
@@ -72,20 +79,74 @@
 
   --radius: 0.5rem;
 }
+*/
+
+
+
+:root {
+  /* Clean professional light theme */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+
+  /* Cards */
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  /* Borders / inputs */
+  --border: 220 14% 90%;
+  --input: 220 14% 90%;
+
+  /* Keep gold accent */
+  --primary: 43 74% 49%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 43 74% 49%;
+
+  /* Neutral secondary */
+  --secondary: 220 20% 96%;
+  --secondary-foreground: 222 47% 11%;
+
+  /* Muted surfaces */
+  --muted: 220 20% 97%;
+  --muted-foreground: 220 9% 40%;
+
+  --accent: 43 74% 49%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --radius: 0.5rem;
+}
+
+
+
+
+
 
 @layer base {
   * {
     @apply border-border;
   }
 
-  body {
+  /* body {
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary/30 selection:text-primary-foreground;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     @apply tracking-tight;
-  }
+  }  */
+  
+  
+  body {
+  @apply font-sans antialiased bg-background text-foreground;
+  font-weight: 400;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  @apply tracking-tight font-bold;
+}
 }
 
 /* Custom Scrollbar */
@@ -105,7 +166,7 @@
 
 /* Utility for glassmorphism */
 .glass-panel {
-  @apply bg-background/60 backdrop-blur-xl border border-white/5 shadow-2xl;
+  @apply bg-white/80 backdrop-blur-xl border border-black/5 shadow-xl;
 }
 
 /* Luxury gold gradient text */

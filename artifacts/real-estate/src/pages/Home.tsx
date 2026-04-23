@@ -255,7 +255,7 @@ setRecentProjects(rowsWithVirtualTour.slice(0, 6));
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Map size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-white mb-3">Ture Virtuale 360°</h3>
+              <h3 className="font-display text-2xl text-foreground mb-3 font-bold">Ture Virtuale 360°</h3>
               <p className="text-muted-foreground leading-relaxed">
                 Eksperienconi pronat sikur të ishit aty. Turet tona virtuale të integruara ofrojnë
                 një shëtitje reale të pakrahasueshme.
@@ -265,7 +265,7 @@ setRecentProjects(rowsWithVirtualTour.slice(0, 6));
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Building2 size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-white mb-3">Portofol i Përzgjedhur</h3>
+              <h3 className="font-display text-2xl text-foreground mb-3 font-bold">Portofol i Përzgjedhur</h3>
               <p className="text-muted-foreground leading-relaxed">
                 Përftoni akses në një koleksion ekskluziv të pronave rezidenciale dhe komerciale më
                 të kërkuara në botë.
@@ -275,7 +275,7 @@ setRecentProjects(rowsWithVirtualTour.slice(0, 6));
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <ShieldCheck size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-white mb-3">Shërbim i Klasit të Parë</h3>
+              <h3 className="font-display text-2xl text-foreground mb-3 font-bold">Shërbim i Klasit të Parë</h3>
               <p className="text-muted-foreground leading-relaxed">
                 Një qasje e dedikuar në fushën e pasurive të paluajtshme që i përshtatet natyrës
                 premium të pronave që përfaqësojmë.
@@ -289,7 +289,7 @@ setRecentProjects(rowsWithVirtualTour.slice(0, 6));
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
             <div>
-              <h2 className="font-display text-4xl md:text-5xl font-bold text-white mb-4">
+              <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
                 Pronat e Fundit
               </h2>
               <p className="text-muted-foreground text-lg max-w-xl">

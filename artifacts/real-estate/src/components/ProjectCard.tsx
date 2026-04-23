@@ -28,7 +28,7 @@ export function ProjectCard({ project }: { project: any }) {
 
   return (
     <Link href={`/projects/${project.id}`} className="group block h-full">
-      <div className="bg-card border border-white/5 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col h-full hover:-translate-y-1">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col h-full hover:-translate-y-1">
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {primaryImage?.url ? (
             <img
@@ -45,7 +45,7 @@ export function ProjectCard({ project }: { project: any }) {
           <div className="absolute top-4 left-4 flex flex-col gap-2">
             <span
               className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider backdrop-blur-md border ${
-                statusColors[project.status] || "bg-white/10 text-white border-white/20"
+                statusColors[project.status] || "bg-muted text-foreground border-border"
               }`}
             >
               {statusLabels[project.status] || project.status || "Pronë"}
@@ -53,7 +53,7 @@ export function ProjectCard({ project }: { project: any }) {
           </div>
 
           {project.hasVirtualTour && (
-            <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
+            <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md border border-border px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-[10px] font-bold text-white uppercase tracking-widest">Tur 360°</span>
             </div>
@@ -64,7 +64,7 @@ export function ProjectCard({ project }: { project: any }) {
 
         <div className="p-6 flex flex-col flex-grow">
 <div className="flex items-start justify-between gap-4 mb-3">
-  <h3 className="price-font text-xl font-semibold text-white tracking-tight line-clamp-1">
+  <h3 className="price-font text-xl font-bold text-foreground tracking-tight line-clamp-1">
     {project.title}
   </h3>
 <span className="price-font text-xl text-primary font-semibold">
@@ -81,9 +81,9 @@ export function ProjectCard({ project }: { project: any }) {
             </span>
           </div>
 
-          <div className="mt-auto grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+          <div className="mt-auto grid grid-cols-3 gap-4 pt-4 border-t border-border">
             {(project.areaM2 || project.area_m2) && (
-              <div className="flex items-center gap-2 text-white/80">
+              <div className="flex items-center gap-2 text-foreground">
                 <Maximize size={16} className="text-primary" />
                 <span className="text-sm font-medium">
                   {project.areaM2 || project.area_m2}{" "}
@@ -93,7 +93,7 @@ export function ProjectCard({ project }: { project: any }) {
             )}
 
             {project.bedrooms && (
-              <div className="flex items-center gap-2 text-white/80">
+              <div className="flex items-center gap-2 text-foreground">
                 <BedDouble size={16} className="text-primary" />
                 <span className="text-sm font-medium">
                   {project.bedrooms} <span className="text-xs text-muted-foreground">Dh. Gjumi</span>
@@ -102,7 +102,7 @@ export function ProjectCard({ project }: { project: any }) {
             )}
 
             {project.bathrooms && (
-              <div className="flex items-center gap-2 text-white/80">
+              <div className="flex items-center gap-2 text-foreground">
                 <Bath size={16} className="text-primary" />
                 <span className="text-sm font-medium">
                   {project.bathrooms} <span className="text-xs text-muted-foreground">Banjo</span>
