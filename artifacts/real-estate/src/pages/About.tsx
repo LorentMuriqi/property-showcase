@@ -13,7 +13,7 @@ export default function About() {
               alt="Abstract background" 
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-background/80" />
+            <div className="absolute inset-0 bg-black/35" />
           </div>
           <div className="relative z-10 text-center px-4">
             <motion.h1 
@@ -47,14 +47,14 @@ export default function About() {
                   Të themeluar mbi parimet e diskrecionit absolut dhe cilësisë pa kompromis, ne përfaqësojmë vetëm pronat më të jashtëzakonshme në mbarë botën.
                 </p>
               </div>
-              <div className="aspect-square bg-card rounded-2xl border border-white/5 p-8 flex flex-col justify-center text-center">
+              <div className="aspect-square bg-card rounded-2xl border border-border p-8 flex flex-col justify-center text-center">
                 <span className="font-display text-6xl text-primary block mb-4">15+</span>
-                <span className="text-white tracking-widest uppercase text-sm">Vite Ekselencë</span>
+                <span className="text-foreground tracking-widest uppercase text-sm">Vite Ekselencë</span>
               </div>
             </div>
 
-            <div className="border-t border-white/10 pt-16">
-              <h2 className="font-display text-3xl text-white mb-8 text-center">Eksperienca Virtuale</h2>
+<div className="border-t border-border pt-16">
+  <h2 className="font-display text-3xl text-foreground mb-8 text-center">Eksperienca Virtuale</h2>
               <p className="text-muted-foreground leading-relaxed text-center max-w-3xl mx-auto">
                 Ne jemi pionierë në përdorimin e teknologjisë së avancuar të tureve virtuale 360°, duke i lejuar klientëve kërkues të eksplorojnë prona madhështore nga kudo në botë me një realizëm të paprecedentë. Kjo qasje digjitale siguron që blerësit globalë të përjetojnë thelbin e vërtetë të një prone përpara se të shkelin fizikisht në të.
               </p>

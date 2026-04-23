@@ -126,7 +126,7 @@ if (!res.ok) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="mb-16 text-center max-w-3xl mx-auto">
-            <h1 className="font-display text-5xl font-bold text-white mb-6"><span className="text-primary italic">Konsultim</span> Privat</h1>
+            <h1 className="font-display text-5xl font-bold text-foreground mb-6"><span className="text-primary italic">Konsultim</span> Privat</h1>
             <p className="text-muted-foreground text-lg">
               Lidhu me ekspertët tanë për një këshillim të personalizuar dhe konfidencial mbi investimet tuaja në pasuri të paluajtshme.
             </p>
@@ -135,15 +135,15 @@ if (!res.ok) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             {/* Contact Info */}
             <div className="space-y-12">
-              <div className="glass-panel p-10 rounded-2xl">
-                <h3 className="price-font text-2xl text-white mb-8">Selia</h3>
+              <div className="bg-card p-10 rounded-2xl border border-border shadow-md">
+                <h3 className="price-font text-2xl text-foreground mb-8">Selia</h3>
                 <div className="space-y-8">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                       <MapPin size={24} />
                     </div>
                     <div>
-                      <h4 className="price-font text-white font-medium mb-1">Zyra</h4>
+                      <h4 className="price-font text-foreground font-medium mb-1">Zyra</h4>
                       <p className="price-font text-muted-foreground">Pejë<br/>Fidanishte</p>
                     </div>
                   </div>
@@ -152,7 +152,7 @@ if (!res.ok) {
                       <Phone size={24} />
                     </div>
                     <div>
-                      <h4 className="price-font text-white font-medium mb-1">Tel</h4>
+                      <h4 className="price-font text-foreground font-medium mb-1">Tel</h4>
                       <p className="price-font text-muted-foreground">+38349123456</p>
                     </div>
                   </div>
@@ -161,7 +161,7 @@ if (!res.ok) {
                       <Mail size={24} />
                     </div>
                     <div>
-                      <h4 className="price-font text-white font-medium mb-1">Email</h4>
+                      <h4 className="price-font text-foreground font-medium mb-1">Email</h4>
                       <p className="price-font text-muted-foreground">info@auraks.com</p>
                     </div>
                   </div>
@@ -170,27 +170,27 @@ if (!res.ok) {
             </div>
 
             {/* Form */}
-            <div className="glass-panel p-10 rounded-2xl">
+            <div className="bg-card p-10 rounded-2xl border border-border shadow-md">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Emri</label>
-                    <input name="firstName" required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                    <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Emri</label>
+                    <input name="firstName" required type="text" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mbiemri</label>
-                    <input name="lastName" required type="text" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                    <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Mbiemri</label>
+                    <input name="lastName" required type="text" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors" />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Adresa e Email-it</label>
-                  <input name="email" type="email" className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors" />
+                  <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Adresa e Email-it</label>
+                  <input name="email" type="email" className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors" />
                 </div>
 				
 				
 <div className="space-y-2">
-  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">
+  <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
     Numri i Telefonit
   </label>
 
@@ -200,7 +200,7 @@ if (!res.ok) {
       required
       value={countryCode}
       onChange={(e) => setCountryCode(e.target.value)}
-      className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none"
+      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none"
     >
       <option value="+383">🇽🇰 +383</option>
       <option value="+355">🇦🇱 +355</option>
@@ -220,11 +220,11 @@ if (!res.ok) {
       onChange={(e) => setPhoneNumber(e.target.value)}
       onBlur={() => setPhoneTouched(true)}
       placeholder="049123456 / 49123456"
-      className={`w-full bg-background border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors ${
-        phoneTouched && phoneNumber && !isPhoneValid(countryCode, phoneNumber)
-          ? "border-red-500"
-          : "border-white/10"
-      }`}
+className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors ${
+  phoneTouched && phoneNumber && !isPhoneValid(countryCode, phoneNumber)
+    ? "border-red-500"
+    : "border-border"
+}`}
     />
   </div>
 
@@ -236,8 +236,8 @@ if (!res.ok) {
 				
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Natyra e Kërkesës</label>
-                  <select name="requestType" required className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none">
+                  <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Natyra e Kërkesës</label>
+                  <select name="requestType" required className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none">
          <option value="Blerje e një prone">Blerje e një prone</option>
 <option value="Shitje e një prone">Shitje e një prone</option>
 <option value="Shërbime të Turit Virtual">Shërbime të Turit Virtual</option>
@@ -246,11 +246,11 @@ if (!res.ok) {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white/70 uppercase tracking-wider">Mesazhi</label>
-                 <textarea name="message" required rows={4} className="w-full bg-background border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
+                  <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Mesazhi</label>
+                 <textarea name="message" required rows={4} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
                 </div>
 
-                <button type="submit" className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors mt-4">
+                <button type="submit" className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors mt-4">
                   Dërgo Kërkesën
                 </button>
               </form>
