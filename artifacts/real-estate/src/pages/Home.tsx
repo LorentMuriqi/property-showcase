@@ -182,7 +182,7 @@ export default function Home() {
     Pronën Tënde të Ëndrrave
   </span>
 </h1>
-            <p className="text-lg md:text-xl text-white/80 font-light mb-12 max-w-xl mx-auto tracking-wide">
+            <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
               Eksploro prona me ture virtuale 360°
             </p>
 
@@ -249,35 +249,35 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-24 bg-card">
+      <section className="py-12 md:py-16 bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
             <div className="text-center group">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Map size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-foreground mb-3 font-bold">Ture Virtuale 360°</h3>
-              <p className="text-muted-foreground leading-relaxed">
+              <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Ture Virtuale 360°</h3>
+              <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
                 Eksperienconi pronat sikur të ishit aty. Turet tona virtuale të integruara ofrojnë
                 një shëtitje reale të pakrahasueshme.
               </p>
             </div>
             <div className="text-center group">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Building2 size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-foreground mb-3 font-bold">Portofol i Përzgjedhur</h3>
-              <p className="text-muted-foreground leading-relaxed">
+              <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Portofol i Përzgjedhur</h3>
+              <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
                 Përftoni akses në një koleksion ekskluziv të pronave rezidenciale dhe komerciale më
                 të kërkuara në botë.
               </p>
             </div>
             <div className="text-center group">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <ShieldCheck size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-2xl text-foreground mb-3 font-bold">Shërbim i Klasit të Parë</h3>
-              <p className="text-muted-foreground leading-relaxed">
+              <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Shërbim i Klasit të Parë</h3>
+              <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
                 Një qasje e dedikuar në fushën e pasurive të paluajtshme që i përshtatet natyrës
                 premium të pronave që përfaqësojmë.
               </p>
