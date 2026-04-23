@@ -283,9 +283,9 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-32 relative">
+      <section className="py-16 md:py-24 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
+          <div className="flex flex-col md:flex-row justify-between items-end mb-10 md:mb-16 gap-6">
             <div>
               <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
                 Pronat e Fundit
