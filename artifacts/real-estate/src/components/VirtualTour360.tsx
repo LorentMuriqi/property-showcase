@@ -448,16 +448,26 @@ useEffect(() => {
           }}
         />
 
-        {isInitialLoading && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-              <div className="text-white/80 text-sm tracking-wide">
-                Duke hapur turin virtual...
-              </div>
-            </div>
-          </div>
-        )}
+{isInitialLoading && (
+  <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
+    <div className="flex flex-col items-center gap-4 animate-pulse">
+
+      {/* Spinner premium */}
+      <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
+
+      {/* Text kryesor */}
+      <p className="text-white/85 text-sm tracking-wide font-medium">
+        Duke hapur turin virtual
+      </p>
+
+      {/* Sub text */}
+      <span className="text-primary text-xs uppercase tracking-[0.2em] font-semibold">
+        Ju lutem prisni
+      </span>
+
+    </div>
+  </div>
+)}
 
         <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none max-w-[80%]">
           <h2 className="text-white font-display text-xl">
