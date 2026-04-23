@@ -358,7 +358,7 @@ export default function Projects() {
               Prona
             </h1>
             <p className="text-muted-foreground text-lg">
-              Shfletoni koleksionin tonë të plotë të pronave luksoze.
+              Shfletoni koleksionin tonë të plotë të pronave.
             </p>
           </div>
 

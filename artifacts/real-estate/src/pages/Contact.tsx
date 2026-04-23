@@ -219,7 +219,6 @@ if (!res.ok) {
       value={phoneNumber}
       onChange={(e) => setPhoneNumber(e.target.value)}
       onBlur={() => setPhoneTouched(true)}
-      placeholder="049123456 / 49123456"
 className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors ${
   phoneTouched && phoneNumber && !isPhoneValid(countryCode, phoneNumber)
     ? "border-red-500"
