@@ -50,7 +50,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onError={(e) => (e.currentTarget.style.display = "none")}
               />
             </div>
-<span className="font-display text-xl sm:text-2xl font-bold tracking-wider text-foreground group-hover:text-primary transition-colors">
+<span className="font-display text-xl sm:text-2xl font-bold tracking-wider text-white group-hover:text-primary transition-colors">
   AURA
   <span className="font-sans font-light text-muted-foreground ml-2 text-sm tracking-widest uppercase">
     Estates
@@ -63,9 +63,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm font-medium tracking-wide uppercase transition-all hover:text-primary ${
-                  location === link.href ? "text-primary" : "text-muted-foreground"
-                }`}
+className={`text-sm font-medium tracking-wide uppercase transition-all hover:text-primary ${
+  location === link.href ? "text-primary" : "text-gray-300"
+}`}
               >
                 {link.name}
               </Link>
@@ -89,7 +89,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <button
-            className="md:hidden text-foreground hover:text-primary transition-colors"
+            className="md:hidden text-white hover:text-primary transition-colors"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -110,9 +110,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`price-font font-medium text-3xl transition-colors ${
-                    location === link.href ? "text-primary" : "text-foreground hover:text-primary"
-                  }`}
+className={`price-font font-medium text-3xl transition-colors ${
+  location === link.href ? "text-primary" : "text-white hover:text-primary"
+}`}
                 >
                   {link.name}
                 </Link>
@@ -137,10 +137,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-2">
-<span className="font-display text-xl sm:text-2xl font-bold tracking-wider transition-colors">
-  <span className="bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] bg-clip-text text-transparent drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+<span className="font-display text-2xl font-bold tracking-wider text-white mb-6 block">
   AURA
-</span>
   <span className="font-sans font-light text-muted-foreground ml-2 text-sm tracking-widest uppercase">
     Estates
   </span>
