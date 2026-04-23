@@ -59,7 +59,7 @@ export function ProjectCard({ project }: { project: any }) {
             </div>
           )}
 
-          <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-transparent opacity-30 group-hover:opacity-10 transition-opacity duration-500" />
         </div>
 
         <div className="p-6 flex flex-col flex-grow">
