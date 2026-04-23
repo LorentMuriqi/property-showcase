@@ -50,16 +50,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onError={(e) => (e.currentTarget.style.display = "none")}
               />
             </div>
-<span className="font-display text-xl sm:text-2xl font-bold tracking-wider transition-colors">
-  <span
-    className={
-      scrolled
-        ? "text-primary"
-        : "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] bg-clip-text text-transparent drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-    }
-  >
-    AURA
-  </span>
+<span className="font-display text-xl sm:text-2xl font-bold tracking-wider text-foreground group-hover:text-primary transition-colors">
+  AURA
   <span className="font-sans font-light text-muted-foreground ml-2 text-sm tracking-widest uppercase">
     Estates
   </span>
