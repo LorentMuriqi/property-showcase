@@ -77,7 +77,7 @@ export default function AdminProjectForm() {
       city: "",
       address: "",
       price: "",
-      currency: "",
+      currency: "EUR",
       areaM2: "",
       propertyType: "",
       bedrooms: "",
@@ -237,7 +237,7 @@ export default function AdminProjectForm() {
         address: data.address || "",
         status: data.status || "for_sale",
         price: data.price,
-        currency: data.currency || "",
+        currency: "EUR",
         area_m2: data.areaM2,
         property_type: data.propertyType || "",
         bedrooms: data.bedrooms,
@@ -419,18 +419,9 @@ export default function AdminProjectForm() {
             <h2 className="font-display text-xl text-primary border-b border-border pb-4">
               Specifikimet
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <Input label="Çmimi" type="number" {...register("price")} />
-              <Input
-                label="Monedha"
-                {...register("currency")}
-                placeholder="USD"
-              />
-              <Input
-                label="Sipërfaqja (m²)"
-                type="number"
-                {...register("areaM2")}
-              />
+<div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+  <Input label="Çmimi" type="number" {...register("price")} />
+  <Input label="Sipërfaqja (m²)" type="number" {...register("areaM2")} />
               <Input
                 label="Lloji i Pronës"
                 {...register("propertyType")}
