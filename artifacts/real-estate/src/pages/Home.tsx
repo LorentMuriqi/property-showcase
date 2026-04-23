@@ -176,10 +176,12 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            <h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-              Zbulo <br />
-              <span className="text-gold-gradient italic">Pronën Tënde të Ëndrrave</span>
-            </h1>
+<h1 className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-[1.15] md:leading-tight">
+  <span className="block">Zbulo</span>
+  <span className="block pb-1 text-gold-gradient italic">
+    Pronën Tënde të Ëndrrave
+  </span>
+</h1>
             <p className="text-lg md:text-xl text-white/80 font-light mb-12 max-w-xl mx-auto tracking-wide">
               Eksploro prona me ture virtuale 360°
             </p>
