@@ -258,18 +258,16 @@ export default function Home() {
               </div>
               <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Ture Virtuale 360°</h3>
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                Eksperienconi pronat sikur të ishit aty. Turet tona virtuale të integruara ofrojnë
-                një shëtitje reale të pakrahasueshme.
+                Eksploroni çdo pronë në mënyrë reale përmes tureve 360°.
               </p>
             </div>
             <div className="text-center group">
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Building2 size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Portofol i Përzgjedhur</h3>
+              <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Prona Ekskluzive</h3>
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                Përftoni akses në një koleksion ekskluziv të pronave rezidenciale dhe komerciale më
-                të kërkuara në botë.
+                Një përzgjedhje e kujdesshme e pronave më cilësore.
               </p>
             </div>
             <div className="text-center group">
@@ -278,8 +276,7 @@ export default function Home() {
               </div>
               <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Shërbim i Klasit të Parë</h3>
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                Një qasje e dedikuar në fushën e pasurive të paluajtshme që i përshtatet natyrës
-                premium të pronave që përfaqësojmë.
+                Mbështetje profesionale në çdo hap.
               </p>
             </div>
           </div>
