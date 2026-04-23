@@ -137,12 +137,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-2">
-              <span className="font-display text-2xl font-bold tracking-wider text-white mb-6 block">
-                AURA
-                <span className="font-sans font-light text-muted-foreground ml-2 text-sm tracking-widest uppercase">
-                  Estates
-                </span>
-              </span>
+<span className="font-display text-xl sm:text-2xl font-bold tracking-wider transition-colors">
+  <span className="text-gold-gradient">AURA</span>
+  <span className="font-sans font-light text-muted-foreground ml-2 text-sm tracking-widest uppercase">
+    Estates
+  </span>
+</span>
               <p className="text-muted-foreground leading-relaxed max-w-md mb-8">
                 Curating the world's most exceptional properties. We redefine luxury real estate through immersive virtual experiences and unparalleled service.
               </p>

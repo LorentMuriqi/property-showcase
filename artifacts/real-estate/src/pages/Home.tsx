@@ -74,43 +74,40 @@ export default function Home() {
         return;
       }
 
+      const rows = data || [];
+      const propertyIds = rows.map((item) => item.id);
 
-const rows = data || [];
+      let scenePropertyIds = new Set<string>();
 
-const propertyIds = rows.map((item) => item.id);
+      if (propertyIds.length > 0) {
+        const { data: sceneRows, error: sceneError } = await supabase
+          .from("virtual_tour_scenes")
+          .select("property_id")
+          .in("property_id", propertyIds);
 
-let scenePropertyIds = new Set<string>();
+        if (sceneError) {
+          console.error("Fetch virtual tour scenes error:", sceneError);
+        } else {
+          scenePropertyIds = new Set(
+            (sceneRows || []).map((scene) => String(scene.property_id))
+          );
+        }
+      }
 
-if (propertyIds.length > 0) {
-  const { data: sceneRows, error: sceneError } = await supabase
-    .from("virtual_tour_scenes")
-    .select("property_id")
-    .in("property_id", propertyIds);
+      const rowsWithVirtualTour = rows.map((item) => {
+        const hasVirtualTour =
+          !!item.virtual_tour_url ||
+          !!item.virtual_tour_embed_code ||
+          !!item.has_custom_virtual_tour ||
+          scenePropertyIds.has(String(item.id));
 
-  if (sceneError) {
-    console.error("Fetch virtual tour scenes error:", sceneError);
-  } else {
-    scenePropertyIds = new Set(
-      (sceneRows || []).map((scene) => String(scene.property_id))
-    );
-  }
-}
+        return {
+          ...item,
+          hasVirtualTour,
+        };
+      });
 
-const rowsWithVirtualTour = rows.map((item) => {
-  const hasVirtualTour =
-    !!item.virtual_tour_url ||
-    !!item.virtual_tour_embed_code ||
-    !!item.has_custom_virtual_tour ||
-    scenePropertyIds.has(String(item.id));
-
-  return {
-    ...item,
-    hasVirtualTour,
-  };
-});
-
-setRecentProjects(rowsWithVirtualTour.slice(0, 6));
-
+      setRecentProjects(rowsWithVirtualTour.slice(0, 6));
 
       setAllFilterRows(
         rows.map((item) => ({
@@ -193,45 +190,48 @@ setRecentProjects(rowsWithVirtualTour.slice(0, 6));
               className="glass-panel rounded-2xl p-2 max-w-4xl mx-auto flex flex-col md:flex-row gap-2"
             >
               <select
-                className="w-full md:w-auto flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                className="w-full md:w-auto flex-1 bg-white/90 border border-border rounded-xl px-4 py-4 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
                 value={country}
                 onChange={(e) => {
                   setCountry(e.target.value);
                   setCity("");
                 }}
               >
-                <option value="" className="bg-card text-white">
+                <option value="" className="bg-white text-foreground">
                   Të Gjitha Shtetet
                 </option>
                 {countries.map((c) => (
-                  <option key={c} value={c} className="bg-card text-white">
+                  <option key={c} value={c} className="bg-white text-foreground">
                     {c}
                   </option>
                 ))}
               </select>
 
               <select
-                className="w-full md:w-auto flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer disabled:opacity-50"
+                className="w-full md:w-auto flex-1 bg-white/90 border border-border rounded-xl px-4 py-4 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer disabled:opacity-50"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 disabled={!country}
               >
-                <option value="" className="bg-card text-white">
+                <option value="" className="bg-white text-foreground">
                   Të Gjitha Qytetet
                 </option>
                 {cities.map((c) => (
-                  <option key={c} value={c} className="bg-card text-white">
+                  <option key={c} value={c} className="bg-white text-foreground">
                     {c}
                   </option>
                 ))}
               </select>
 
               <div className="w-full md:w-auto flex-[1.5] relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
+                <Search
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  size={20}
+                />
                 <input
                   type="text"
                   placeholder="Fjalë kyçe, emri i pronës..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-primary"
+                  className="w-full bg-white/90 border border-border rounded-xl pl-12 pr-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />

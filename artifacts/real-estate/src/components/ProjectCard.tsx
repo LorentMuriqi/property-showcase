@@ -55,7 +55,7 @@ export function ProjectCard({ project }: { project: any }) {
           {project.hasVirtualTour && (
             <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md border border-border px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-[10px] font-bold text-white uppercase tracking-widest">Tur 360°</span>
+              <span className="text-[10px] font-bold text-foreground uppercase tracking-widest">Tur 360°</span>
             </div>
           )}
 
