@@ -19,11 +19,11 @@ import { supabase } from "@/lib/supabase";
 
 const Input = ({ label, ...props }: any) => (
   <div className="space-y-2">
-    <label className="text-xs font-medium text-white/70 uppercase tracking-wider">
+    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
       {label}
     </label>
     <input
-      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors"
       {...props}
     />
   </div>
@@ -40,27 +40,24 @@ export default function AdminProjectForm() {
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    if (authLoading) return;
 
-useEffect(() => {
-  if (authLoading) return;
+    if (!isAdmin) {
+      setLocation("/admin/login");
+      return;
+    }
 
-  if (!isAdmin) {
-    setLocation("/admin/login");
-    return;
-  }
+    if (!isEditing && !permissions.canCreateProperty) {
+      setLocation("/admin");
+      return;
+    }
 
-  if (!isEditing && !permissions.canCreateProperty) {
-    setLocation("/admin");
-    return;
-  }
-
-  if (isEditing && !permissions.canEditProperty) {
-    setLocation("/admin");
-    return;
-  }
-}, [authLoading, isAdmin, isEditing, permissions, setLocation]);
-
-
+    if (isEditing && !permissions.canEditProperty) {
+      setLocation("/admin");
+      return;
+    }
+  }, [authLoading, isAdmin, isEditing, permissions, setLocation]);
 
   const {
     register,
@@ -179,25 +176,24 @@ useEffect(() => {
 
   const onSubmit = async (data: any) => {
     try {
-		
-		    if (!isEditing && !permissions.canCreateProperty) {
-      toast({
-        title: "Pa akses",
-        description: "Nuk ke leje për të krijuar prona.",
-        variant: "destructive",
-      });
-      return;
-    }
+      if (!isEditing && !permissions.canCreateProperty) {
+        toast({
+          title: "Pa akses",
+          description: "Nuk ke leje për të krijuar prona.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    if (isEditing && !permissions.canEditProperty) {
-      toast({
-        title: "Pa akses",
-        description: "Nuk ke leje për të edituar prona.",
-        variant: "destructive",
-      });
-      return;
-    }
-		
+      if (isEditing && !permissions.canEditProperty) {
+        toast({
+          title: "Pa akses",
+          description: "Nuk ke leje për të edituar prona.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsSaving(true);
 
       const cleanedImages = (data.images || []).filter(
@@ -315,23 +311,23 @@ useEffect(() => {
   };
 
   if (authLoading || (isEditing && isLoading)) {
-    return <div className="p-8 text-white">Loading...</div>;
+    return <div className="p-8 text-foreground">Loading...</div>;
   }
 
   if (!isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 md:p-6 flex items-center justify-between">
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setLocation("/admin")}
-            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-colors"
+            className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="font-display text-2xl font-bold text-white leading-none">
+            <h1 className="font-display text-2xl font-bold text-foreground leading-none">
               {isEditing ? "Edito Projektin" : "Projekt i Ri"}
             </h1>
             <p className="text-muted-foreground text-xs uppercase tracking-widest mt-1">
@@ -353,7 +349,7 @@ useEffect(() => {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 mt-8">
         <form className="space-y-8">
           <div className="glass-panel p-6 md:p-8 rounded-2xl space-y-6">
-            <h2 className="font-display text-xl text-primary border-b border-white/10 pb-4">
+            <h2 className="font-display text-xl text-primary border-b border-border pb-4">
               Detajet Thelbësore
             </h2>
 
@@ -375,16 +371,16 @@ useEffect(() => {
               <Input label="Adresa e Rrugës" {...register("address")} />
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Statusi *
                 </label>
                 <select
                   {...register("status")}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
                 >
                   <option value="for_sale">Në Shitje</option>
-				{/* <option value="sold">Shitur</option> */}
-				{/* <option value="rented">Dhënë me Qira</option> */}
+                  {/* <option value="sold">Shitur</option> */}
+                  {/* <option value="rented">Dhënë me Qira</option> */}
                   <option value="for_rent">Me Qira</option>
                 </select>
               </div>
@@ -398,29 +394,29 @@ useEffect(() => {
                 {...register("activeDays")}
               />
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Shënim
                 </label>
-                <div className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white/60">
+                <div className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-muted-foreground">
                   Pas skadimit, projekti largohet nga faqja publike dhe mbetet vetëm në admin si “Skaduar”.
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-white/70 uppercase tracking-wider">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Përshkrimi
               </label>
               <textarea
                 {...register("description")}
                 rows={5}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary resize-none"
+                className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary resize-none"
               />
             </div>
           </div>
 
           <div className="glass-panel p-6 md:p-8 rounded-2xl space-y-6">
-            <h2 className="font-display text-xl text-primary border-b border-white/10 pb-4">
+            <h2 className="font-display text-xl text-primary border-b border-border pb-4">
               Specifikimet
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -465,7 +461,7 @@ useEffect(() => {
           </div>
 
           <div className="glass-panel p-6 md:p-8 rounded-2xl space-y-6 border-l-4 border-l-primary">
-            <h2 className="font-display text-xl text-primary border-b border-white/10 pb-4 flex items-center gap-2">
+            <h2 className="font-display text-xl text-primary border-b border-border pb-4 flex items-center gap-2">
               Eksperienca Virtuale (Tur 360°)
             </h2>
             <p className="text-sm text-muted-foreground">
@@ -475,30 +471,30 @@ useEffect(() => {
 
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <LinkIcon size={14} />
                   URL e Turit
                 </label>
                 <input
                   type="url"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   {...register("virtualTourUrl")}
                   placeholder="https://kuula.co/share/..."
                 />
               </div>
 
-              <div className="flex items-center gap-4 text-white/30 uppercase text-xs font-bold before:flex-1 before:h-px before:bg-white/10 after:flex-1 after:h-px after:bg-white/10">
+              <div className="flex items-center gap-4 text-muted-foreground uppercase text-xs font-bold before:flex-1 before:h-px before:bg-border after:flex-1 after:h-px after:bg-border">
                 OSE
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Code size={14} />
                   Kodi Embed (HTML)
                 </label>
                 <textarea
                   rows={4}
-                  className="w-full font-mono text-sm bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-primary/80 focus:outline-none focus:border-primary resize-none"
+                  className="w-full font-mono text-sm bg-background border border-border rounded-xl px-4 py-3 text-primary/80 focus:outline-none focus:border-primary resize-none"
                   {...register("virtualTourEmbedCode")}
                   placeholder="<iframe src='...' allowfullscreen></iframe>"
                 />
@@ -507,7 +503,7 @@ useEffect(() => {
           </div>
 
           <div className="glass-panel p-6 md:p-8 rounded-2xl space-y-6 border-l-4 border-l-primary/60">
-            <h2 className="font-display text-xl text-primary border-b border-white/10 pb-4 flex items-center gap-2">
+            <h2 className="font-display text-xl text-primary border-b border-border pb-4 flex items-center gap-2">
               <Building2 size={20} /> Kontakti i Kompanisë (Kërko Informacion)
             </h2>
             <p className="text-sm text-muted-foreground">
@@ -517,34 +513,34 @@ useEffect(() => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Building2 size={14} /> Emri i Kompanisë
                 </label>
                 <input
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors"
                   {...register("contactCompany")}
                   placeholder="P.sh., Aura Estates SH.P.K."
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Phone size={14} /> Numri i Telefonit
                 </label>
                 <input
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors"
                   {...register("contactPhone")}
                   placeholder="+355 69 123 4567"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Mail size={14} /> Adresa Email
                 </label>
                 <input
                   type="email"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors"
                   {...register("contactEmail")}
                   placeholder="info@kompania.al"
                 />
@@ -553,7 +549,7 @@ useEffect(() => {
           </div>
 
           <div className="glass-panel p-6 md:p-8 rounded-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center justify-between border-b border-border pb-4">
               <h2 className="font-display text-xl text-primary flex items-center gap-2">
                 <ImageIcon size={20} /> Galeria e Fotove
               </h2>
@@ -567,7 +563,7 @@ useEffect(() => {
                     isPrimary: imageFields.length === 0,
                   })
                 }
-                className="text-sm text-primary hover:text-white font-medium flex items-center gap-1"
+                className="text-sm text-primary hover:text-foreground font-medium flex items-center gap-1"
               >
                 <Plus size={16} /> Shto Foto
               </button>
@@ -577,18 +573,18 @@ useEffect(() => {
               {imageFields.map((field, index) => (
                 <div
                   key={field.id}
-                  className="flex gap-4 items-start bg-black/20 p-4 rounded-xl border border-white/5"
+                  className="flex gap-4 items-start bg-muted/40 p-4 rounded-xl border border-border"
                 >
                   <div className="flex-1 space-y-4">
                     <input
                       {...register(`images.${index}.url` as const)}
                       placeholder="URL e Fotos (https://...)"
-                      className="w-full bg-background border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
                     />
                     <input
                       {...register(`images.${index}.caption` as const)}
                       placeholder="Përshkrimi (Opsionale)"
-                      className="w-full bg-background border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
                     />
                   </div>
 

@@ -740,10 +740,39 @@ setEditingHotspot({
   };
 
   const handlePlaceEditedHotspotAtCenter = () => {
-    if (!editingHotspot) return;
-	
-	
-	const handleSaveHotspotTargetView = async (hotspotId: number) => {
+  if (!editingHotspot) return;
+
+  const livePosition = getLiveViewerPosition();
+
+  if (!livePosition) {
+    toast({
+      title: "Gabim",
+      description: "Pozicioni aktual i kamerës nuk u lexua.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  setEditingHotspot((prev) =>
+    prev
+      ? {
+          ...prev,
+          yaw: livePosition.yaw,
+          pitch: livePosition.pitch,
+        }
+      : prev,
+  );
+
+  setCameraCenter(livePosition);
+  setIsEditingHotspotPlacement(true);
+
+  toast({
+    title: "Pozicioni u përditësua",
+    description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
+  });
+};
+
+const handleSaveHotspotTargetView = async (hotspotId: number) => {
   const livePosition = getLiveViewerPosition();
 
   if (!livePosition) {
@@ -805,38 +834,10 @@ setEditingHotspot({
     });
   }
 };
-	
-	
-
-    const livePosition = getLiveViewerPosition();
-
-    if (!livePosition) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setEditingHotspot((prev) =>
-      prev
-        ? {
-            ...prev,
-            yaw: livePosition.yaw,
-            pitch: livePosition.pitch,
-          }
-        : prev,
-    );
-
-    setCameraCenter(livePosition);
-    setIsEditingHotspotPlacement(true);
-
-    toast({
-      title: "Pozicioni u përditësua",
-      description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
-    });
-  };
+  
+  
+  
+  
 
   const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
     setEditingHotspot((prev) => {
@@ -1278,16 +1279,16 @@ const virtualTourNodes = useMemo(() => {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 md:p-6 flex items-center justify-between">
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setLocation("/admin")}
-            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-colors"
+            className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="font-display text-2xl font-bold text-white leading-none">
+            <h1 className="font-display text-2xl font-bold text-foreground leading-none">
               Menaxho Turin Virtual
             </h1>
             <p className="text-muted-foreground text-xs uppercase tracking-widest mt-1">
@@ -1299,7 +1300,7 @@ const virtualTourNodes = useMemo(() => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 space-y-8">
         <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
+          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
             <div>
               <h2 className="font-display text-xl text-primary font-bold">1. Skenat 360°</h2>
               <p className="text-sm text-muted-foreground mt-1">
@@ -1335,7 +1336,7 @@ const virtualTourNodes = useMemo(() => {
                     className={`rounded-2xl overflow-hidden border bg-card ${
                       selectedSceneId === scene.id
                         ? "border-primary ring-2 ring-primary/20"
-                        : "border-white/10"
+                        : "border-border"
                     }`}
                   >
                     <div className="aspect-[2/1] bg-black relative">
@@ -1353,7 +1354,7 @@ const virtualTourNodes = useMemo(() => {
 
                     <div className="p-4 space-y-3">
                       <div>
-                        <h3 className="text-white font-medium truncate">{scene.title}</h3>
+                        <h3 className="text-foreground font-medium truncate">{scene.title}</h3>
                         <p className="text-xs text-muted-foreground mt-1">
                           Renditja: {scene.sort_order}
                         </p>
@@ -1367,7 +1368,7 @@ const virtualTourNodes = useMemo(() => {
                         className={`w-full py-2 rounded-xl text-sm flex items-center justify-center gap-2 ${
                           selectedSceneId === scene.id
                             ? "bg-primary/15 text-primary"
-                            : "bg-white/5 text-white hover:bg-white/10"
+                            : "bg-muted text-foreground hover:bg-muted/80"
                         }`}
                       >
                         <Crosshair size={14} /> Edito Hotspot-et
@@ -1376,7 +1377,7 @@ const virtualTourNodes = useMemo(() => {
                       <div className="grid grid-cols-3 gap-2">
                         <button
                           onClick={() => openEditScene(scene)}
-                          className="py-2 rounded-xl bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-white flex justify-center"
+                          className="py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground flex items-center justify-center"
                           title="Edito skenën"
                         >
                           <Edit size={14} />
@@ -1405,7 +1406,7 @@ const virtualTourNodes = useMemo(() => {
 
         {selectedScene && (
           <div className="glass-panel p-6 rounded-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
               <div>
                 <h2 className="font-display text-xl text-primary font-bold">
                   2. Editor Profesional i Hotspot-eve
@@ -1420,13 +1421,13 @@ const virtualTourNodes = useMemo(() => {
             <div className="flex flex-wrap gap-2 mb-4">
               <button
                 onClick={handleSaveSceneStartView}
-                className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
               >
                 Ruaj këndin fillestar të kësaj skene
               </button>
 
               {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
-                <div className="px-4 py-2 rounded-xl bg-black/20 text-xs text-white/70 border border-white/10">
+                className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border"
                   Start view: {selectedScene.initial_yaw.toFixed(3)} / {selectedScene.initial_pitch.toFixed(3)}
                 </div>
               )}
@@ -1440,7 +1441,7 @@ const virtualTourNodes = useMemo(() => {
                   </div>
                 )}
 
-                <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black relative">
+                <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-border bg-black relative">
                   <div ref={editorContainerRef} className="w-full h-full" />
 
                   {(isPlacementMode || isEditingHotspotPlacement) && (
@@ -1472,7 +1473,7 @@ const virtualTourNodes = useMemo(() => {
                 </div>
 
                 <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-                  <h3 className="text-white font-medium flex items-center gap-2">
+                  <h3 className="text-foreground font-medium flex items-center gap-2">
                     <Link2 size={16} /> Shto hotspot të ri
                   </h3>
 
@@ -1482,7 +1483,7 @@ const virtualTourNodes = useMemo(() => {
                         Skena destinacion
                       </label>
                       <select
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
                         value={draft.to_scene_id}
                         onChange={(e) =>
                           setDraft((prev) => ({
@@ -1512,7 +1513,7 @@ const virtualTourNodes = useMemo(() => {
                         Etiketa
                       </label>
                       <input
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
                         value={draft.label}
                         onChange={(e) =>
                           setDraft((prev) => ({ ...prev, label: e.target.value }))
@@ -1522,10 +1523,10 @@ const virtualTourNodes = useMemo(() => {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+                  <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <span>
-                        <strong className="text-white">Status:</strong>{" "}
+                        <strong className="text-foreground">Status:</strong>{" "}
                         {isPlacementMode
                           ? draft.yaw !== null && draft.pitch !== null
                             ? "Gati për ruajtje"
@@ -1533,13 +1534,13 @@ const virtualTourNodes = useMemo(() => {
                           : "Joaktiv"}
                       </span>
                       <span>
-                        <strong className="text-white">Yaw/Pitch:</strong>{" "}
+                        <strong className="text-foreground">Yaw/Pitch:</strong>{" "}
                         {draft.yaw !== null && draft.pitch !== null
                           ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
                           : "Pa zgjedhur"}
                       </span>
                       <span>
-                        <strong className="text-white">Target:</strong>{" "}
+                        <strong className="text-foreground">Target:</strong>{" "}
                         {draft.to_scene_id === ""
                           ? "Pa zgjedhur"
                           : scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.title ||
@@ -1572,7 +1573,7 @@ const virtualTourNodes = useMemo(() => {
                           className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
                             draft.yaw !== null && draft.pitch !== null
                               ? "bg-primary text-black"
-                              : "bg-white/10 text-white/50 cursor-not-allowed"
+                              : "bg-muted text-muted-foreground cursor-not-allowed"
                           }`}
                         >
                           <Check size={16} />
@@ -1581,7 +1582,7 @@ const virtualTourNodes = useMemo(() => {
 
                         <button
                           onClick={() => resetDraft(true)}
-                          className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
                         >
                           <X size={16} />
                           Pastro Pozicionin
@@ -1589,7 +1590,7 @@ const virtualTourNodes = useMemo(() => {
 
                         <button
                           onClick={handleStopPlacement}
-                          className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                         >
                           Dil nga Placement Mode
                         </button>
@@ -1598,11 +1599,11 @@ const virtualTourNodes = useMemo(() => {
                   </div>
 
                   {isPlacementMode && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
                       <button
                         type="button"
                         onClick={() => nudgeDraftPosition(-0.02, 0)}
-                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
                       >
                         <ArrowLeftRight size={14} />
                         Majtas
@@ -1610,14 +1611,14 @@ const virtualTourNodes = useMemo(() => {
                       <button
                         type="button"
                         onClick={() => nudgeDraftPosition(0.02, 0)}
-                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                       >
                         Djathtas
                       </button>
                       <button
                         type="button"
                         onClick={() => nudgeDraftPosition(0, -0.02)}
-                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
                       >
                         <ArrowUp size={14} />
                         Lart
@@ -1625,7 +1626,7 @@ const virtualTourNodes = useMemo(() => {
                       <button
                         type="button"
                         onClick={() => nudgeDraftPosition(0, 0.02)}
-                        className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15 inline-flex items-center gap-2"
+                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
                       >
                         <ArrowDown size={14} />
                         Poshtë
@@ -1635,8 +1636,8 @@ const virtualTourNodes = useMemo(() => {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <h3 className="text-white font-medium mb-4">Hotspot-et ekzistuese</h3>
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <h3 className="text-foreground font-medium mb-4">Hotspot-et ekzistuese</h3>
 
                 {selectedScene.hotspots.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">
@@ -1654,16 +1655,16 @@ const virtualTourNodes = useMemo(() => {
                         return (
                           <div
                             key={String(hotspot.id)}
-                            className="rounded-xl border border-white/5 bg-black/25 p-3 flex items-center justify-between gap-3"
+                            className="rounded-xl border border-border bg-muted/40 p-3 flex items-center justify-between gap-3"
                           >
                             <div className="min-w-0">
-                              <div className="text-sm text-white font-medium truncate">
+                              <div className="text-sm text-foreground font-medium truncate">
                                 {target?.title || "Skenë e panjohur"}
                               </div>
                               <div className="text-xs text-muted-foreground truncate">
                                 {hotspot.label || "Pa etiketë"}
                               </div>
-                              <div className="text-[11px] text-white/50 mt-1">
+                              <div className="text-[11px] text-muted-foreground mt-1">
                                 yaw {hotspot.yaw.toFixed(3)} / pitch {hotspot.pitch.toFixed(3)}
                               </div>
                             </div>
@@ -1704,7 +1705,7 @@ const virtualTourNodes = useMemo(() => {
         )}
 
         <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
             <div>
               <h2 className="font-display text-xl text-primary font-bold">3. Preview i Turit</h2>
               <p className="text-sm text-muted-foreground mt-1">
@@ -1719,7 +1720,7 @@ const virtualTourNodes = useMemo(() => {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-white/10 bg-black">
+              <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-border bg-black">
                 <div ref={previewContainerRef} className="w-full h-full" />
               </div>
 
@@ -1730,7 +1731,7 @@ const virtualTourNodes = useMemo(() => {
                   .map((scene) => (
                     <div
                       key={String(scene.id)}
-                      className="rounded-xl overflow-hidden border border-white/10 bg-white/5"
+                      className="rounded-xl overflow-hidden border border-border bg-card"
                     >
                       <div className="aspect-[4/3] bg-black">
                         <img
@@ -1740,7 +1741,7 @@ const virtualTourNodes = useMemo(() => {
                         />
                       </div>
                       <div className="p-2">
-                        <p className="text-xs text-white truncate">{scene.title}</p>
+                        <p className="text-xs text-foreground truncate">{scene.title}</p>
                         <p className="text-[11px] text-muted-foreground">
                           {scene.hotspots.length} hotspot-e
                         </p>
@@ -1753,7 +1754,7 @@ const virtualTourNodes = useMemo(() => {
         </div>
 
         <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
+          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
             <div>
               <h2 className="font-display text-xl text-primary font-bold">
                 4. Plani i Katit (Opsionale)
@@ -1766,16 +1767,16 @@ const virtualTourNodes = useMemo(() => {
 
           <div className="flex flex-col md:flex-row gap-8">
             <div
-              className="flex-1 max-w-[700px] aspect-[4/3] bg-white/5 border-2 border-white/10 rounded-2xl relative overflow-hidden"
+              className="flex-1 max-w-[700px] aspect-[4/3] bg-muted/40 border-2 border-border rounded-2xl relative overflow-hidden"
               style={{
                 backgroundImage:
                   "radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)",
                 backgroundSize: "20px 20px",
               }}
             >
-              <div className="absolute inset-0 flex items-center justify-center text-white/15 pointer-events-none select-none">
-                <MapIcon size={70} />
-              </div>
+<div className="absolute inset-0 flex items-center justify-center text-muted-foreground/20 pointer-events-none select-none">
+  <MapIcon size={70} />
+</div>
 
               {scenes.map((scene) => {
                 const x = scene.position_x ?? 50;
@@ -1816,8 +1817,8 @@ const virtualTourNodes = useMemo(() => {
               })}
             </div>
 
-            <div className="w-full md:w-72 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="text-white font-medium mb-4">Skenat</h3>
+            <div className="w-full md:w-72 rounded-2xl border border-border bg-white/5 p-4">
+              <h3 className="text-foreground font-medium mb-4">Skenat</h3>
               <div className="space-y-3">
                 {scenes
                   .slice()
@@ -1825,7 +1826,7 @@ const virtualTourNodes = useMemo(() => {
                   .map((scene) => (
                     <div
                       key={String(scene.id)}
-                      className="flex items-center gap-3 rounded-xl bg-black/20 p-2.5 border border-white/5"
+                      className="flex items-center gap-3 rounded-xl bg-muted/40 p-2.5 border border-border"
                     >
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
                         {scene.thumbnail_url || scene.image_url ? (
@@ -1841,7 +1842,7 @@ const virtualTourNodes = useMemo(() => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{scene.title}</p>
+                        <p className="text-sm text-foreground truncate">{scene.title}</p>
                         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Move size={11} />{" "}
                           {scene.position_x != null && scene.position_y != null
@@ -1858,7 +1859,7 @@ const virtualTourNodes = useMemo(() => {
       </main>
 
       <Dialog open={isSceneModalOpen} onOpenChange={setIsSceneModalOpen}>
-        <DialogContent className="bg-card border-white/10 text-white">
+        <DialogContent className="bg-card border-border text-foreground">
           <DialogHeader>
             <DialogTitle>
               {editingSceneId ? "Edito Skenën" : "Shto Skenë të Re"}
@@ -1871,7 +1872,7 @@ const virtualTourNodes = useMemo(() => {
                 Titulli *
               </label>
               <input
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
+                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
                 value={sceneForm.title}
                 onChange={(e) =>
                   setSceneForm((prev) => ({ ...prev, title: e.target.value }))
@@ -1885,7 +1886,7 @@ const virtualTourNodes = useMemo(() => {
                 URL e panoramës 360° *
               </label>
               <input
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
+                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
                 value={sceneForm.imageUrl}
                 onChange={(e) =>
                   setSceneForm((prev) => ({ ...prev, imageUrl: e.target.value }))
@@ -1899,7 +1900,7 @@ const virtualTourNodes = useMemo(() => {
                 Thumbnail URL
               </label>
               <input
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
+                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
                 value={sceneForm.thumbnailUrl}
                 onChange={(e) =>
                   setSceneForm((prev) => ({ ...prev, thumbnailUrl: e.target.value }))
@@ -1915,7 +1916,7 @@ const virtualTourNodes = useMemo(() => {
                 </label>
                 <input
                   type="number"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-sm focus:border-primary focus:outline-none"
+                  className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
                   value={sceneForm.sortOrder}
                   onChange={(e) =>
                     setSceneForm((prev) => ({
@@ -1946,10 +1947,10 @@ const virtualTourNodes = useMemo(() => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <button
               onClick={() => setIsSceneModalOpen(false)}
-              className="px-4 py-2 text-sm hover:bg-white/5 rounded-lg"
+              className="px-4 py-2 text-sm hover:bg-muted rounded-lg"
             >
               Anulo
             </button>
@@ -1973,7 +1974,7 @@ const virtualTourNodes = useMemo(() => {
           }
         }}
       >
-        <DialogContent className="bg-card border-white/10 text-white">
+        <DialogContent className="bg-card border-border text-foreground">
           <DialogHeader>
             <DialogTitle>Edito Hotspot-in</DialogTitle>
           </DialogHeader>
@@ -1985,7 +1986,7 @@ const virtualTourNodes = useMemo(() => {
                   Skena destinacion
                 </label>
                 <select
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                  className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
                   value={editingHotspot.to_scene_id}
                   onChange={(e) =>
                     setEditingHotspot((prev) =>
@@ -2021,7 +2022,7 @@ const virtualTourNodes = useMemo(() => {
                   Etiketa
                 </label>
                 <input
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-3 text-white"
+                  className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
                   value={editingHotspot.label}
                   onChange={(e) =>
                     setEditingHotspot((prev) =>
@@ -2032,14 +2033,14 @@ const virtualTourNodes = useMemo(() => {
                 />
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/80">
+              <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <span>
-                    <strong className="text-white">Pozicioni:</strong>{" "}
+                    <strong className="text-foreground">Pozicioni:</strong>{" "}
                     {editingHotspot.yaw.toFixed(3)} / {editingHotspot.pitch.toFixed(3)}
                   </span>
                   <span>
-                    <strong className="text-white">Statusi:</strong>{" "}
+                    <strong className="text-foreground">Statusi:</strong>{" "}
                     {isEditingHotspotPlacement
                       ? "Pozicioni po rregullohet"
                       : "Gati për ruajtje"}
@@ -2059,7 +2060,7 @@ const virtualTourNodes = useMemo(() => {
 
   <button
     onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
-    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+    className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
   >
     Ruaj drejtimin e hyrjes për këtë hotspot
   </button>
@@ -2067,28 +2068,28 @@ const virtualTourNodes = useMemo(() => {
                 <button
                   type="button"
                   onClick={() => nudgeEditingHotspotPosition(-0.02, 0)}
-                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                 >
                   Majtas
                 </button>
                 <button
                   type="button"
                   onClick={() => nudgeEditingHotspotPosition(0.02, 0)}
-                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                 >
                   Djathtas
                 </button>
                 <button
                   type="button"
                   onClick={() => nudgeEditingHotspotPosition(0, -0.02)}
-                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                 >
                   Lart
                 </button>
                 <button
                   type="button"
                   onClick={() => nudgeEditingHotspotPosition(0, 0.02)}
-                  className="px-3 py-2 rounded-xl bg-white/10 text-white hover:bg-white/15"
+                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                 >
                   Poshtë
                 </button>
@@ -2103,14 +2104,14 @@ const virtualTourNodes = useMemo(() => {
             </div>
           )}
 
-          <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <button
               onClick={() => {
                 setIsEditHotspotModalOpen(false);
                 setEditingHotspot(null);
                 setIsEditingHotspotPlacement(false);
               }}
-              className="px-4 py-2 text-sm hover:bg-white/5 rounded-lg"
+              className="px-4 py-2 text-sm hover:bg-muted rounded-lg"
             >
               Anulo
             </button>

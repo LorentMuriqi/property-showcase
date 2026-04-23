@@ -181,16 +181,16 @@ export default function AdminRules() {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 md:p-6 flex items-center justify-between">
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setLocation("/admin")}
-            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-colors"
+            className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="font-display text-2xl font-bold text-white leading-none">
+            <h1 className="font-display text-2xl font-bold text-foreground leading-none">
               Rules
             </h1>
             <p className="text-muted-foreground text-xs uppercase tracking-widest mt-1">
@@ -201,16 +201,16 @@ export default function AdminRules() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 glass-panel rounded-2xl overflow-hidden border border-white/5">
-          <div className="p-6 border-b border-white/5 flex items-center justify-between">
-            <h2 className="font-display text-xl text-white">Lista e Rule-ve</h2>
+        <div className="lg:col-span-2 glass-panel rounded-2xl overflow-hidden border border-border">
+          <div className="p-6 border-b border-border flex items-center justify-between">
+            <h2 className="font-display text-xl text-foreground">Lista e Rule-ve</h2>
           </div>
 
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-border">
             {roles.map((role) => (
               <div key={role.id} className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <h3 className="text-white font-semibold">{role.name}</h3>
+                  <h3 className="text-foreground font-semibold">{role.name}</h3>
                   <p className="text-sm text-muted-foreground mt-1">
                     {role.description || "Pa përshkrim"}
                   </p>
@@ -225,7 +225,7 @@ export default function AdminRules() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEdit(role)}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white"
+                    className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground"
                   >
                     <Pencil size={16} />
                   </button>
@@ -247,14 +247,14 @@ export default function AdminRules() {
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl border border-white/5 p-6 space-y-6">
+        <div className="glass-panel rounded-2xl border border-border p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-xl text-white">
+            <h2 className="font-display text-xl text-foreground">
               {editingId ? "Edito Rule" : "Rule i Ri"}
             </h2>
 
             {editingId ? (
-              <button onClick={resetForm} className="text-muted-foreground hover:text-white">
+              <button onClick={resetForm} className="text-muted-foreground hover:text-foreground">
                 <X size={18} />
               </button>
             ) : (
@@ -267,7 +267,7 @@ export default function AdminRules() {
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Emri i rule"
-              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white"
+              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground"
             />
 
             <textarea
@@ -275,10 +275,10 @@ export default function AdminRules() {
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
               placeholder="Përshkrimi"
               rows={3}
-              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white resize-none"
+              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground resize-none"
             />
 
-            <label className="flex items-center gap-3 text-white">
+            <label className="flex items-center gap-3 text-foreground">
               <input
                 type="checkbox"
                 checked={form.can_create_property}
@@ -289,7 +289,7 @@ export default function AdminRules() {
               Mund të shtojë prona
             </label>
 
-            <label className="flex items-center gap-3 text-white">
+            <label className="flex items-center gap-3 text-foreground">
               <input
                 type="checkbox"
                 checked={form.can_edit_property}
@@ -300,7 +300,7 @@ export default function AdminRules() {
               Mund të editojë prona
             </label>
 
-            <label className="flex items-center gap-3 text-white">
+            <label className="flex items-center gap-3 text-foreground">
               <input
                 type="checkbox"
                 checked={form.can_delete_property}
@@ -311,7 +311,7 @@ export default function AdminRules() {
               Mund të fshijë prona
             </label>
 
-            <label className="flex items-center gap-3 text-white">
+            <label className="flex items-center gap-3 text-foreground">
               <input
                 type="checkbox"
                 checked={form.can_manage_virtual_tours}

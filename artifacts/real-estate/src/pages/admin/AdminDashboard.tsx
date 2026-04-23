@@ -29,12 +29,12 @@ function getComputedListingStatus(project: any): AdminListingStatus {
 
 export default function AdminDashboard() {
   const {
-  isAdmin,
-  isSuperAdmin,
-  permissions,
-  isLoading: authLoading,
-  logout,
-} = useAuth();
+    isAdmin,
+    isSuperAdmin,
+    permissions,
+    isLoading: authLoading,
+    logout,
+  } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -111,79 +111,75 @@ export default function AdminDashboard() {
     fetchProjects();
   }, [authLoading, isAdmin]);
 
-const handleDelete = async (id: number | string, title: string) => {
-  if (!confirm(`A jeni i sigurt që dëshironi të fshini përgjithmonë "${title}"?`)) {
-    return;
-  }
-
-  try {
-    setIsDeleting(true);
-
-    // 1. Merr të gjitha skenat e lidhura me këtë pronë
-    const { data: scenes, error: scenesError } = await supabase
-      .from("virtual_tour_scenes")
-      .select("id")
-      .eq("property_id", id);
-
-    if (scenesError) throw scenesError;
-
-    const sceneIds = (scenes || []).map((scene) => scene.id);
-
-    // 2. Fshi hotspot-et e lidhura me këto skena
-    if (sceneIds.length > 0) {
-      const { error: hotspotsBySceneError } = await supabase
-        .from("virtual_tour_hotspots")
-        .delete()
-        .in("scene_id", sceneIds);
-
-      if (hotspotsBySceneError) throw hotspotsBySceneError;
-
-      const { error: hotspotsByTargetError } = await supabase
-        .from("virtual_tour_hotspots")
-        .delete()
-        .in("to_scene_id", sceneIds);
-
-      if (hotspotsByTargetError) throw hotspotsByTargetError;
-
-      // 3. Fshi skenat
-      const { error: scenesDeleteError } = await supabase
-        .from("virtual_tour_scenes")
-        .delete()
-        .in("id", sceneIds);
-
-      if (scenesDeleteError) throw scenesDeleteError;
+  const handleDelete = async (id: number | string, title: string) => {
+    if (!confirm(`A jeni i sigurt që dëshironi të fshini përgjithmonë "${title}"?`)) {
+      return;
     }
 
-    // 4. Fshi pronën
-    const { error: propertyDeleteError } = await supabase
-      .from("properties")
-      .delete()
-      .eq("id", id);
+    try {
+      setIsDeleting(true);
 
-    if (propertyDeleteError) throw propertyDeleteError;
+      const { data: scenes, error: scenesError } = await supabase
+        .from("virtual_tour_scenes")
+        .select("id")
+        .eq("property_id", id);
 
-    setProjects((prev) => prev.filter((project) => project.id !== id));
+      if (scenesError) throw scenesError;
 
-    toast({
-      title: "Projekti u Fshi",
-      description: "Prona dhe të gjitha të dhënat e lidhura u hoqën me sukses.",
-    });
-  } catch (err) {
-    console.error("Delete error:", err);
-    toast({
-      title: "Gabim",
-      description: "Dështoi fshirja e projektit.",
-      variant: "destructive",
-    });
-  } finally {
-    setIsDeleting(false);
-  }
-};
+      const sceneIds = (scenes || []).map((scene) => scene.id);
+
+      if (sceneIds.length > 0) {
+        const { error: hotspotsBySceneError } = await supabase
+          .from("virtual_tour_hotspots")
+          .delete()
+          .in("scene_id", sceneIds);
+
+        if (hotspotsBySceneError) throw hotspotsBySceneError;
+
+        const { error: hotspotsByTargetError } = await supabase
+          .from("virtual_tour_hotspots")
+          .delete()
+          .in("to_scene_id", sceneIds);
+
+        if (hotspotsByTargetError) throw hotspotsByTargetError;
+
+        const { error: scenesDeleteError } = await supabase
+          .from("virtual_tour_scenes")
+          .delete()
+          .in("id", sceneIds);
+
+        if (scenesDeleteError) throw scenesDeleteError;
+      }
+
+      const { error: propertyDeleteError } = await supabase
+        .from("properties")
+        .delete()
+        .eq("id", id);
+
+      if (propertyDeleteError) throw propertyDeleteError;
+
+      setProjects((prev) => prev.filter((project) => project.id !== id));
+
+      toast({
+        title: "Projekti u Fshi",
+        description: "Prona dhe të gjitha të dhënat e lidhura u hoqën me sukses.",
+      });
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast({
+        title: "Gabim",
+        description: "Dështoi fshirja e projektit.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handlePause = async (project: any) => {
-	  if (!confirm(`A jeni i sigurt që dëshironi ta pezulloni "${project.title}"?`)) {
-		return;
-		}
+    if (!confirm(`A jeni i sigurt që dëshironi ta pezulloni "${project.title}"?`)) {
+      return;
+    }
     try {
       setActionId(project.id);
 
@@ -215,9 +211,9 @@ const handleDelete = async (id: number | string, title: string) => {
   };
 
   const handleExpire = async (project: any) => {
-	  if (!confirm(`A jeni i sigurt që dëshironi ta skadoni "${project.title}"?`)) {
-		return;
-		}
+    if (!confirm(`A jeni i sigurt që dëshironi ta skadoni "${project.title}"?`)) {
+      return;
+    }
     try {
       setActionId(project.id);
 
@@ -250,9 +246,9 @@ const handleDelete = async (id: number | string, title: string) => {
   };
 
   const handleResume = async (project: any) => {
-	  if (!confirm(`A jeni i sigurt që dëshironi ta riaktivizoni "${project.title}"?`)) {
-		return;
-		}
+    if (!confirm(`A jeni i sigurt që dëshironi ta riaktivizoni "${project.title}"?`)) {
+      return;
+    }
     try {
       setActionId(project.id);
 
@@ -342,9 +338,9 @@ const handleDelete = async (id: number | string, title: string) => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 glass-panel border-r border-white/5 flex flex-col hidden md:flex h-screen sticky top-0">
-        <div className="p-6 border-b border-white/5">
-          <span className="font-display text-xl font-bold tracking-wider text-white">
+      <aside className="w-full md:w-64 glass-panel border-r border-border flex flex-col hidden md:flex h-screen sticky top-0">
+        <div className="p-6 border-b border-border">
+          <span className="font-display text-xl font-bold tracking-wider text-foreground">
             AURA
             <span className="font-sans font-light text-muted-foreground ml-2 text-xs tracking-widest uppercase">
               Admin
@@ -352,41 +348,41 @@ const handleDelete = async (id: number | string, title: string) => {
           </span>
         </div>
 
-<nav className="flex-1 p-4 space-y-2">
-  <Link
-    href="/admin"
-    className="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-xl font-medium"
-  >
-    <Home size={18} /> Properties
-  </Link>
+        <nav className="flex-1 p-4 space-y-2">
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-xl font-medium"
+          >
+            <Home size={18} /> Properties
+          </Link>
 
-  {isSuperAdmin && (
-    <>
-      <Link
-        href="/admin/users"
-        className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
-      >
-        <ExternalLink size={18} /> Users
-      </Link>
+          {isSuperAdmin && (
+            <>
+              <Link
+                href="/admin/users"
+                className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl font-medium transition-colors"
+              >
+                <ExternalLink size={18} /> Users
+              </Link>
 
-      <Link
-        href="/admin/rules"
-        className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
-      >
-        <ExternalLink size={18} /> Rules
-      </Link>
-    </>
-  )}
+              <Link
+                href="/admin/rules"
+                className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl font-medium transition-colors"
+              >
+                <ExternalLink size={18} /> Rules
+              </Link>
+            </>
+          )}
 
-  <Link
-    href="/"
-    className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl font-medium transition-colors"
-  >
-    <ExternalLink size={18} /> Shiko Faqen
-  </Link>
-</nav>
+          <Link
+            href="/"
+            className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl font-medium transition-colors"
+          >
+            <ExternalLink size={18} /> Shiko Faqen
+          </Link>
+        </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className="p-4 border-t border-border">
           <button
             onClick={logout}
             className="w-full py-3 text-destructive border border-destructive/20 hover:bg-destructive hover:text-white rounded-xl font-medium transition-colors"
@@ -398,7 +394,7 @@ const handleDelete = async (id: number | string, title: string) => {
 
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <div className="md:hidden flex justify-between items-center mb-6 glass-panel p-4 rounded-2xl">
-          <span className="font-display text-xl font-bold text-white">AURA Admin</span>
+          <span className="font-display text-xl font-bold text-foreground">AURA Admin</span>
           <button onClick={logout} className="text-destructive text-sm font-medium">
             Dalje
           </button>
@@ -406,7 +402,7 @@ const handleDelete = async (id: number | string, title: string) => {
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="font-display text-3xl text-white font-bold">
+            <h1 className="font-display text-3xl text-foreground font-bold">
               Portofoli i Pronave
             </h1>
             <p className="text-muted-foreground mt-1">
@@ -414,14 +410,14 @@ const handleDelete = async (id: number | string, title: string) => {
             </p>
           </div>
 
-{permissions.canCreateProperty && (
-  <Link
-    href="/admin/projects/new"
-    className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors"
-  >
-    <Plus size={18} /> Projekt i Ri
-  </Link>
-)}
+          {permissions.canCreateProperty && (
+            <Link
+              href="/admin/projects/new"
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors"
+            >
+              <Plus size={18} /> Projekt i Ri
+            </Link>
+          )}
         </div>
 
         {isLoading ? (
@@ -429,15 +425,15 @@ const handleDelete = async (id: number | string, title: string) => {
             Duke ngarkuar të dhënat e portofolit...
           </div>
         ) : (
-          <div className="glass-panel rounded-2xl border border-white/5 overflow-hidden">
+          <div className="glass-panel rounded-2xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-black/40 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="p-4 font-medium">Prona</th>
                     <th className="p-4 font-medium">Çmimi</th>
                     <th
-                      className="p-4 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                      className="p-4 font-medium cursor-pointer hover:text-foreground transition-colors select-none"
                       onClick={() => {
                         setSortMode((prev) => {
                           if (prev === "default") return "expiry_asc";
@@ -453,13 +449,13 @@ const handleDelete = async (id: number | string, title: string) => {
                     <th className="p-4 font-medium text-right">Veprimet</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-border">
                   {getSortedProjects().map((project) => {
                     const listingStatus = getComputedListingStatus(project);
                     const meta = statusMeta[listingStatus];
 
                     return (
-                      <tr key={project.id} className="hover:bg-white/5 transition-colors">
+                      <tr key={project.id} className="hover:bg-muted/60 transition-colors">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
                             <div className="w-12 h-12 rounded-lg bg-card overflow-hidden shrink-0">
@@ -470,13 +466,13 @@ const handleDelete = async (id: number | string, title: string) => {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-full bg-white/5 flex items-center justify-center text-[10px] text-muted-foreground">
+                                <div className="w-full h-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground">
                                   S'ka Foto
                                 </div>
                               )}
                             </div>
                             <div>
-                              <span className="font-medium text-white max-w-[220px] truncate block">
+                              <span className="font-medium text-foreground max-w-[220px] truncate block">
                                 {project.title}
                               </span>
                               <span className="text-sm text-muted-foreground">
@@ -519,89 +515,89 @@ const handleDelete = async (id: number | string, title: string) => {
                         </td>
 
                         <td className="p-4 text-right space-x-2">
-{listingStatus === "active" && permissions.canEditProperty && (
-  <>
-    <button
-      onClick={() => handlePause(project)}
-      disabled={actionId === project.id}
-      className="p-2 text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg transition-colors inline-flex"
-      title="Pezullo projektin"
-    >
-      <EyeOff size={16} />
-    </button>
+                          {listingStatus === "active" && permissions.canEditProperty && (
+                            <>
+                              <button
+                                onClick={() => handlePause(project)}
+                                disabled={actionId === project.id}
+                                className="p-2 text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg transition-colors inline-flex"
+                                title="Pezullo projektin"
+                              >
+                                <EyeOff size={16} />
+                              </button>
 
-    <button
-      onClick={() => handleExpire(project)}
-      disabled={actionId === project.id}
-      className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
-      title="Skado projektin"
-    >
-      <Ban size={16} />
-    </button>
-  </>
-)}
+                              <button
+                                onClick={() => handleExpire(project)}
+                                disabled={actionId === project.id}
+                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
+                                title="Skado projektin"
+                              >
+                                <Ban size={16} />
+                              </button>
+                            </>
+                          )}
 
-{listingStatus === "paused" && permissions.canEditProperty && (
-  <>
-    <button
-      onClick={() => handleResume(project)}
-      disabled={actionId === project.id}
-      className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-      title="Riaktivizo projektin"
-    >
-      <RefreshCw size={16} />
-    </button>
+                          {listingStatus === "paused" && permissions.canEditProperty && (
+                            <>
+                              <button
+                                onClick={() => handleResume(project)}
+                                disabled={actionId === project.id}
+                                className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                                title="Riaktivizo projektin"
+                              >
+                                <RefreshCw size={16} />
+                              </button>
 
-    <button
-      onClick={() => handleExpire(project)}
-      disabled={actionId === project.id}
-      className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
-      title="Skado projektin"
-    >
-      <Ban size={16} />
-    </button>
-  </>
-)}
+                              <button
+                                onClick={() => handleExpire(project)}
+                                disabled={actionId === project.id}
+                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
+                                title="Skado projektin"
+                              >
+                                <Ban size={16} />
+                              </button>
+                            </>
+                          )}
 
-{listingStatus === "expired" && permissions.canEditProperty && (
-  <button
-    onClick={() => handleResume(project)}
-    disabled={actionId === project.id}
-    className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-    title="Riaktivizo projektin"
-  >
-    <RefreshCw size={16} />
-  </button>
-)}
+                          {listingStatus === "expired" && permissions.canEditProperty && (
+                            <button
+                              onClick={() => handleResume(project)}
+                              disabled={actionId === project.id}
+                              className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                              title="Riaktivizo projektin"
+                            >
+                              <RefreshCw size={16} />
+                            </button>
+                          )}
 
-{permissions.canManageVirtualTours && (
-  <Link href={`/admin/projects/${project.id}/virtual-tour`}>
-    <button
-      className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-      title="Menaxho Turin Virtual"
-    >
-      <Focus size={16} />
-    </button>
-  </Link>
-)}
+                          {permissions.canManageVirtualTours && (
+                            <Link href={`/admin/projects/${project.id}/virtual-tour`}>
+                              <button
+                                className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                                title="Menaxho Turin Virtual"
+                              >
+                                <Focus size={16} />
+                              </button>
+                            </Link>
+                          )}
 
-{permissions.canEditProperty && (
-  <Link href={`/admin/projects/${project.id}/edit`}>
-    <button className="p-2 text-muted-foreground hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors inline-flex">
-      <Edit size={16} />
-    </button>
-  </Link>
-)}
+                          {permissions.canEditProperty && (
+                            <Link href={`/admin/projects/${project.id}/edit`}>
+                              <button className="p-2 text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors inline-flex">
+                                <Edit size={16} />
+                              </button>
+                            </Link>
+                          )}
 
-{permissions.canDeleteProperty && (
-  <button
-    onClick={() => handleDelete(project.id, project.title)}
-    disabled={isDeleting}
-    className="p-2 text-destructive hover:text-white bg-destructive/10 hover:bg-destructive rounded-lg transition-colors inline-flex"
-  >
-    <Trash2 size={16} />
-  </button>
-)}
+                          {permissions.canDeleteProperty && (
+                            <button
+                              onClick={() => handleDelete(project.id, project.title)}
+                              disabled={isDeleting}
+                              className="p-2 text-destructive hover:text-white bg-destructive/10 hover:bg-destructive rounded-lg transition-colors inline-flex"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
