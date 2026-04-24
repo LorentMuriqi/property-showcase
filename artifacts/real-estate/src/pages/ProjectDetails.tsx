@@ -589,7 +589,7 @@ export default function ProjectDetails() {
           onClick={() => setShowContactModal(false)}
         >
           <div
-            className="relative w-full max-w-md glass-panel rounded-2xl p-8 border border-primary/30 shadow-2xl"
+            className="relative w-full max-w-md bg-background rounded-2xl p-8 border border-border shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
