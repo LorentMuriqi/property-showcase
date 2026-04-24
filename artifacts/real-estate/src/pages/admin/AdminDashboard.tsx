@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 
 type AdminListingStatus = "active" | "paused" | "expired";
+type VirtualTourStatusFilter = "published" | "draft";
 type SortMode = "default" | "expiry_asc" | "expiry_desc";
 
 function getComputedListingStatus(project: any): AdminListingStatus {
@@ -45,6 +46,7 @@ export default function AdminDashboard() {
   const [actionId, setActionId] = useState<string | number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("default");
   const [statusFilters, setStatusFilters] = useState<AdminListingStatus[]>([]);
+  const [virtualTourFilters, setVirtualTourFilters] = useState<VirtualTourStatusFilter[]>([]);
   const [showFilter, setShowFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 const [cityFilter, setCityFilter] = useState("");
@@ -353,6 +355,12 @@ const filtered = projects.filter((project) => {
   const matchesStatus =
     statusFilters.length === 0 ||
     statusFilters.includes(getComputedListingStatus(project));
+	
+	const matchesVirtualTour =
+  virtualTourFilters.length === 0 ||
+  virtualTourFilters.includes(
+    project.virtual_tour_status === "published" ? "published" : "draft"
+  );
 
   const matchesSearch =
     !normalizedSearch ||
@@ -363,7 +371,13 @@ const filtered = projects.filter((project) => {
   const matchesCity = !cityFilter || project.city === cityFilter;
   const matchesCountry = !countryFilter || project.country === countryFilter;
 
-  return matchesStatus && matchesSearch && matchesCity && matchesCountry;
+  return (
+  matchesStatus &&
+  matchesVirtualTour &&
+  matchesSearch &&
+  matchesCity &&
+  matchesCountry
+);
 });
 
   const copy = [...filtered];
@@ -477,7 +491,7 @@ const filtered = projects.filter((project) => {
 		
 		
 		
-		<div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+		<div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
   <div className="relative">
     <Search
       size={18}
@@ -520,6 +534,21 @@ const filtered = projects.filter((project) => {
       </option>
     ))}
   </select>
+  
+  <select
+  value={virtualTourFilters[0] || ""}
+  onChange={(e) => {
+    const value = e.target.value as VirtualTourStatusFilter | "";
+    setVirtualTourFilters(value ? [value] : []);
+  }}
+  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary"
+>
+  <option value="">Të gjitha turet virtuale</option>
+  <option value="published">Virtual Tour Active</option>
+  <option value="draft">Virtual Tour Draft</option>
+</select>
+  
+  
 </div>
 		
 		
