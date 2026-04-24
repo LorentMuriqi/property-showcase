@@ -43,6 +43,7 @@ export default function AdminDashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionId, setActionId] = useState<string | number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [statusFilter, setStatusFilter] = useState<"all" | AdminListingStatus>("all");
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -307,14 +308,19 @@ export default function AdminDashboard() {
     [],
   );
 
-  const getSortedProjects = () => {
-    const copy = [...projects];
+const getSortedProjects = () => {
+  const filtered =
+    statusFilter === "all"
+      ? projects
+      : projects.filter((project) => getComputedListingStatus(project) === statusFilter);
 
-    if (sortMode === "default") {
-      return copy;
-    }
+  const copy = [...filtered];
 
-    return copy.sort((a, b) => {
+  if (sortMode === "default") {
+    return copy;
+  }
+
+  return copy.sort((a, b) => {
       const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
       const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
 
@@ -432,19 +438,18 @@ export default function AdminDashboard() {
                   <tr className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="p-4 font-medium">Prona</th>
                     <th className="p-4 font-medium">Çmimi</th>
-                    <th
-                      className="p-4 font-medium cursor-pointer hover:text-foreground transition-colors select-none"
-                      onClick={() => {
-                        setSortMode((prev) => {
-                          if (prev === "default") return "expiry_asc";
-                          if (prev === "expiry_asc") return "expiry_desc";
-                          return "default";
-                        });
-                      }}
-                      title="Kliko për renditje sipas skadimit"
-                    >
-                      Statusi
-                    </th>
+<th className="p-4 font-medium">
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value as "all" | AdminListingStatus)}
+    className="bg-transparent text-xs uppercase tracking-wider text-muted-foreground font-medium focus:outline-none cursor-pointer hover:text-foreground"
+  >
+    <option value="all">Statusi</option>
+    <option value="active">Publikuar</option>
+    <option value="expired">Skaduar</option>
+    <option value="paused">Pezulluar</option>
+  </select>
+</th>
                     <th className="p-4 font-medium">Data e Skadimit</th>
                     <th className="p-4 font-medium text-right">Veprimet</th>
                   </tr>
