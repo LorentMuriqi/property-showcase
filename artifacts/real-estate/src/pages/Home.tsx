@@ -256,7 +256,21 @@ export default function Home() {
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-background border border-white/5 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-background transition-all duration-500">
                 <Map size={32} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">Ture Virtuale 360°</h3>
+              
+			  <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold flex items-center gap-1">
+  Ture Virtuale{" "}
+  <span className="relative inline-flex items-center justify-center w-[42px] h-[28px]">
+    <span className="font-bold">360</span>
+
+    <span className="absolute w-full h-full animate-orbit">
+      <span className="absolute top-0 left-1/2 -translate-x-1/2 text-primary">
+        °
+      </span>
+    </span>
+  </span>
+</h3>
+			  
+			  
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
                 Eksploroni çdo pronë në mënyrë reale përmes tureve 360°.
               </p>
