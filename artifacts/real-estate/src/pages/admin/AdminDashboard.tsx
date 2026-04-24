@@ -113,6 +113,19 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchProjects();
   }, [authLoading, isAdmin]);
+  
+  
+  useEffect(() => {
+  const handleClickOutside = () => {
+    setShowFilter(false);
+  };
+
+  window.addEventListener("click", handleClickOutside);
+
+  return () => {
+    window.removeEventListener("click", handleClickOutside);
+  };
+}, []);
 
   const handleDelete = async (id: number | string, title: string) => {
     if (!confirm(`A jeni i sigurt që dëshironi të fshini përgjithmonë "${title}"?`)) {
@@ -410,31 +423,7 @@ const getSortedProjects = () => {
             <h1 className="font-display text-3xl text-foreground font-bold">
               Portofoli i Pronave
             </h1>
-			
-			{statusFilters.length > 0 && (
-  <div className="flex flex-wrap gap-2 mb-4">
-    {statusFilters.map((status) => (
-      <div
-        key={status}
-        className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-sm"
-      >
-        {status === "active" && "Publikuar"}
-        {status === "paused" && "Pezulluar"}
-        {status === "expired" && "Skaduar"}
-
-        <button
-          onClick={() =>
-            setStatusFilters((prev) => prev.filter((s) => s !== status))
-          }
-          className="text-muted-foreground hover:text-foreground"
-        >
-          ✕
-        </button>
-      </div>
-    ))}
-  </div>
-)}
-			
+						
 			
             <p className="text-muted-foreground mt-1">
               Menaxho listimet dhe turet virtuale.
@@ -465,36 +454,83 @@ const getSortedProjects = () => {
                     <th className="p-4 font-medium">Çmimi</th>
 <th className="p-4 font-medium relative">
   <div
-    onClick={() => setShowFilter((prev) => !prev)}
+    onClick={(e) => {
+  e.stopPropagation();
+  setShowFilter((prev) => !prev);
+}}
     className="flex items-center gap-2 cursor-pointer text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
   >
     Statusi
     <Filter size={14} />
   </div>
 
-  {showFilter && (
-    <div className="absolute z-50 mt-2 w-48 bg-background border border-border rounded-xl shadow-lg p-2 space-y-1">
-      {["active", "paused", "expired"].map((status) => (
-        <div
-          key={status}
-          onClick={() => {
-            if (statusFilters.includes(status as AdminListingStatus)) {
-              setStatusFilters((prev) =>
-                prev.filter((s) => s !== status)
-              );
-            } else {
-              setStatusFilters((prev) => [...prev, status as AdminListingStatus]);
-            }
-          }}
-          className="px-3 py-2 rounded-lg hover:bg-muted cursor-pointer text-sm"
-        >
-          {status === "active" && "Publikuar"}
-          {status === "paused" && "Pezulluar"}
-          {status === "expired" && "Skaduar"}
-        </div>
-      ))}
+{showFilter && (
+  <div
+  onClick={(e) => e.stopPropagation()}
+  className="absolute z-50 mt-3 w-64 bg-background border border-border rounded-2xl shadow-xl p-3"
+>
+    <div className="min-h-[44px] flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 mb-2">
+      {statusFilters.length === 0 ? (
+        <span className="text-sm text-muted-foreground">Zgjidh statusin</span>
+      ) : (
+        statusFilters.map((status) => (
+          <span
+            key={status}
+            className="inline-flex items-center gap-2 rounded-full bg-foreground text-background px-3 py-1 text-xs font-medium"
+          >
+            {status === "active" && "Publikuar"}
+            {status === "paused" && "Pezulluar"}
+            {status === "expired" && "Skaduar"}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setStatusFilters((prev) => prev.filter((s) => s !== status));
+              }}
+              className="text-background/80 hover:text-background"
+            >
+              ×
+            </button>
+          </span>
+        ))
+      )}
     </div>
-  )}
+
+    <div className="space-y-1">
+      {["active", "paused", "expired"].map((status) => {
+        const isSelected = statusFilters.includes(status as AdminListingStatus);
+
+        return (
+          <div
+            key={status}
+            onClick={() => {
+              if (isSelected) {
+                setStatusFilters((prev) =>
+                  prev.filter((s) => s !== status)
+                );
+              } else {
+                setStatusFilters((prev) => [...prev, status as AdminListingStatus]);
+              }
+            }}
+            className={`px-3 py-2 rounded-lg cursor-pointer text-sm font-medium transition-colors ${
+              isSelected
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            {status === "active" && "Publikuar"}
+            {status === "paused" && "Pezulluar"}
+            {status === "expired" && "Skaduar"}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
+  
+  
+  
 </th>
                     <th className="p-4 font-medium">Data e Skadimit</th>
                     <th className="p-4 font-medium text-right">Veprimet</th>
@@ -654,7 +690,7 @@ const getSortedProjects = () => {
                     );
                   })}
 
-                  {projects.length === 0 && (
+                  {getSortedProjects().length === 0 && (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-muted-foreground">
                         Asnjë pronë nuk u gjet. Shto listimin tënd të parë.
