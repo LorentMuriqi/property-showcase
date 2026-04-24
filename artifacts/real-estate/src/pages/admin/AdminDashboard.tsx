@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Filter } from "lucide-react";
+import { Filter, Search } from "lucide-react";
 import {
   Plus,
   Edit,
@@ -46,6 +46,9 @@ export default function AdminDashboard() {
   const [sortMode, setSortMode] = useState<SortMode>("default");
   const [statusFilters, setStatusFilters] = useState<AdminListingStatus[]>([]);
   const [showFilter, setShowFilter] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+const [cityFilter, setCityFilter] = useState("");
+const [countryFilter, setCountryFilter] = useState("");
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -323,13 +326,45 @@ export default function AdminDashboard() {
     [],
   );
 
+
+const countries = useMemo(() => {
+  return Array.from(
+    new Set(projects.map((project) => project.country).filter(Boolean))
+  ).sort();
+}, [projects]);
+
+const cities = useMemo(() => {
+  return Array.from(
+    new Set(
+      projects
+        .filter((project) => !countryFilter || project.country === countryFilter)
+        .map((project) => project.city)
+        .filter(Boolean)
+    )
+  ).sort();
+}, [projects, countryFilter]);
+
+
+
 const getSortedProjects = () => {
-  const filtered =
-    statusFilters.length === 0
-      ? projects
-      : projects.filter((project) =>
-          statusFilters.includes(getComputedListingStatus(project))
-        );
+const normalizedSearch = searchQuery.trim().toLowerCase();
+
+const filtered = projects.filter((project) => {
+  const matchesStatus =
+    statusFilters.length === 0 ||
+    statusFilters.includes(getComputedListingStatus(project));
+
+  const matchesSearch =
+    !normalizedSearch ||
+    String(project.title || "").toLowerCase().includes(normalizedSearch) ||
+    String(project.city || "").toLowerCase().includes(normalizedSearch) ||
+    String(project.country || "").toLowerCase().includes(normalizedSearch);
+
+  const matchesCity = !cityFilter || project.city === cityFilter;
+  const matchesCountry = !countryFilter || project.country === countryFilter;
+
+  return matchesStatus && matchesSearch && matchesCity && matchesCountry;
+});
 
   const copy = [...filtered];
 
@@ -439,6 +474,55 @@ const getSortedProjects = () => {
             </Link>
           )}
         </div>
+		
+		
+		
+		<div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+  <div className="relative">
+    <Search
+      size={18}
+      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+    />
+    <input
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      placeholder="Kërko pronë, qytet ose shtet..."
+      className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+    />
+  </div>
+
+  <select
+    value={countryFilter}
+    onChange={(e) => {
+      setCountryFilter(e.target.value);
+      setCityFilter("");
+    }}
+    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary"
+  >
+    <option value="">Të gjitha shtetet</option>
+    {countries.map((country) => (
+      <option key={country} value={country}>
+        {country}
+      </option>
+    ))}
+  </select>
+
+  <select
+    value={cityFilter}
+    onChange={(e) => setCityFilter(e.target.value)}
+    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary disabled:opacity-50"
+    disabled={!countryFilter && cities.length === 0}
+  >
+    <option value="">Të gjitha qytetet</option>
+    {cities.map((city) => (
+      <option key={city} value={city}>
+        {city}
+      </option>
+    ))}
+  </select>
+</div>
+		
+		
 
         {isLoading ? (
           <div className="glass-panel rounded-2xl p-8 text-center animate-pulse text-muted-foreground">
