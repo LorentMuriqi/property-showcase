@@ -567,9 +567,12 @@ export default function ProjectDetails() {
                 </div>
 
                 <div className="space-y-4">
-                  <button className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors">
-                    Planifiko një Vizitë
-                  </button>
+<button
+  onClick={() => (window.location.href = "/Contact")}
+  className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
+>
+  Planifiko një Vizitë
+</button>
                   <button
                     onClick={() => setShowContactModal(true)}
                     className="w-full py-4 bg-transparent border border-border text-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
