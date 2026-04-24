@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { Filter } from "lucide-react";
 import {
   Plus,
   Edit,
@@ -43,7 +44,8 @@ export default function AdminDashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionId, setActionId] = useState<string | number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("default");
-  const [statusFilter, setStatusFilter] = useState<"all" | AdminListingStatus>("all");
+  const [statusFilters, setStatusFilters] = useState<AdminListingStatus[]>([]);
+  const [showFilter, setShowFilter] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -310,9 +312,11 @@ export default function AdminDashboard() {
 
 const getSortedProjects = () => {
   const filtered =
-    statusFilter === "all"
+    statusFilters.length === 0
       ? projects
-      : projects.filter((project) => getComputedListingStatus(project) === statusFilter);
+      : projects.filter((project) =>
+          statusFilters.includes(getComputedListingStatus(project))
+        );
 
   const copy = [...filtered];
 
@@ -321,20 +325,15 @@ const getSortedProjects = () => {
   }
 
   return copy.sort((a, b) => {
-      const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
-      const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
+    const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
+    const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
 
-      if (sortMode === "expiry_asc") {
-        return aTime - bTime;
-      }
+    if (sortMode === "expiry_asc") return aTime - bTime;
+    if (sortMode === "expiry_desc") return bTime - aTime;
 
-      if (sortMode === "expiry_desc") {
-        return bTime - aTime;
-      }
-
-      return 0;
-    });
-  };
+    return 0;
+  });
+};
 
   if (authLoading) {
     return <div className="min-h-screen bg-background" />;
@@ -411,6 +410,32 @@ const getSortedProjects = () => {
             <h1 className="font-display text-3xl text-foreground font-bold">
               Portofoli i Pronave
             </h1>
+			
+			{statusFilters.length > 0 && (
+  <div className="flex flex-wrap gap-2 mb-4">
+    {statusFilters.map((status) => (
+      <div
+        key={status}
+        className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-sm"
+      >
+        {status === "active" && "Publikuar"}
+        {status === "paused" && "Pezulluar"}
+        {status === "expired" && "Skaduar"}
+
+        <button
+          onClick={() =>
+            setStatusFilters((prev) => prev.filter((s) => s !== status))
+          }
+          className="text-muted-foreground hover:text-foreground"
+        >
+          ✕
+        </button>
+      </div>
+    ))}
+  </div>
+)}
+			
+			
             <p className="text-muted-foreground mt-1">
               Menaxho listimet dhe turet virtuale.
             </p>
@@ -438,17 +463,38 @@ const getSortedProjects = () => {
                   <tr className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="p-4 font-medium">Prona</th>
                     <th className="p-4 font-medium">Çmimi</th>
-<th className="p-4 font-medium">
-  <select
-    value={statusFilter}
-    onChange={(e) => setStatusFilter(e.target.value as "all" | AdminListingStatus)}
-    className="bg-transparent text-xs uppercase tracking-wider text-muted-foreground font-medium focus:outline-none cursor-pointer hover:text-foreground"
+<th className="p-4 font-medium relative">
+  <div
+    onClick={() => setShowFilter((prev) => !prev)}
+    className="flex items-center gap-2 cursor-pointer text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
   >
-    <option value="all">Statusi</option>
-    <option value="active">Publikuar</option>
-    <option value="expired">Skaduar</option>
-    <option value="paused">Pezulluar</option>
-  </select>
+    Statusi
+    <Filter size={14} />
+  </div>
+
+  {showFilter && (
+    <div className="absolute z-50 mt-2 w-48 bg-background border border-border rounded-xl shadow-lg p-2 space-y-1">
+      {["active", "paused", "expired"].map((status) => (
+        <div
+          key={status}
+          onClick={() => {
+            if (statusFilters.includes(status as AdminListingStatus)) {
+              setStatusFilters((prev) =>
+                prev.filter((s) => s !== status)
+              );
+            } else {
+              setStatusFilters((prev) => [...prev, status as AdminListingStatus]);
+            }
+          }}
+          className="px-3 py-2 rounded-lg hover:bg-muted cursor-pointer text-sm"
+        >
+          {status === "active" && "Publikuar"}
+          {status === "paused" && "Pezulluar"}
+          {status === "expired" && "Skaduar"}
+        </div>
+      ))}
+    </div>
+  )}
 </th>
                     <th className="p-4 font-medium">Data e Skadimit</th>
                     <th className="p-4 font-medium text-right">Veprimet</th>
