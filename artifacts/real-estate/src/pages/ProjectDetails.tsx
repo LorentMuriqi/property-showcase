@@ -77,6 +77,10 @@ type ProjectType = {
   virtual_tour_embed_code?: string;
   virtualTourScenes?: VirtualTourScene[];
   virtual_tour_scenes?: VirtualTourScene[];
+  virtual_tour_status?: "draft" | "published";
+  virtualTourStatus?: "draft" | "published";
+  virtual_tour_published_at?: string | null;
+  virtualTourPublishedAt?: string | null;
   defaultSceneId?: string | number;
   default_scene_id?: string | number;
 };
@@ -97,6 +101,10 @@ function normalizeProject(raw: any): ProjectType {
     virtualTourEmbedCode:
       raw?.virtualTourEmbedCode ?? raw?.virtual_tour_embed_code,
     virtualTourScenes: raw?.virtualTourScenes ?? raw?.virtual_tour_scenes ?? [],
+	virtualTourStatus:
+  raw?.virtualTourStatus ?? raw?.virtual_tour_status ?? "draft",
+virtualTourPublishedAt:
+  raw?.virtualTourPublishedAt ?? raw?.virtual_tour_published_at ?? null,
     defaultSceneId: raw?.defaultSceneId ?? raw?.default_scene_id,
     images: Array.isArray(raw?.images) ? raw.images : [],
   };
@@ -233,7 +241,9 @@ export default function ProjectDetails() {
           .select("*", { count: "exact", head: true })
           .eq("property_id", data.id);
 
-        setHasBuiltInVirtualTour((count || 0) > 0);
+        setHasBuiltInVirtualTour(
+  data.virtual_tour_status === "published" && (count || 0) > 0,
+);
         setFetchError(false);
       }
       setIsLoading(false);
@@ -286,7 +296,13 @@ export default function ProjectDetails() {
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-  const hasVirtualTour = !!(
+const isVirtualTourPublished =
+  project.virtualTourStatus === "published" ||
+  project.virtual_tour_status === "published";
+
+const hasVirtualTour =
+  isVirtualTourPublished &&
+  !!(
     hasBuiltInVirtualTour ||
     project.hasCustomVirtualTour ||
     project.has_custom_virtual_tour ||

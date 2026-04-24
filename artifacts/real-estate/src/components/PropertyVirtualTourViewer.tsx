@@ -20,6 +20,18 @@ export default function PropertyVirtualTourViewer({
     const loadScenes = async () => {
       setLoading(true);
 
+	  const { data: propertyData, error: propertyError } = await supabase
+  .from("properties")
+  .select("virtual_tour_status")
+  .eq("id", propertyId)
+  .single();
+
+if (propertyError || propertyData?.virtual_tour_status !== "published") {
+  setScenes([]);
+  setLoading(false);
+  return;
+}
+
       const { data: sceneData, error: sceneError } = await supabase
         .from("virtual_tour_scenes")
         .select("*")

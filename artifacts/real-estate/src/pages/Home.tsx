@@ -42,23 +42,24 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from("properties")
-        .select(`
-          id,
-          title,
-          description,
-          country,
-          city,
-          address,
-          status,
-          property_type,
-          price,
-          currency,
-          images,
-          created_at,
-          listing_status,
-          is_paused,
-          expires_at
-        `)
+.select(`
+  id,
+  title,
+  description,
+  country,
+  city,
+  address,
+  status,
+  property_type,
+  price,
+  currency,
+  images,
+  created_at,
+  listing_status,
+  is_paused,
+  expires_at,
+  virtual_tour_status
+`)
         .eq("listing_status", "active")
         .eq("is_paused", false)
         .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
@@ -95,11 +96,14 @@ export default function Home() {
       }
 
       const rowsWithVirtualTour = rows.map((item) => {
-        const hasVirtualTour =
-          !!item.virtual_tour_url ||
-          !!item.virtual_tour_embed_code ||
-          !!item.has_custom_virtual_tour ||
-          scenePropertyIds.has(String(item.id));
+const hasVirtualTour =
+  item.virtual_tour_status === "published" &&
+  (
+    !!item.virtual_tour_url ||
+    !!item.virtual_tour_embed_code ||
+    !!item.has_custom_virtual_tour ||
+    scenePropertyIds.has(String(item.id))
+  );
 
         return {
           ...item,

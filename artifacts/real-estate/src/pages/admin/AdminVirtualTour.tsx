@@ -63,6 +63,8 @@ type Hotspot = {
 type Project = {
   id: string;
   title: string;
+  virtual_tour_status?: "draft" | "published";
+  virtual_tour_published_at?: string | null;
 };
 
 type HotspotFormState = {
@@ -326,7 +328,7 @@ export default function AdminVirtualTour() {
 
     const { data: projectData, error: projectError } = await supabase
       .from("properties")
-      .select("id, title")
+      .select("id, title, virtual_tour_status, virtual_tour_published_at")
       .eq("id", projectId)
       .single();
 
@@ -452,6 +454,75 @@ const normalizedHotspot: Hotspot = {
     setIsEditHotspotModalOpen(false);
     setCameraCenter(null);
   }, [selectedSceneId, resetDraft]);
+
+  const handlePublishTour = async () => {
+  try {
+    const { error } = await supabase
+      .from("properties")
+      .update({
+        virtual_tour_status: "published",
+        virtual_tour_published_at: new Date().toISOString(),
+      })
+      .eq("id", projectId);
+
+    if (error) throw error;
+
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            virtual_tour_status: "published",
+            virtual_tour_published_at: new Date().toISOString(),
+          }
+        : prev,
+    );
+
+    toast({
+      title: "Sukses",
+      description: "Turi virtual u publikua dhe tani është live.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Publikimi i turit virtual dështoi.",
+      variant: "destructive",
+    });
+  }
+};
+
+const handleUnpublishTour = async () => {
+  try {
+    const { error } = await supabase
+      .from("properties")
+      .update({
+        virtual_tour_status: "draft",
+      })
+      .eq("id", projectId);
+
+    if (error) throw error;
+
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            virtual_tour_status: "draft",
+          }
+        : prev,
+    );
+
+    toast({
+      title: "Draft u ruajt",
+      description: "Turi virtual nuk është publik.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Ruajtja si draft dështoi.",
+      variant: "destructive",
+    });
+  }
+};
+
 
   const openCreateScene = () => {
     setEditingSceneId(null);
@@ -1295,6 +1366,35 @@ const virtualTourNodes = useMemo(() => {
               {project?.title || "Duke ngarkuar..."}
             </p>
           </div>
+		  
+		  <div className="flex items-center gap-2">
+  <span
+    className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border ${
+      project?.virtual_tour_status === "published"
+        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+        : "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+    }`}
+  >
+    {project?.virtual_tour_status === "published" ? "Published" : "Draft"}
+  </span>
+
+  {project?.virtual_tour_status === "published" ? (
+    <button
+      onClick={handleUnpublishTour}
+      className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
+    >
+      Kthe në Draft
+    </button>
+  ) : (
+    <button
+      onClick={handlePublishTour}
+      disabled={scenes.length === 0}
+      className="px-4 py-2 rounded-xl bg-primary text-black hover:bg-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      Publiko Turin
+    </button>
+  )}
+</div>
         </div>
       </div>
 
