@@ -567,7 +567,7 @@ export default function ProjectDetails() {
                 </div>
 
                 <div className="space-y-4">
-                  <button className="w-full py-4 bg-primary border border-border text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary transition-colors">
+                  className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
                     Planifiko një Vizitë
                   </button>
                   <button
