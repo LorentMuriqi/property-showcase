@@ -49,6 +49,7 @@ export function VirtualTour360({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
+  const pendingOrientationRef = useRef<Orientation | null>(null);
   const isNavigatingRef = useRef(false);
   const closeTouchHandledRef = useRef(false);
 
@@ -187,6 +188,24 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
     [getNodeById],
   );
 
+
+  const applyViewerOrientation = useCallback((orientation: Orientation | null) => {
+  const viewer = viewerRef.current;
+  if (!viewer || !orientation) return;
+
+  requestAnimationFrame(() => {
+    try {
+      viewer.rotate({
+        yaw: orientation.yaw,
+        pitch: orientation.pitch,
+      });
+    } catch (error) {
+      console.error("Apply orientation error:", error);
+    }
+  });
+}, []);
+
+
   const goToScene = useCallback(
     async (targetSceneId: number) => {
       const viewer = viewerRef.current;
@@ -203,6 +222,7 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
 
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
         const entryOrientation = getSceneStartOrientation(targetSceneId);
+		pendingOrientationRef.current = entryOrientation;
 
         updateTargetNodeOrientation(
           vtPlugin,
@@ -324,13 +344,22 @@ zoomSpeed: 1.15,
       );
     });
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      const nextId = Number(node.id);
-      const nextScene = getSceneById(nextId);
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  const nextScene = getSceneById(nextId);
 
-      currentSceneRef.current = nextScene;
-      setCurrentSceneId(nextId);
-    });
+  currentSceneRef.current = nextScene;
+  setCurrentSceneId(nextId);
+
+  const orientation =
+    pendingOrientationRef.current || getSceneStartOrientation(nextId);
+
+  pendingOrientationRef.current = null;
+
+  window.setTimeout(() => {
+    applyViewerOrientation(orientation);
+  }, 80);
+});
 
     const fallbackTimer = window.setTimeout(() => {
       console.warn("Initial panorama load is taking longer than expected.");
@@ -354,6 +383,7 @@ zoomSpeed: 1.15,
     getSceneStartOrientation,
     getHotspotEntryOrientation,
     updateTargetNodeOrientation,
+	applyViewerOrientation,
   ]);
 
   const handleSceneChange = async (id: number) => {
