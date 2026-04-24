@@ -458,7 +458,7 @@ const getSortedProjects = () => {
   e.stopPropagation();
   setShowFilter((prev) => !prev);
 }}
-    className="flex items-center gap-2 cursor-pointer text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
+    className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground"
   >
     Statusi
     <Filter size={14} />
@@ -467,7 +467,7 @@ const getSortedProjects = () => {
 {showFilter && (
   <div
   onClick={(e) => e.stopPropagation()}
-  className="absolute z-50 mt-3 w-64 bg-background border border-border rounded-2xl shadow-xl p-3"
+  className="absolute z-50 mt-1.5 w-56 bg-background border border-border rounded-xl shadow-lg p-2"
 >
     <div className="min-h-[44px] flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 mb-2">
       {statusFilters.length === 0 ? (
@@ -476,7 +476,7 @@ const getSortedProjects = () => {
         statusFilters.map((status) => (
           <span
             key={status}
-            className="inline-flex items-center gap-2 rounded-full bg-foreground text-background px-3 py-1 text-xs font-medium"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs"
           >
             {status === "active" && "Publikuar"}
             {status === "paused" && "Pezulluar"}
@@ -488,7 +488,7 @@ const getSortedProjects = () => {
                 e.stopPropagation();
                 setStatusFilters((prev) => prev.filter((s) => s !== status));
               }}
-              className="text-background/80 hover:text-background"
+              className="text-primary/70 hover:text-primary"
             >
               ×
             </button>
