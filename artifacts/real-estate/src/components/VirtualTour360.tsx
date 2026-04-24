@@ -57,6 +57,7 @@ export function VirtualTour360({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
+  const [isSceneTransitioning, setIsSceneTransitioning] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
 const [canUseFullscreen, setCanUseFullscreen] = useState(false);
@@ -187,47 +188,73 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
     [getNodeById],
   );
 
-  const goToScene = useCallback(
-    async (targetSceneId: number) => {
-      const viewer = viewerRef.current;
-      if (!viewer || isNavigatingRef.current) return;
 
-      const targetScene = getSceneById(targetSceneId);
-      if (!targetScene) return;
+  const applyManualSceneOrientation = useCallback((orientation: Orientation | null) => {
+  const viewer = viewerRef.current;
+  if (!viewer || !orientation) return;
 
-      if (currentSceneRef.current?.id === targetSceneId) return;
+  if (!Number.isFinite(orientation.yaw) || !Number.isFinite(orientation.pitch)) {
+    return;
+  }
 
-      isNavigatingRef.current = true;
+  viewer.rotate({
+    yaw: orientation.yaw,
+    pitch: orientation.pitch,
+  });
+}, []);
 
-      try {
 
-        const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
-        const entryOrientation = getSceneStartOrientation(targetSceneId);
+const goToScene = useCallback(
+  async (targetSceneId: number) => {
+    const viewer = viewerRef.current;
+    if (!viewer || isNavigatingRef.current) return;
 
-        updateTargetNodeOrientation(
-          vtPlugin,
-          String(targetSceneId),
-          entryOrientation,
-        );
+    const targetScene = getSceneById(targetSceneId);
+    if (!targetScene) return;
 
-        await vtPlugin.setCurrentNode(String(targetSceneId), {
-          showLoader: false,
-          effect: "fade",
-          speed: 260,
-          rotation: false,
-        });
-      } catch (error) {
-        console.error("Scene change error:", error);
-      } finally {
-        isNavigatingRef.current = false;
-      }
-    },
-    [
-      getSceneById,
-      getSceneStartOrientation,
-      updateTargetNodeOrientation,
-    ],
-  );
+    if (currentSceneRef.current?.id === targetSceneId) return;
+
+    isNavigatingRef.current = true;
+    setIsSceneTransitioning(true);
+
+    try {
+      const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+      const entryOrientation = getSceneStartOrientation(targetSceneId);
+
+      updateTargetNodeOrientation(
+        vtPlugin,
+        String(targetSceneId),
+        entryOrientation,
+      );
+
+      await vtPlugin.setCurrentNode(String(targetSceneId), {
+        showLoader: false,
+        effect: "fade",
+        speed: 260,
+        rotation: false,
+      });
+
+      requestAnimationFrame(() => {
+        applyManualSceneOrientation(entryOrientation);
+
+        window.setTimeout(() => {
+          setIsSceneTransitioning(false);
+        }, 120);
+      });
+    } catch (error) {
+      console.error("Scene change error:", error);
+      setIsSceneTransitioning(false);
+    } finally {
+      isNavigatingRef.current = false;
+    }
+  },
+  [
+    getSceneById,
+    getSceneStartOrientation,
+    updateTargetNodeOrientation,
+    applyManualSceneOrientation,
+  ],
+);
 
   useEffect(() => {
     Cache.enabled = true;
@@ -443,8 +470,8 @@ useEffect(() => {
           ref={containerRef}
           className="w-full h-full bg-black"
           style={{
-            opacity: isViewerVisible ? 1 : 0,
-            transition: "opacity 120ms linear",
+opacity: isViewerVisible && !isSceneTransitioning ? 1 : 0,
+transition: "opacity 160ms ease",
           }}
         />
 
