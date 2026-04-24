@@ -217,7 +217,7 @@ export default function AdminUsers() {
                         <button
                           onClick={() => handleUpdateUser(user)}
                           disabled={savingId === user.user_id}
-                          className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-white transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                          className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-white hover:text-foreground transition-colors disabled:opacity-50 inline-flex items-center gap-2"
                         >
                           <Save size={14} />
                           {savingId === user.user_id ? "Duke ruajtur..." : "Ruaj"}

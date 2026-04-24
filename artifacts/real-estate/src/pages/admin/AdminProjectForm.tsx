@@ -339,7 +339,7 @@ export default function AdminProjectForm() {
         <button
           onClick={handleSubmit(onSubmit)}
           disabled={isSaving}
-          className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors disabled:opacity-50"
         >
           <Save size={18} />{" "}
           {isSaving ? "Duke ruajtur..." : isEditing ? "Ruaj" : "Publiko"}

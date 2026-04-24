@@ -413,7 +413,7 @@ export default function AdminDashboard() {
           {permissions.canCreateProperty && (
             <Link
               href="/admin/projects/new"
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white transition-colors"
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
             >
               <Plus size={18} /> Projekt i Ri
             </Link>

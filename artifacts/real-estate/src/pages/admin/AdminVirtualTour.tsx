@@ -1310,7 +1310,7 @@ const virtualTourNodes = useMemo(() => {
 
             <button
               onClick={openCreateScene}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-xs rounded-xl hover:bg-white transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-xs rounded-xl hover:bg-white hover:text-foreground transition-colors"
             >
               <Plus size={14} /> Shto Skenë
             </button>
@@ -1680,7 +1680,7 @@ const virtualTourNodes = useMemo(() => {
 
   <button
     onClick={() => handleSaveHotspotTargetView(hotspot.id)}
-    className="p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white"
+    className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground"
     title="Ruaj drejtimin e hyrjes"
   >
     <LocateFixed size={14} />

@@ -325,7 +325,7 @@ export default function AdminRules() {
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-white hover:text-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Save size={16} />
               {isSaving ? "Duke ruajtur..." : editingId ? "Ruaj Ndryshimet" : "Krijo Rule"}
