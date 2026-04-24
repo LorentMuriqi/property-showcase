@@ -458,7 +458,7 @@ const getSortedProjects = () => {
   e.stopPropagation();
   setShowFilter((prev) => !prev);
 }}
-    className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground"
+    className="flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground"
   >
     Statusi
     <Filter size={14} />
@@ -471,7 +471,7 @@ const getSortedProjects = () => {
 >
     <div className="min-h-[44px] flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 mb-2">
       {statusFilters.length === 0 ? (
-        <span className="text-sm text-muted-foreground">Zgjidh statusin</span>
+        <span className="text-xs text-muted-foreground">Zgjidh statusin</span>
       ) : (
         statusFilters.map((status) => (
           <span
@@ -513,7 +513,7 @@ const getSortedProjects = () => {
                 setStatusFilters((prev) => [...prev, status as AdminListingStatus]);
               }
             }}
-            className={`px-3 py-2 rounded-lg cursor-pointer text-sm font-medium transition-colors ${
+            className={`px-2.5 py-1.5 rounded-md cursor-pointer text-xs font-medium transition-colors ${
               isSelected
                 ? "bg-muted text-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
