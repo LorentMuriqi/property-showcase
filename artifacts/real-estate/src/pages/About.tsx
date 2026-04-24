@@ -19,7 +19,7 @@ export default function About() {
             <motion.h1 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="font-display text-5xl md:text-7xl font-bold text-white mb-6"
+              className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-[1.18] md:leading-[1.15] pb-1"
             >
               The Art of <span className="text-gold-gradient italic">Living</span>
             </motion.h1>
