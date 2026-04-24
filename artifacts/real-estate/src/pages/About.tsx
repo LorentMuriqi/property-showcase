@@ -59,8 +59,8 @@ The Art of{" "}
 <div className="border-t border-border pt-16">
   <h2 className="font-display text-3xl text-foreground mb-8 text-center">Eksperienca Virtuale</h2>
               <p className="text-muted-foreground leading-relaxed text-center max-w-3xl mx-auto">
-Ne përdorim teknologjinë e avancuar të tureve virtuale 360° për të prezantuar pronat në mënyrë të qartë dhe profesionale.
-Kjo u mundëson klientëve të eksplorojnë çdo hapësirë nga kudo në botë, duke krijuar një përjetim të plotë përpara një vizite fizike.                
+Përmes teknologjisë së avancuar të tureve virtuale 360°, ne prezantojmë pronat me një qartësi dhe standard të lartë profesional.
+Kjo u jep mundësi klientëve të eksplorojnë çdo hapësirë nga kudo në botë, duke krijuar një përjetim të plotë përpara një vizite fizike.       
 				</p>
             </div>
           </div>

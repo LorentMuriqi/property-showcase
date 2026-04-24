@@ -145,7 +145,7 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
   </span>
 </span>
               <p className="text-muted-foreground leading-relaxed max-w-md mb-8">
-                Curating the world's most exceptional properties. We redefine luxury real estate through immersive virtual experiences and unparalleled service.
+                Ne përzgjedhim dhe prezantojmë prona përmes tureve virtuale dhe një qasjeje moderne, ofrojmë një eksperiencë të qartë dhe profesionale për klientët tanë.
               </p>
               <div className="flex gap-4">
                 <a
@@ -168,7 +168,7 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
               <ul className="space-y-4 text-muted-foreground">
                 <li className="flex items-start gap-3">
                   <MapPin size={18} className="text-primary mt-1 shrink-0" />
-                  <span>Pejë<br />Fidanishte</span>
+                  <span>Pejë<br />Kosovë</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <Phone size={18} className="text-primary shrink-0" />
