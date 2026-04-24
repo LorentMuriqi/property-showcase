@@ -22,8 +22,10 @@ export default function About() {
               className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-[1.2] overflow-visible"
             >
               The Art of{" "}
-<span className="text-gold-gradient font-semibold tracking-tight">
-  Living
+<span className="italic inline-block leading-[1.25] pb-[0.1em]">
+  <span className="text-gold-gradient inline-block align-bottom">
+    Living
+  </span>
 </span>
             </motion.h1>
             <motion.p 
