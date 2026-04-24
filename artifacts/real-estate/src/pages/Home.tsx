@@ -257,15 +257,12 @@ export default function Home() {
                 <Map size={32} strokeWidth={1.5} />
               </div>
               
-			  <h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold flex items-center gap-1">
+<h3 className="font-display text-xl md:text-2xl text-foreground mb-2 font-bold">
   Ture Virtuale{" "}
-  <span className="relative inline-flex items-center justify-center w-[42px] h-[28px]">
-    <span className="font-bold">360</span>
-
-    <span className="absolute w-full h-full animate-orbit">
-      <span className="absolute top-0 left-1/2 -translate-x-1/2 text-primary">
-        °
-      </span>
+  <span className="font-bold">
+    360
+    <span className="inline-block animate-spin-slow ml-[1px]">
+      °
     </span>
   </span>
 </h3>
