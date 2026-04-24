@@ -261,7 +261,7 @@ export default function Home() {
   Ture Virtuale{" "}
   <span className="font-bold">
     360
-    <span className="inline-block animate-spin-slow ml-[1px]">
+    <span className="inline-block animate-spin-slow ml-[1px] text-primary/90">
       °
     </span>
   </span>
