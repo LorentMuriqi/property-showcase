@@ -455,7 +455,15 @@ const normalizedHotspot: Hotspot = {
     setCameraCenter(null);
   }, [selectedSceneId, resetDraft]);
 
-  const handlePublishTour = async () => {
+const handlePublishTour = async () => {
+  if (
+    !confirm(
+      "A jeni i sigurt që dëshironi ta publikoni turin virtual? Pasi të publikohet, do të shfaqet në faqen publike."
+    )
+  ) {
+    return;
+  }
+
   try {
     const { error } = await supabase
       .from("properties")
@@ -491,6 +499,14 @@ const normalizedHotspot: Hotspot = {
 };
 
 const handleUnpublishTour = async () => {
+  if (
+    !confirm(
+      "A jeni i sigurt që dëshironi ta ktheni turin virtual në Draft? Pasi të kthehet në Draft, nuk do të shfaqet më në faqen publike."
+    )
+  ) {
+    return;
+  }
+
   try {
     const { error } = await supabase
       .from("properties")
