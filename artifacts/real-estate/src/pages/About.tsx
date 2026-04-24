@@ -42,12 +42,12 @@ The Art of{" "}
           <div className="space-y-16">
             <div className="grid md:grid-cols-2 gap-12 items-center">
               <div>
-                <h2 className="font-display text-3xl text-primary mb-6">Filozofia Jonë</h2>
+                <h2 className="font-display text-3xl text-primary mb-6">Qasja Jonë</h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Në Aura Estates, ne besojmë se një shtëpi është më shumë se një hapësirë fizike—është shprehja përfundimtare e arritjeve personale dhe ndjeshmërisë estetike. 
+                  Në Aura Estates, ne besojmë se një pronë është më shumë se një hapësirë, është një përjetim.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  Të themeluar mbi parimet e diskrecionit absolut dhe cilësisë pa kompromis, ne përfaqësojmë vetëm pronat më të jashtëzakonshme në mbarë botën.
+                  Ne specializohemi në prezantimin e pronave premium përmes teknologjisë moderne, duke përfshirë ture virtuale 360°, që u mundësojnë klientëve të eksplorojnë çdo detaj nga kudo në botë.
                 </p>
               </div>
               <div className="aspect-square bg-card rounded-2xl border border-border p-8 flex flex-col justify-center text-center">
