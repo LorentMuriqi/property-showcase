@@ -520,7 +520,7 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => handlePause(project)}
                                 disabled={actionId === project.id}
-                                className="p-2 text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg transition-colors inline-flex"
+                                className="p-2 text-yellow-400 hover:text-white bg-yellow-500/10 hover:bg-yellow-500/30 rounded-lg transition-colors inline-flex"
                                 title="Pezullo projektin"
                               >
                                 <EyeOff size={16} />
@@ -529,7 +529,7 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => handleExpire(project)}
                                 disabled={actionId === project.id}
-                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
+                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/30 rounded-lg transition-colors inline-flex"
                                 title="Skado projektin"
                               >
                                 <Ban size={16} />
@@ -542,7 +542,7 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => handleResume(project)}
                                 disabled={actionId === project.id}
-                                className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                                className="p-2 text-primary bg-primary/10 hover:bg-primary/30 rounded-lg transition-colors inline-flex"
                                 title="Riaktivizo projektin"
                               >
                                 <RefreshCw size={16} />
@@ -551,7 +551,7 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => handleExpire(project)}
                                 disabled={actionId === project.id}
-                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors inline-flex"
+                                className="p-2 text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/30 rounded-lg transition-colors inline-flex"
                                 title="Skado projektin"
                               >
                                 <Ban size={16} />
@@ -563,7 +563,7 @@ export default function AdminDashboard() {
                             <button
                               onClick={() => handleResume(project)}
                               disabled={actionId === project.id}
-                              className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                              className="p-2 text-primary bg-primary/10 hover:bg-primary/30 rounded-lg transition-colors inline-flex"
                               title="Riaktivizo projektin"
                             >
                               <RefreshCw size={16} />
@@ -573,7 +573,7 @@ export default function AdminDashboard() {
                           {permissions.canManageVirtualTours && (
                             <Link href={`/admin/projects/${project.id}/virtual-tour`}>
                               <button
-                                className="p-2 text-primary hover:text-white bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                                className="p-2 text-primary bg-primary/10 hover:bg-primary/30 rounded-lg transition-colors inline-flex"
                                 title="Menaxho Turin Virtual"
                               >
                                 <Focus size={16} />
