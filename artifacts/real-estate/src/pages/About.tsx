@@ -47,7 +47,14 @@ The Art of{" "}
                   Në Aura Estates, një pronë është më shumë se një hapësirë, është një përjetim.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  Ne specializohemi në prezantimin e pronave premium përmes teknologjisë moderne, duke përfshirë ture virtuale 360°, që u mundësojnë klientëve të eksplorojnë çdo detaj nga kudo në botë.
+                  Ne specializohemi në prezantimin e pronave premium përmes teknologjisë moderne, duke përfshirë ture virtuale{" "}
+<span className="inline-flex items-center font-semibold text-primary">
+  360
+  <span className="inline-block ml-[1px] animate-[spin_3s_linear_infinite] origin-center">
+    °
+  </span>
+</span>
+, që u mundësojnë klientëve të eksplorojnë çdo detaj nga kudo në botë.
                 </p>
               </div>
               <div className="aspect-square bg-card rounded-2xl border border-border p-8 flex flex-col justify-center text-center">
