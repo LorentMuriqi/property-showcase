@@ -44,7 +44,7 @@ The Art of{" "}
               <div>
                 <h2 className="font-display text-3xl text-primary mb-6">Qasja Jonë</h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Në Aura Estates, ne besojmë se një pronë është më shumë se një hapësirë, është një përjetim.
+                  Në Aura Estates, një pronë është më shumë se një hapësirë, është një përjetim.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
                   Ne specializohemi në prezantimin e pronave premium përmes teknologjisë moderne, duke përfshirë ture virtuale 360°, që u mundësojnë klientëve të eksplorojnë çdo detaj nga kudo në botë.
