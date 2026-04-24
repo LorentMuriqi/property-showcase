@@ -21,11 +21,9 @@ export default function About() {
               animate={{ opacity: 1, y: 0 }}
               className="font-display text-5xl md:text-7xl font-bold text-white mb-6 leading-[1.2] overflow-visible"
             >
-              The Art of{" "}
-<span className="italic inline-block leading-[1.25] pb-[0.1em]">
-  <span className="text-gold-gradient inline-block align-bottom">
-    Living
-  </span>
+The Art of{" "}
+<span className="italic text-[#D4AF37]">
+  Living
 </span>
             </motion.h1>
             <motion.p 
