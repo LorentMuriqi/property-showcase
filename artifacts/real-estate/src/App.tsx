@@ -19,6 +19,8 @@ import AdminProjectForm from "@/pages/admin/AdminProjectForm";
 import AdminVirtualTour from "@/pages/admin/AdminVirtualTour";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminRules from "@/pages/admin/AdminRules";
+import PublicVirtualTour from "@/pages/PublicVirtualTour";
+import EmbeddedVirtualTour from "@/pages/EmbeddedVirtualTour";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +50,10 @@ function Router() {
 <Route path="/admin/projects/:id/virtual-tour" component={AdminVirtualTour} />
       
       <Route component={NotFound} />
+	  
+<Route path="/tour/:id" component={PublicVirtualTour} />
+<Route path="/embed/tour/:id" component={EmbeddedVirtualTour} />
+	  
     </Switch>
   );
 }
