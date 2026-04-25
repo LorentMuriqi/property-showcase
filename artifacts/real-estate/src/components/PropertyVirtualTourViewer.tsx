@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { VirtualTour360 } from "@/components/VirtualTour360";
+import { X } from "lucide-react";
 
 export default function PropertyVirtualTourViewer({
   propertyId,
@@ -110,25 +111,59 @@ const normalized = sceneData.map((scene) => ({
     );
   }
 
-  if (fallbackEmbedCode) {
-    return (
+if (fallbackEmbedCode) {
+  return (
+    <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] bg-black overflow-hidden">
+      <button
+        onClick={onClose}
+        className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg"
+        style={{
+          top: "max(12px, env(safe-area-inset-top))",
+          right: "max(12px, env(safe-area-inset-right))",
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
+        aria-label="Mbyll turin virtual"
+        type="button"
+      >
+        <X size={22} />
+      </button>
+
       <div
-        className="w-full h-[100dvh] md:h-[80vh] [&>iframe]:w-full [&>iframe]:h-full"
+        className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:border-0"
         dangerouslySetInnerHTML={{ __html: fallbackEmbedCode }}
       />
-    );
-  }
+    </div>
+  );
+}
 
-  if (fallbackUrl) {
-    return (
+if (fallbackUrl) {
+  return (
+    <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] bg-black overflow-hidden">
+      <button
+        onClick={onClose}
+        className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 shadow-lg"
+        style={{
+          top: "max(12px, env(safe-area-inset-top))",
+          right: "max(12px, env(safe-area-inset-right))",
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
+        aria-label="Mbyll turin virtual"
+        type="button"
+      >
+        <X size={22} />
+      </button>
+
       <iframe
         src={fallbackUrl}
-        className="w-full h-[100dvh] md:h-[80vh] border-none rounded-none md:rounded-2xl"
+        className="w-full h-full border-0"
         allowFullScreen
         title="Virtual Tour"
       />
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="w-full h-[60vh] flex items-center justify-center text-white">
