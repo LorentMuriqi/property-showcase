@@ -270,9 +270,7 @@ useEffect(() => {
 }, [lightboxIndex]);
 
 useEffect(() => {
-  if (lightboxIndex === null || !lightboxApi) return;
-
-  lightboxApi.scrollTo(lightboxIndex, true);
+  if (!lightboxApi) return;
 
   const onSelect = () => {
     setLightboxIndex(lightboxApi.selectedScrollSnap());
@@ -283,7 +281,16 @@ useEffect(() => {
   return () => {
     lightboxApi.off("select", onSelect);
   };
-}, [lightboxIndex, lightboxApi]);
+}, [lightboxApi]);
+
+useEffect(() => {
+  if (lightboxIndex === null || !lightboxApi) return;
+
+  requestAnimationFrame(() => {
+    lightboxApi.reInit();
+    lightboxApi.scrollTo(lightboxIndex, true);
+  });
+}, [lightboxApi]);
 
   if (isLoading) {
     return (
