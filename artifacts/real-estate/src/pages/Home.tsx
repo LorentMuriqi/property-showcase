@@ -58,7 +58,10 @@ export default function Home() {
   listing_status,
   is_paused,
   expires_at,
-  virtual_tour_status
+  virtual_tour_status,
+  virtual_tour_url,
+  virtual_tour_embed_code,
+  has_custom_virtual_tour
 `)
         .eq("listing_status", "active")
         .eq("is_paused", false)
