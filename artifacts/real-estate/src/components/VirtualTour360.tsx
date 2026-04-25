@@ -498,13 +498,13 @@ transition: "opacity 160ms ease",
 
 <div className="absolute top-6 left-6 z-40 pointer-events-none max-w-[80%]">
   <div className="
-    px-5 py-3 rounded-2xl
+    px-4 py-2 rounded-2xl
     bg-gradient-to-br from-black/50 to-black/30
     backdrop-blur-xl
     border border-white/10
     shadow-[0_10px_40px_rgba(0,0,0,0.45)]
   ">
-    <h2 className="text-white/95 text-sm md:text-base font-semibold tracking-wide">
+    <h2 className="text-white/95 text-xs md:text-sm font-semibold tracking-wide">
       {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Pamja 360°"}
     </h2>
   </div>
