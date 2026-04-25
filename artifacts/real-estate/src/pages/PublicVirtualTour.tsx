@@ -86,7 +86,7 @@ export default function PublicVirtualTour() {
             Virtual tour nuk është i disponueshëm
           </h1>
           <p className="text-white/60 max-w-md">
-            Ky tur virtual mund të jetë në draft, i skaduar, i pezulluar ose i larguar nga platforma.
+            Ky tur virtual mund të jetë i skaduar ose i larguar nga platforma.
           </p>
         </div>
       </div>
