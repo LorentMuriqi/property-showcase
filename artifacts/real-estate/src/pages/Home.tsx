@@ -58,10 +58,8 @@ export default function Home() {
   listing_status,
   is_paused,
   expires_at,
-  virtual_tour_status,
-  virtual_tour_url,
-  virtual_tour_embed_code,
-  has_custom_virtual_tour
+virtual_tour_url,
+virtual_tour_embed_code
 `)
         .eq("listing_status", "active")
         .eq("is_paused", false)
@@ -102,7 +100,6 @@ export default function Home() {
 const hasVirtualTour = !!(
   item.virtual_tour_url ||
   item.virtual_tour_embed_code ||
-  item.has_custom_virtual_tour ||
   scenePropertyIds.has(String(item.id))
 );
 
