@@ -496,11 +496,19 @@ transition: "opacity 160ms ease",
   </div>
 )}
 
-        <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none max-w-[80%]">
-          <h2 className="text-white font-display text-xl">
-            {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Pamja 360°"}
-          </h2>
-        </div>
+<div className="absolute top-6 left-6 z-40 pointer-events-none max-w-[80%]">
+  <div className="
+    px-5 py-3 rounded-2xl
+    bg-gradient-to-br from-black/50 to-black/30
+    backdrop-blur-xl
+    border border-white/10
+    shadow-[0_10px_40px_rgba(0,0,0,0.45)]
+  ">
+    <h2 className="text-white/95 text-sm md:text-base font-semibold tracking-wide">
+      {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Pamja 360°"}
+    </h2>
+  </div>
+</div>
 
         <div className="absolute bottom-24 right-6 z-40 flex flex-col gap-3">
           {hasMap && (
