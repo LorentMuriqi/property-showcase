@@ -294,15 +294,21 @@ setHasBuiltInVirtualTour((count || 0) > 0);
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-const hasVirtualTour = !!(
-  hasBuiltInVirtualTour ||
-  project.hasCustomVirtualTour ||
-  project.has_custom_virtual_tour ||
-  project.virtualTourUrl ||
-  project.virtual_tour_url ||
-  project.virtualTourEmbedCode ||
-  project.virtual_tour_embed_code
-);
+const isVirtualTourPublished =
+  project.virtualTourStatus === "published" ||
+  project.virtual_tour_status === "published";
+
+const hasVirtualTour =
+  isVirtualTourPublished &&
+  !!(
+    hasBuiltInVirtualTour ||
+    project.hasCustomVirtualTour ||
+    project.has_custom_virtual_tour ||
+    project.virtualTourUrl ||
+    project.virtual_tour_url ||
+    project.virtualTourEmbedCode ||
+    project.virtual_tour_embed_code
+  );
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
