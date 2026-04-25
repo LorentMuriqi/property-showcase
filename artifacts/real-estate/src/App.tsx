@@ -48,11 +48,13 @@ function Router() {
 <Route path="/admin/projects/new" component={AdminProjectForm} />
 <Route path="/admin/projects/:id/edit" component={AdminProjectForm} />
 <Route path="/admin/projects/:id/virtual-tour" component={AdminVirtualTour} />
-      
-      <Route component={NotFound} />
-	  
+
 <Route path="/tour/:id" component={PublicVirtualTour} />
 <Route path="/embed/tour/:id" component={EmbeddedVirtualTour} />
+
+
+      <Route component={NotFound} />
+	  
 	  
     </Switch>
   );
