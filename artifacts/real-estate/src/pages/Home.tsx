@@ -98,13 +98,16 @@ virtual_tour_embed_code
       }
 
       const rowsWithVirtualTour = rows.map((item) => {
-const hasVirtualTour =
+const hasFallbackVirtualTour = !!(
+  item.virtual_tour_url ||
+  item.virtual_tour_embed_code
+);
+
+const hasPublishedBuiltInVirtualTour =
   item.virtual_tour_status === "published" &&
-  !!(
-    item.virtual_tour_url ||
-    item.virtual_tour_embed_code ||
-    scenePropertyIds.has(String(item.id))
-  );
+  scenePropertyIds.has(String(item.id));
+
+const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
 
         return {
           ...item,

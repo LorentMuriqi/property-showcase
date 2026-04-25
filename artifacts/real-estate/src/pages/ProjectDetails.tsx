@@ -241,7 +241,9 @@ export default function ProjectDetails() {
           .select("*", { count: "exact", head: true })
           .eq("property_id", data.id);
 
-setHasBuiltInVirtualTour((count || 0) > 0);
+setHasBuiltInVirtualTour(
+  data.virtual_tour_status === "published" && (count || 0) > 0
+);
         setFetchError(false);
       }
       setIsLoading(false);
@@ -294,21 +296,14 @@ setHasBuiltInVirtualTour((count || 0) > 0);
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-const isVirtualTourPublished =
-  project.virtualTourStatus === "published" ||
-  project.virtual_tour_status === "published";
+const hasFallbackVirtualTour = !!(
+  project.virtualTourUrl ||
+  project.virtual_tour_url ||
+  project.virtualTourEmbedCode ||
+  project.virtual_tour_embed_code
+);
 
-const hasVirtualTour =
-  isVirtualTourPublished &&
-  !!(
-    hasBuiltInVirtualTour ||
-    project.hasCustomVirtualTour ||
-    project.has_custom_virtual_tour ||
-    project.virtualTourUrl ||
-    project.virtual_tour_url ||
-    project.virtualTourEmbedCode ||
-    project.virtual_tour_embed_code
-  );
+const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
@@ -777,7 +772,7 @@ const hasVirtualTour =
 
           <div className="flex-1 p-4 overflow-auto">
             <PropertyVirtualTourViewer
-              propertyId={project.id as any}
+              propertyId={hasBuiltInVirtualTour ? (project.id as any) : undefined}
               fallbackUrl={project.virtualTourUrl}
               fallbackEmbedCode={project.virtualTourEmbedCode}
               onClose={() => setShowVirtualTour(false)}
