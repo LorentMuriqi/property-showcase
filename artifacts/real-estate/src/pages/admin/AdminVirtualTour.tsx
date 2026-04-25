@@ -1364,6 +1364,32 @@ const virtualTourNodes = useMemo(() => {
 
   if (!isAdmin) return null;
 
+const appOrigin =
+  typeof window !== "undefined" ? window.location.origin : "";
+
+const publicTourUrl = project ? `${appOrigin}/tour/${project.id}` : "";
+
+const embedTourCode = project
+  ? `<iframe src="${appOrigin}/embed/tour/${project.id}" width="100%" height="600" style="border:none;" allowfullscreen loading="lazy"></iframe>`
+  : "";
+
+const copyText = async (text: string, label: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+
+    toast({
+      title: "U kopjua",
+      description: `${label} u kopjua me sukses.`,
+    });
+  } catch (error) {
+    toast({
+      title: "Gabim",
+      description: "Kopjimi dështoi. Kopjoje manualisht.",
+      variant: "destructive",
+    });
+  }
+};
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
@@ -1415,6 +1441,70 @@ const virtualTourNodes = useMemo(() => {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 space-y-8">
+	  {project?.virtual_tour_status === "published" && (
+  <div className="glass-panel p-6 rounded-2xl border border-primary/20">
+    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 border-b border-border pb-4 mb-5">
+      <div>
+        <h2 className="font-display text-xl text-primary font-bold">
+          Share Virtual Tour
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Dërgoja klientit si link ose vendose në website-in e tij me embed code.
+        </p>
+      </div>
+
+      <span className="px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+        Live
+      </span>
+    </div>
+
+    <div className="space-y-5">
+      <div>
+        <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          Public Link
+        </label>
+
+        <div className="flex flex-col md:flex-row gap-2">
+          <input
+            readOnly
+            value={publicTourUrl}
+            className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none"
+          />
+
+          <button
+            type="button"
+            onClick={() => copyText(publicTourUrl, "Linku")}
+            className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors"
+          >
+            Copy Link
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          Embed Code
+        </label>
+
+        <div className="flex flex-col md:flex-row gap-2">
+          <textarea
+            readOnly
+            value={embedTourCode}
+            className="flex-1 min-h-[96px] bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono resize-none focus:outline-none"
+          />
+
+          <button
+            type="button"
+            onClick={() => copyText(embedTourCode, "Embed code")}
+            className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors md:self-start"
+          >
+            Copy Embed
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
         <div className="glass-panel p-6 rounded-2xl">
           <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
             <div>
