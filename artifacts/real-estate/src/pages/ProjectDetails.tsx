@@ -1,5 +1,5 @@
 import PropertyVirtualTourViewer from "@/components/PropertyVirtualTourViewer";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
 import {
@@ -147,6 +147,7 @@ export default function ProjectDetails() {
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
+  const lightboxTouchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -255,6 +256,18 @@ setHasBuiltInVirtualTour(
       isMounted = false;
     };
   }, [id]);
+
+
+useEffect(() => {
+  if (lightboxIndex === null) return;
+
+  const originalOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    document.body.style.overflow = originalOverflow;
+  };
+}, [lightboxIndex]);
 
   if (isLoading) {
     return (
@@ -693,10 +706,30 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
       )}
 
       {lightboxIndex !== null && images.length > 0 && (
-        <div
-          className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center"
-          onClick={closeLightbox}
-        >
+<div
+  className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center overflow-hidden touch-none"
+  onClick={closeLightbox}
+  onTouchStart={(e) => {
+    lightboxTouchStartX.current = e.touches[0].clientX;
+  }}
+  onTouchEnd={(e) => {
+    if (lightboxTouchStartX.current === null) return;
+
+    const diff = lightboxTouchStartX.current - e.changedTouches[0].clientX;
+
+    if (Math.abs(diff) > 50) {
+      e.stopPropagation();
+
+      if (diff > 0) {
+        lightboxNext();
+      } else {
+        lightboxPrev();
+      }
+    }
+
+    lightboxTouchStartX.current = null;
+  }}
+>
           <button
             onClick={closeLightbox}
             className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
@@ -726,24 +759,24 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
           {images.length > 1 && (
             <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  lightboxPrev();
-                }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10"
-              >
-                <ChevronLeft size={28} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  lightboxNext();
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10"
-              >
-                <ChevronRight size={28} />
-              </button>
+<button
+  onClick={(e) => {
+    e.stopPropagation();
+    lightboxPrev();
+  }}
+  className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 hover:border-white/20 group"
+>
+  <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
+</button>
+<button
+  onClick={(e) => {
+    e.stopPropagation();
+    lightboxNext();
+  }}
+  className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 hover:border-white/20 group"
+>
+  <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
+</button>
             </>
           )}
         </div>
