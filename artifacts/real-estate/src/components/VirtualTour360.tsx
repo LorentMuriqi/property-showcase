@@ -498,7 +498,7 @@ transition: "opacity 160ms ease",
 
         <div className="absolute top-6 left-6 z-40 bg-black/50 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 pointer-events-none max-w-[80%]">
           <h2 className="text-white font-display text-xl">
-            {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Tur 360°"}
+            {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Pamja 360°"}
           </h2>
         </div>
 
