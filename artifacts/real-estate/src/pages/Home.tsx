@@ -58,6 +58,7 @@ export default function Home() {
   listing_status,
   is_paused,
   expires_at,
+virtual_tour_status,
 virtual_tour_url,
 virtual_tour_embed_code
 `)
@@ -97,11 +98,13 @@ virtual_tour_embed_code
       }
 
       const rowsWithVirtualTour = rows.map((item) => {
-const hasVirtualTour = !!(
-  item.virtual_tour_url ||
-  item.virtual_tour_embed_code ||
-  scenePropertyIds.has(String(item.id))
-);
+const hasVirtualTour =
+  item.virtual_tour_status === "published" &&
+  !!(
+    item.virtual_tour_url ||
+    item.virtual_tour_embed_code ||
+    scenePropertyIds.has(String(item.id))
+  );
 
         return {
           ...item,
