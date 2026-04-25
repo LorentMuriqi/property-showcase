@@ -366,18 +366,18 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                     e.stopPropagation();
                     scrollPrev();
                   }}
-                  className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10 z-10"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 hover:bg-black/60 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 hover:border-white/20 z-10 group"
                 >
-                  <ChevronLeft size={24} />
+                  <ChevronLeft size={18} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     scrollNext();
                   }}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 hover:bg-primary text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/10 z-10"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/40 hover:bg-black/60 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 hover:border-white/20 z-10 group"
                 >
-                  <ChevronRight size={24} />
+                  <ChevronRight size={18} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </>
             )}
