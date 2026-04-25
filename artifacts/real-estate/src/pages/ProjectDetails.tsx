@@ -1,5 +1,5 @@
 import PropertyVirtualTourViewer from "@/components/PropertyVirtualTourViewer";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
 import {
@@ -144,10 +144,10 @@ export default function ProjectDetails() {
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
-  const lightboxTouchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -172,15 +172,15 @@ export default function ProjectDetails() {
 
   const images = project?.images || [];
 
-  const lightboxPrev = useCallback(() => {
-    if (lightboxIndex === null || !images.length) return;
-    setLightboxIndex((lightboxIndex - 1 + images.length) % images.length);
-  }, [lightboxIndex, images.length]);
+const lightboxPrev = useCallback(() => {
+  if (!images.length) return;
+  lightboxApi?.scrollPrev();
+}, [lightboxApi, images.length]);
 
-  const lightboxNext = useCallback(() => {
-    if (lightboxIndex === null || !images.length) return;
-    setLightboxIndex((lightboxIndex + 1) % images.length);
-  }, [lightboxIndex, images.length]);
+const lightboxNext = useCallback(() => {
+  if (!images.length) return;
+  lightboxApi?.scrollNext();
+}, [lightboxApi, images.length]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -268,6 +268,22 @@ useEffect(() => {
     document.body.style.overflow = originalOverflow;
   };
 }, [lightboxIndex]);
+
+useEffect(() => {
+  if (lightboxIndex === null || !lightboxApi) return;
+
+  lightboxApi.scrollTo(lightboxIndex, true);
+
+  const onSelect = () => {
+    setLightboxIndex(lightboxApi.selectedScrollSnap());
+  };
+
+  lightboxApi.on("select", onSelect);
+
+  return () => {
+    lightboxApi.off("select", onSelect);
+  };
+}, [lightboxIndex, lightboxApi]);
 
   if (isLoading) {
     return (
@@ -707,28 +723,8 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
       {lightboxIndex !== null && images.length > 0 && (
 <div
-  className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center overflow-hidden touch-none"
+  className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center overflow-hidden"
   onClick={closeLightbox}
-  onTouchStart={(e) => {
-    lightboxTouchStartX.current = e.touches[0].clientX;
-  }}
-  onTouchEnd={(e) => {
-    if (lightboxTouchStartX.current === null) return;
-
-    const diff = lightboxTouchStartX.current - e.changedTouches[0].clientX;
-
-    if (Math.abs(diff) > 50) {
-      e.stopPropagation();
-
-      if (diff > 0) {
-        lightboxNext();
-      } else {
-        lightboxPrev();
-      }
-    }
-
-    lightboxTouchStartX.current = null;
-  }}
 >
           <button
             onClick={closeLightbox}
@@ -741,15 +737,26 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
             {lightboxIndex + 1} / {images.length}
           </div>
 
-          <img
-            src={images[lightboxIndex].url}
-            alt={
-              images[lightboxIndex].caption ||
-              `${project.title} - Foto ${lightboxIndex + 1}`
-            }
-            className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+<div
+  className="w-full h-full overflow-hidden"
+  ref={lightboxRef}
+  onClick={(e) => e.stopPropagation()}
+>
+  <div className="flex h-full">
+    {images.map((img, idx) => (
+      <div
+        key={img.id || idx}
+        className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
+      >
+        <img
+          src={img.url}
+          alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+        />
+      </div>
+    ))}
+  </div>
+</div>
 
           {images[lightboxIndex].caption && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm">
