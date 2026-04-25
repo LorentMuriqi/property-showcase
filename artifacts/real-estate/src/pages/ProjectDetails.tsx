@@ -241,9 +241,7 @@ export default function ProjectDetails() {
           .select("*", { count: "exact", head: true })
           .eq("property_id", data.id);
 
-        setHasBuiltInVirtualTour(
-  data.virtual_tour_status === "published" && (count || 0) > 0,
-);
+setHasBuiltInVirtualTour((count || 0) > 0);
         setFetchError(false);
       }
       setIsLoading(false);
@@ -296,21 +294,15 @@ export default function ProjectDetails() {
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-const isVirtualTourPublished =
-  project.virtualTourStatus === "published" ||
-  project.virtual_tour_status === "published";
-
-const hasVirtualTour =
-  isVirtualTourPublished &&
-  !!(
-    hasBuiltInVirtualTour ||
-    project.hasCustomVirtualTour ||
-    project.has_custom_virtual_tour ||
-    project.virtualTourUrl ||
-    project.virtual_tour_url ||
-    project.virtualTourEmbedCode ||
-    project.virtual_tour_embed_code
-  );
+const hasVirtualTour = !!(
+  hasBuiltInVirtualTour ||
+  project.hasCustomVirtualTour ||
+  project.has_custom_virtual_tour ||
+  project.virtualTourUrl ||
+  project.virtual_tour_url ||
+  project.virtualTourEmbedCode ||
+  project.virtual_tour_embed_code
+);
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
