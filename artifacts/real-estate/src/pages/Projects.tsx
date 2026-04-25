@@ -243,14 +243,12 @@ export default function Projects() {
         }
 
         const rowsWithVirtualTour = rows.map((item) => {
-const hasVirtualTour =
-  item.virtual_tour_status === "published" &&
-  (
-    !!item.virtual_tour_url ||
-    !!item.virtual_tour_embed_code ||
-    !!item.has_custom_virtual_tour ||
-    scenePropertyIds.has(String(item.id))
-  );
+const hasVirtualTour = !!(
+  item.virtual_tour_url ||
+  item.virtual_tour_embed_code ||
+  item.has_custom_virtual_tour ||
+  scenePropertyIds.has(String(item.id))
+);
 
           return {
             ...item,
