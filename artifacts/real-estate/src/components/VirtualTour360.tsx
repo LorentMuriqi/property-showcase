@@ -262,6 +262,27 @@ const goToScene = useCallback(
     Cache.ttl = 15 * 60 * 1000;
     Cache.maxItems = 12;
   }, []);
+  
+  
+  useEffect(() => {
+  if (!resolvedStartScene) return;
+
+  const currentScene = resolvedStartScene;
+
+  const neighborIds = currentScene.hotspots.map((h) => h.toSceneId);
+
+  const imagesToPreload = [
+    currentScene.imageUrl,
+    ...sortedScenes
+      .filter((s) => neighborIds.includes(s.id))
+      .map((s) => s.imageUrl),
+  ];
+
+  imagesToPreload.forEach((src) => {
+    const img = new Image();
+    img.src = src;
+  });
+}, [resolvedStartScene, sortedScenes]);
 
   useEffect(() => {
     if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
