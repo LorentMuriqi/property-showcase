@@ -264,25 +264,51 @@ const goToScene = useCallback(
   }, []);
   
   
-  useEffect(() => {
-  if (!resolvedStartScene) return;
+  
+  
+  
+  
+const preloadedImagesRef = useRef<Set<string>>(new Set());
 
-  const currentScene = resolvedStartScene;
+const preloadSceneImages = useCallback(
+  (sceneId: number | null) => {
+    if (sceneId === null) return;
 
-  const neighborIds = currentScene.hotspots.map((h) => h.toSceneId);
+    const scene = sortedScenes.find((s) => s.id === sceneId);
+    if (!scene) return;
 
-  const imagesToPreload = [
-    currentScene.imageUrl,
-    ...sortedScenes
-      .filter((s) => neighborIds.includes(s.id))
-      .map((s) => s.imageUrl),
-  ];
+    const neighborIds = scene.hotspots.map((h) => h.toSceneId);
 
-  imagesToPreload.forEach((src) => {
-    const img = new Image();
-    img.src = src;
-  });
-}, [resolvedStartScene, sortedScenes]);
+    const imagesToPreload = [
+      scene.imageUrl,
+      ...sortedScenes
+        .filter((s) => neighborIds.includes(s.id))
+        .map((s) => s.imageUrl),
+    ].filter(Boolean);
+
+    imagesToPreload.forEach((src) => {
+      if (preloadedImagesRef.current.has(src)) return;
+
+      preloadedImagesRef.current.add(src);
+
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
+    });
+  },
+  [sortedScenes],
+);
+
+useEffect(() => {
+  preloadSceneImages(resolvedStartScene?.id ?? null);
+}, [resolvedStartScene, preloadSceneImages]);
+
+useEffect(() => {
+  preloadSceneImages(currentSceneId);
+}, [currentSceneId, preloadSceneImages]);
+
+
+
 
   useEffect(() => {
     if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
@@ -619,11 +645,14 @@ transition: "opacity 160ms ease",
                     : "border-transparent opacity-70 hover:opacity-100"
                 }`}
               >
-                <img
-                  src={scene.thumbnailUrl || scene.imageUrl}
-                  alt={scene.title}
-                  className="w-full h-full object-cover"
-                />
+<img
+  src={scene.thumbnailUrl || scene.imageUrl}
+  alt={scene.title}
+  loading="lazy"
+  decoding="async"
+  fetchPriority={currentSceneId === scene.id ? "high" : "low"}
+  className="w-full h-full object-cover"
+/>
                 <div className="absolute inset-0 bg-black/20 flex items-end p-1">
                   <span className="text-[10px] text-white font-medium truncate drop-shadow-md">
                     {scene.title}
