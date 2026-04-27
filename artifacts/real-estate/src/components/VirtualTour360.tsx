@@ -51,6 +51,7 @@ export function VirtualTour360({
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
   const closeTouchHandledRef = useRef(false);
+  const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
    const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -414,6 +415,23 @@ useEffect(() => {
   return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
 }, []);
 
+
+
+useEffect(() => {
+  if (currentSceneId === null) return;
+
+  const activeButton = sceneButtonRefs.current[currentSceneId];
+
+  if (!activeButton) return;
+
+  activeButton.scrollIntoView({
+    behavior: "smooth",
+    inline: "center",
+    block: "nearest",
+  });
+}, [currentSceneId]);
+
+
   if (sortedScenes.length === 0) {
     return (
       <div className="w-full h-full min-h-[100dvh] md:min-h-[500px] flex items-center justify-center bg-black text-white">
@@ -568,9 +586,12 @@ transition: "opacity 160ms ease",
         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
           <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
             {sortedScenes.map((scene) => (
-              <button
-                key={scene.id}
-                onClick={() => handleSceneChange(scene.id)}
+<button
+  key={scene.id}
+  ref={(el) => {
+    sceneButtonRefs.current[scene.id] = el;
+  }}
+  onClick={() => handleSceneChange(scene.id)}
                 className={`relative shrink-0 w-24 h-14 rounded-lg overflow-hidden border-2 transition-all ${
                   currentSceneId === scene.id
                     ? "border-primary"
