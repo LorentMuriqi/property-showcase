@@ -205,18 +205,23 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
 }, []);
 
 
+
 const goToScene = useCallback(
   async (targetSceneId: number) => {
     const viewer = viewerRef.current;
-    if (!viewer || isNavigatingRef.current) return;
+    if (!viewer) return;
 
     const targetScene = getSceneById(targetSceneId);
     if (!targetScene) return;
 
     if (currentSceneRef.current?.id === targetSceneId) return;
 
+    // Nëse navigim është duke ndodhur, mos blloko — thjesht kthe
+    if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
-    setIsSceneTransitioning(true);
+
+    // MOS bëj fade-to-black — lejo PSV të bëjë transition direkt
+    // setIsSceneTransitioning(true) është hequr — shkakton freeze vizual
 
     try {
       const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
@@ -231,20 +236,15 @@ const goToScene = useCallback(
       await vtPlugin.setCurrentNode(String(targetSceneId), {
         showLoader: false,
         effect: "fade",
-        speed: 260,
+        speed: 180,      // konsistent me konfigurimin e sipërm
         rotation: false,
       });
 
       requestAnimationFrame(() => {
         applyManualSceneOrientation(entryOrientation);
-
-        window.setTimeout(() => {
-          setIsSceneTransitioning(false);
-        }, 120);
       });
     } catch (error) {
       console.error("Scene change error:", error);
-      setIsSceneTransitioning(false);
     } finally {
       isNavigatingRef.current = false;
     }
@@ -257,11 +257,13 @@ const goToScene = useCallback(
   ],
 );
 
-  useEffect(() => {
-    Cache.enabled = true;
-    Cache.ttl = 15 * 60 * 1000;
-    Cache.maxItems = 12;
-  }, []);
+
+
+useEffect(() => {
+  Cache.enabled = true;
+  Cache.ttl = 30 * 60 * 1000; // 30 min — mban më gjatë në memorie
+  Cache.maxItems = 30;         // më shumë skena të cached
+}, []);
   
   
   
@@ -368,13 +370,13 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-            preload: false,
-            transitionOptions: () => ({
-              showLoader: false,
-              effect: "fade",
-              speed: 260,
-              rotation: false,
-            }),
+preload: true,   // <-- PSV ngarkon fqinjët në background automatikisht
+transitionOptions: () => ({
+  showLoader: false,
+  effect: "fade",
+  speed: 180,    // <-- pak më shpejt (260 → 180ms)
+  rotation: false,
+}),
           },
         ],
       ],
@@ -531,14 +533,14 @@ useEffect(() => {
 
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
-                <div
-          ref={containerRef}
-          className="w-full h-full bg-black"
-          style={{
-opacity: isViewerVisible && !isSceneTransitioning ? 1 : 0,
-transition: "opacity 160ms ease",
-          }}
-        />
+<div
+  ref={containerRef}
+  className="w-full h-full bg-black"
+  style={{
+    opacity: isViewerVisible ? 1 : 0,
+    transition: "opacity 220ms ease",  // vetëm për hapjen fillestare
+  }}
+/>
 
 {isInitialLoading && (
   <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
