@@ -194,10 +194,84 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
   Eksploro prona me ture virtuale 360°
 </p>
 
-            <form
-              onSubmit={handleSearch}
-              className="glass-panel rounded-2xl p-2 max-w-4xl mx-auto flex flex-col md:flex-row gap-2"
-            >
+
+
+<form
+  onSubmit={handleSearch}
+  className="max-w-5xl mx-auto rounded-[24px] bg-white/95 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.28)] border border-white/30 backdrop-blur-xl flex flex-col md:flex-row gap-2 text-left"
+>
+  <div className="relative flex-1">
+    <label className="absolute left-4 top-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground pointer-events-none">
+      Shteti
+    </label>
+    <select
+      className="w-full h-16 bg-transparent border border-border rounded-[18px] px-4 pt-7 pb-2 text-sm font-semibold text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
+      value={country}
+      onChange={(e) => {
+        setCountry(e.target.value);
+        setCity("");
+      }}
+    >
+      <option value="" className="bg-white text-foreground">
+        Të gjitha shtetet
+      </option>
+      {countries.map((c) => (
+        <option key={c} value={c} className="bg-white text-foreground">
+          {c}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="relative flex-1">
+    <label className="absolute left-4 top-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground pointer-events-none">
+      Qyteti
+    </label>
+    <select
+      className="w-full h-16 bg-transparent border border-border rounded-[18px] px-4 pt-7 pb-2 text-sm font-semibold text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+      value={city}
+      onChange={(e) => setCity(e.target.value)}
+      disabled={!country}
+    >
+      <option value="" className="bg-white text-foreground">
+        Të gjitha qytetet
+      </option>
+      {cities.map((c) => (
+        <option key={c} value={c} className="bg-white text-foreground">
+          {c}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="relative flex-[1.4]">
+    <label className="absolute left-12 top-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground pointer-events-none">
+      Kërko
+    </label>
+    <Search
+      className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+      size={19}
+    />
+    <input
+      type="text"
+      placeholder="Emri i pronës, adresë..."
+      className="w-full h-16 bg-transparent border border-border rounded-[18px] pl-12 pr-4 pt-7 pb-2 text-sm font-semibold text-foreground placeholder:text-foreground/45 focus:outline-none focus:border-primary transition-colors"
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+    />
+  </div>
+
+  <button
+    type="submit"
+    className="w-full md:w-auto h-16 px-8 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-[18px] hover:bg-primary/90 transition-colors"
+  >
+    Kërko
+  </button>
+</form>
+
+
+
+
               <select
                 className="w-full md:w-auto flex-1 bg-white/90 border border-border rounded-xl px-4 py-4 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
                 value={country}
