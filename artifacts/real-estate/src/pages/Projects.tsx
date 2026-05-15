@@ -597,7 +597,7 @@ default:
   // ─────────────────────────────────────────────────────────────────────
 
   const FilterPanel = (
-    <div className="glass-panel p-6 rounded-2xl sticky top-24 space-y-5">
+    <div className="glass-panel p-5 rounded-2xl sticky top-24 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-display text-xl text-foreground flex items-center gap-2">
@@ -656,27 +656,23 @@ default:
       </FilterSection>
 
       {/* Lloji i pronës */}
-      <FilterSection title="Lloji i Pronës" badge={propertyType ? 1 : 0}>
-        <div className="grid grid-cols-2 gap-2">
-          {PROPERTY_TYPES.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                shouldScrollToTopRef.current = true;
-                setPropertyType(propertyType === opt.value ? "" : opt.value);
-              }}
-              className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-left ${
-                propertyType === opt.value
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </FilterSection>
+<FilterSection title="Lloji i Pronës" badge={propertyType ? 1 : 0} defaultOpen={false}>
+  <select
+    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
+    value={propertyType}
+    onChange={(e) => {
+      shouldScrollToTopRef.current = true;
+      setPropertyType(e.target.value);
+    }}
+  >
+    <option value="">Të gjitha llojet</option>
+    {PROPERTY_TYPES.map((opt) => (
+      <option key={opt.value} value={opt.value}>
+        {opt.label}
+      </option>
+    ))}
+  </select>
+</FilterSection>
 
       {/* Shteti / Qyteti */}
       <FilterSection title="Vendndodhja" badge={(country ? 1 : 0) + (city ? 1 : 0)}>
@@ -716,10 +712,11 @@ default:
       </FilterSection>
 
       {/* Çmimi */}
-      <FilterSection
-        title="Çmimi"
-        badge={priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX ? 1 : 0}
-      >
+<FilterSection
+  title="Çmimi"
+  badge={priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX ? 1 : 0}
+  defaultOpen={false}
+>
         <RangeSlider
           min={PRICE_MIN}
           max={PRICE_MAX}
@@ -764,10 +761,11 @@ default:
       </FilterSection>
 
       {/* Sipërfaqja m² */}
-      <FilterSection
-        title="Sipërfaqja (m²)"
-        badge={areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX ? 1 : 0}
-      >
+<FilterSection
+  title="Sipërfaqja (m²)"
+  badge={areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX ? 1 : 0}
+  defaultOpen={false}
+>
         <RangeSlider
           min={AREA_MIN}
           max={AREA_MAX}
@@ -779,7 +777,7 @@ default:
       </FilterSection>
 
       {/* Dhoma gjumi */}
-      <FilterSection title="Dhoma Gjumi" badge={bedroomsMin !== null ? 1 : 0}>
+      <FilterSection title="Dhoma Gjumi" badge={bedroomsMin !== null ? 1 : 0} defaultOpen={false}>
         <RoomButtons value={bedroomsMin} onChange={setBedroomsMin} />
       </FilterSection>
 
@@ -838,7 +836,7 @@ default:
             </button>
 
             {/* Sidebar filters */}
-            <div className={`w-full lg:w-80 shrink-0 ${showFilters ? "block" : "hidden lg:block"}`}>
+           <div className={`w-full lg:w-72 shrink-0 ${showFilters ? "block" : "hidden lg:block"}`}>
               {FilterPanel}
             </div>
 
