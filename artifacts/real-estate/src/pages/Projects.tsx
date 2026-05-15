@@ -327,7 +327,7 @@ useEffect(() => {
   if (!didInitRef.current) return;
   shouldScrollToTopRef.current = true;
   setPage(1);
-}, [country, city, search, statusFilter, propertyType, sortBy]);
+}, [country, city, search, statusFilter, propertyType]);
 
   // ── Save scroll on scroll ─────────────────────────────────────────────
   useEffect(() => {
@@ -433,7 +433,7 @@ const { data, error, count } = await query
     };
 
     fetchProjects();
-  }, [country, city, search, statusFilter, propertyType, sortBy, page]);
+  }, [country, city, search, statusFilter, propertyType, page]);
 
   // ── Fetch filter options ──────────────────────────────────────────────
   useEffect(() => {
@@ -846,8 +846,7 @@ default:
             <div className="flex-1 w-full">
 
               {/* Count + sort info */}
-{!isLoading && (
-  <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+<div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
 <p className="text-muted-foreground text-sm">
   Të gjitha pronat
 </p>
@@ -870,7 +869,7 @@ default:
       </select>
     </div>
   </div>
-)}
+</div>
 
               {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
