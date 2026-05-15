@@ -394,28 +394,31 @@ transitionOptions: () => ({
 vtPlugin.addEventListener("select-link", ({ link }: any) => {
   const targetSceneId = Number(link?.nodeId);
 
-  const hotspotYaw  = link?.position?.yaw ?? 0;
-  const hotspotPitch = link?.position?.pitch ?? 0;
-
+  // 1. targetYaw manual nga admin — prioritet absolut
   const hasCustomTarget =
     typeof link?.data?.targetYaw === "number" &&
     Number.isFinite(link?.data?.targetYaw);
 
-  const entryOrientation: Orientation = hasCustomTarget
-    ? {
-        yaw: link.data.targetYaw,
-        pitch: link.data.targetPitch ?? 0,
-      }
-    : {
-        yaw: getOppositeYaw(hotspotYaw),
-        pitch: -(hotspotPitch * 0.4),
-      };
+  if (hasCustomTarget) {
+    updateTargetNodeOrientation(vtPlugin, String(targetSceneId), {
+      yaw: link.data.targetYaw,
+      pitch: link.data.targetPitch ?? 0,
+    });
+    return;
+  }
 
-  updateTargetNodeOrientation(
-    vtPlugin,
-    String(targetSceneId),
-    entryOrientation,
-  );
+  // 2. Llogarit nga yaw-i i hotspotit në skenën aktuale
+  // Hotspot.yaw = drejtimi KU shkon; hyrja = drejtimi nga KU erdhe
+  const hotspotYaw = link?.position?.yaw ?? 0;
+
+  // Normalizim i saktë në [-π, π] — shmang vlerat jashtë range
+  const raw = (hotspotYaw + Math.PI) % (2 * Math.PI);
+  const entryYaw = raw > Math.PI ? raw - 2 * Math.PI : raw;
+
+  updateTargetNodeOrientation(vtPlugin, String(targetSceneId), {
+    yaw: entryYaw,
+    pitch: 0, // pitch 0 — neutral,
+  });
 });
 
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
