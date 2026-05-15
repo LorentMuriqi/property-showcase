@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { Filter, X, Search } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Filter, X, Search, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
 
+// ─── Session storage keys (të njëjtat si më parë) ───────────────────────────
 const PROJECTS_SCROLL_Y_KEY = "projects-scroll-y";
 const PROJECTS_RETURN_URL_KEY = "projects-return-url";
 const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
@@ -18,17 +19,190 @@ const clearProjectsRestoreState = () => {
   sessionStorage.removeItem(PROJECTS_ACTIVE_CARD_TOP_KEY);
 };
 
+// ─── Llojet e pronave ────────────────────────────────────────────────────────
+const PROPERTY_TYPES: { value: string; label: string }[] = [
+  { value: "apartment", label: "Apartament" },
+  { value: "house", label: "Shtëpi" },
+  { value: "villa", label: "Vilë" },
+  { value: "land", label: "Tokë" },
+  { value: "commercial", label: "Komerciale" },
+  { value: "office", label: "Zyrë" },
+  { value: "garage", label: "Garazh" },
+  { value: "warehouse", label: "Depo" },
+];
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "for_sale", label: "Në Shitje" },
+  { value: "for_rent", label: "Me Qira" },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const formatPrice = (val: number, currency = "EUR") => {
+  if (val >= 1_000_000)
+    return `${(val / 1_000_000).toFixed(val % 1_000_000 === 0 ? 0 : 1)}M ${currency}`;
+  if (val >= 1_000) return `${Math.round(val / 1_000)}K ${currency}`;
+  return `${val} ${currency}`;
+};
+
+// ─── Range Slider ─────────────────────────────────────────────────────────────
+interface RangeSliderProps {
+  min: number;
+  max: number;
+  value: [number, number];
+  onChange: (v: [number, number]) => void;
+  formatLabel: (v: number) => string;
+  step?: number;
+}
+
+function RangeSlider({ min, max, value, onChange, formatLabel, step = 1 }: RangeSliderProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [low, high] = value;
+
+  const pct = (v: number) => ((v - min) / (max - min)) * 100;
+
+  const handleLow = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = Math.min(Number(e.target.value), high - step);
+    onChange([v, high]);
+  };
+  const handleHigh = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = Math.max(Number(e.target.value), low + step);
+    onChange([low, v]);
+  };
+
+  return (
+    <div className="px-1 pt-2 pb-1">
+      {/* Track */}
+      <div ref={trackRef} className="relative h-1.5 bg-border rounded-full mb-5">
+        <div
+          className="absolute h-full bg-primary rounded-full"
+          style={{ left: `${pct(low)}%`, right: `${100 - pct(high)}%` }}
+        />
+        {/* Low thumb */}
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={low}
+          onChange={handleLow}
+          className="range-thumb absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+          style={{ zIndex: low > max - (max - min) * 0.1 ? 5 : 3 }}
+        />
+        {/* High thumb */}
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={high}
+          onChange={handleHigh}
+          className="range-thumb absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+          style={{ zIndex: 4 }}
+        />
+        {/* Visual thumbs */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-primary shadow-md pointer-events-none"
+          style={{ left: `${pct(low)}%` }}
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-primary shadow-md pointer-events-none"
+          style={{ left: `${pct(high)}%` }}
+        />
+      </div>
+
+      {/* Labels */}
+      <div className="flex justify-between text-xs font-semibold text-foreground">
+        <span>{formatLabel(low)}</span>
+        <span>{formatLabel(high)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Accordion section helper ──────────────────────────────────────────────
+function FilterSection({
+  title,
+  children,
+  defaultOpen = true,
+  badge,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  badge?: number;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-border last:border-0 pb-5 last:pb-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between py-1 mb-3 group"
+        type="button"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">
+          {title}
+          {!!badge && (
+            <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+              {badge}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+}
+
+// ─── Active filter chip ───────────────────────────────────────────────────
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-semibold">
+      {label}
+      <button
+        onClick={onRemove}
+        className="ml-0.5 hover:text-foreground transition-colors"
+        type="button"
+      >
+        <X size={12} />
+      </button>
+    </span>
+  );
+}
+
+// ─── Constants for sliders ────────────────────────────────────────────────
+const PRICE_MIN = 0;
+const PRICE_MAX = 2_000_000;
+const PRICE_STEP = 5_000;
+const AREA_MIN = 0;
+const AREA_MAX = 1_000;
+const AREA_STEP = 5;
+
+// ═══════════════════════════════════════════════════════════════════════════
 export default function Projects() {
   const searchParams = new URLSearchParams(window.location.search);
 
+  // ── Server-side filters (Supabase query) ──────────────────────────────
   const [country, setCountry] = useState(searchParams.get("country") || "");
   const [city, setCity] = useState(searchParams.get("city") || "");
   const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
+  const [propertyType, setPropertyType] = useState(searchParams.get("type") || "");
+
+  // ── Client-side filters (applied after fetch) ─────────────────────────
+  const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, PRICE_MAX]);
+  const [areaRange, setAreaRange] = useState<[number, number]>([AREA_MIN, AREA_MAX]);
+  const [bedroomsMin, setBedroomsMin] = useState<number | null>(null);
+  const [bathroomsMin, setBathroomsMin] = useState<number | null>(null);
+
+  // ── UI state ──────────────────────────────────────────────────────────
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || "1") || 1));
 
-  const initialPage = Math.max(1, Number(searchParams.get("page") || "1") || 1);
-  const [page, setPage] = useState(initialPage);
-
+  // ── Data state ────────────────────────────────────────────────────────
   const [projects, setProjects] = useState<any[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
@@ -42,51 +216,43 @@ export default function Projects() {
 
   const pageSize = 8;
 
-  const buildProjectsUrl = (
-    pageValue: number,
-    countryValue: string,
-    cityValue: string,
-    searchValue: string
-  ) => {
-    const params = new URLSearchParams();
-    if (countryValue) params.set("country", countryValue);
-    if (cityValue) params.set("city", cityValue);
-    if (searchValue) params.set("search", searchValue);
-    if (pageValue > 1) params.set("page", String(pageValue));
+  // ── Derived: active filter count (for badge on mobile button) ─────────
+  const activeServerFilters = [country, city, search, statusFilter, propertyType].filter(Boolean).length;
+  const activeClientFilters = [
+    priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX,
+    areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX,
+    bedroomsMin !== null,
+    bathroomsMin !== null,
+  ].filter(Boolean).length;
+  const totalActiveFilters = activeServerFilters + activeClientFilters;
 
-    return `/projects${params.toString() ? `?${params.toString()}` : ""}`;
-  };
+  // ── URL sync ──────────────────────────────────────────────────────────
+  const buildProjectsUrl = useCallback(
+    (pg: number, co: string, ci: string, se: string, st: string, ty: string) => {
+      const params = new URLSearchParams();
+      if (co) params.set("country", co);
+      if (ci) params.set("city", ci);
+      if (se) params.set("search", se);
+      if (st) params.set("status", st);
+      if (ty) params.set("type", ty);
+      if (pg > 1) params.set("page", String(pg));
+      return `/projects${params.toString() ? `?${params.toString()}` : ""}`;
+    },
+    []
+  );
 
-  const currentProjectsUrl = buildProjectsUrl(page, country, city, search);
+  const currentProjectsUrl = buildProjectsUrl(page, country, city, search, statusFilter, propertyType);
 
-  const saveProjectsState = (projectId?: string | number) => {
-    sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
-    sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
+  useEffect(() => {
+    window.history.replaceState({}, "", currentProjectsUrl);
+  }, [currentProjectsUrl]);
 
-    if (projectId !== undefined && projectId !== null) {
-      sessionStorage.setItem(PROJECTS_RESTORE_SCROLL_KEY, "1");
-      sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
-
-      const cardEl = document.getElementById(`project-card-${projectId}`);
-      if (cardEl) {
-        sessionStorage.setItem(
-          PROJECTS_ACTIVE_CARD_TOP_KEY,
-          String(cardEl.getBoundingClientRect().top)
-        );
-      }
-    }
-  };
-
+  // ── Scroll helpers (identike me origjinalin) ──────────────────────────
   const scrollToProjectsTop = (behavior: ScrollBehavior = "auto") => {
     const top = pageTopRef.current
       ? pageTopRef.current.getBoundingClientRect().top + window.scrollY
       : 0;
-
-    window.scrollTo({
-      top,
-      left: 0,
-      behavior,
-    });
+    window.scrollTo({ top, left: 0, behavior });
   };
 
   const restoreProjectsPosition = () => {
@@ -104,29 +270,17 @@ export default function Projects() {
     const applyRestore = () => {
       if (savedCardId) {
         const cardEl = document.getElementById(`project-card-${savedCardId}`);
-
         if (cardEl) {
           const absoluteTop = cardEl.getBoundingClientRect().top + window.scrollY;
-
-          window.scrollTo({
-            top: Math.max(0, absoluteTop - savedCardTop),
-            left: 0,
-            behavior: "auto",
-          });
+          window.scrollTo({ top: Math.max(0, absoluteTop - savedCardTop), left: 0, behavior: "auto" });
           return;
         }
       }
-
-      window.scrollTo({
-        top: savedScrollY,
-        left: 0,
-        behavior: "auto",
-      });
+      window.scrollTo({ top: savedScrollY, left: 0, behavior: "auto" });
     };
 
     requestAnimationFrame(() => {
       applyRestore();
-
       setTimeout(() => {
         applyRestore();
         shouldRestoreScrollRef.current = false;
@@ -135,59 +289,54 @@ export default function Projects() {
     });
   };
 
+  const saveProjectsState = (projectId?: string | number) => {
+    sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
+    sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
+    if (projectId !== undefined && projectId !== null) {
+      sessionStorage.setItem(PROJECTS_RESTORE_SCROLL_KEY, "1");
+      sessionStorage.setItem(PROJECTS_ACTIVE_CARD_ID_KEY, String(projectId));
+      const cardEl = document.getElementById(`project-card-${projectId}`);
+      if (cardEl) {
+        sessionStorage.setItem(PROJECTS_ACTIVE_CARD_TOP_KEY, String(cardEl.getBoundingClientRect().top));
+      }
+    }
+  };
+
   const changePage = (nextPage: number) => {
     if (nextPage === page) return;
     shouldScrollToTopRef.current = true;
     setPage(nextPage);
   };
 
+  // ── Init scroll restore ───────────────────────────────────────────────
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (country) params.set("country", country);
-    if (city) params.set("city", city);
-    if (search) params.set("search", search);
-    if (page > 1) params.set("page", String(page));
-
-    const newUrl = `/projects${params.toString() ? `?${params.toString()}` : ""}`;
-    window.history.replaceState({}, "", newUrl);
-  }, [country, city, search, page]);
-
-  useEffect(() => {
-    const shouldRestore =
-      sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
+    const shouldRestore = sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1";
     const savedUrl = sessionStorage.getItem(PROJECTS_RETURN_URL_KEY);
-
     const canRestore = shouldRestore && savedUrl === currentProjectsUrl;
-
     shouldRestoreScrollRef.current = canRestore;
     shouldScrollToTopRef.current = !canRestore;
-
-    if (!canRestore) {
-      clearProjectsRestoreState();
-    }
+    if (!canRestore) clearProjectsRestoreState();
   }, []);
 
+  // ── Reset page on server-filter change ────────────────────────────────
   useEffect(() => {
     if (!didInitRef.current) return;
-
     shouldScrollToTopRef.current = true;
     setPage(1);
-  }, [country, city, search]);
+  }, [country, city, search, statusFilter, propertyType]);
 
+  // ── Save scroll on scroll ─────────────────────────────────────────────
   useEffect(() => {
     const saveScrollState = () => {
       sessionStorage.setItem(PROJECTS_SCROLL_Y_KEY, String(window.scrollY));
       sessionStorage.setItem(PROJECTS_RETURN_URL_KEY, currentProjectsUrl);
     };
-
     saveScrollState();
     window.addEventListener("scroll", saveScrollState, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", saveScrollState);
-    };
+    return () => window.removeEventListener("scroll", saveScrollState);
   }, [currentProjectsUrl]);
 
+  // ── Fetch projects from Supabase (server-side filters) ────────────────
   useEffect(() => {
     const fetchProjects = async () => {
       setIsLoading(true);
@@ -205,6 +354,8 @@ export default function Projects() {
 
       if (country) query = query.eq("country", country);
       if (city) query = query.eq("city", city);
+      if (statusFilter) query = query.eq("status", statusFilter);
+      if (propertyType) query = query.eq("property_type", propertyType);
 
       if (search.trim()) {
         const safeSearch = search.trim().replace(/,/g, " ");
@@ -226,16 +377,13 @@ export default function Projects() {
         const propertyIds = rows.map((item) => item.id);
 
         let scenePropertyIds = new Set<string>();
-
         if (propertyIds.length > 0) {
           const { data: sceneRows, error: sceneError } = await supabase
             .from("virtual_tour_scenes")
             .select("property_id")
             .in("property_id", propertyIds);
 
-          if (sceneError) {
-            console.error("Supabase virtual tour scenes fetch error:", sceneError);
-          } else {
+          if (!sceneError) {
             scenePropertyIds = new Set(
               (sceneRows || []).map((scene) => String(scene.property_id))
             );
@@ -243,21 +391,17 @@ export default function Projects() {
         }
 
         const rowsWithVirtualTour = rows.map((item) => {
-const hasFallbackVirtualTour = !!(
-  item.virtual_tour_url ||
-  item.virtual_tour_embed_code ||
-  item.has_custom_virtual_tour
-);
-
-const hasPublishedBuiltInVirtualTour =
-  item.virtual_tour_status === "published" &&
-  scenePropertyIds.has(String(item.id));
-
-const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
-
+          const hasFallbackVirtualTour = !!(
+            item.virtual_tour_url ||
+            item.virtual_tour_embed_code ||
+            item.has_custom_virtual_tour
+          );
+          const hasPublishedBuiltInVirtualTour =
+            item.virtual_tour_status === "published" &&
+            scenePropertyIds.has(String(item.id));
           return {
             ...item,
-            hasVirtualTour,
+            hasVirtualTour: hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour,
           };
         });
 
@@ -274,18 +418,17 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
           scrollToProjectsTop(didInitRef.current ? "smooth" : "auto");
           shouldScrollToTopRef.current = false;
         }
-
         didInitRef.current = true;
       });
     };
 
     fetchProjects();
-  }, [country, city, search, page]);
+  }, [country, city, search, statusFilter, propertyType, page]);
 
+  // ── Fetch filter options ──────────────────────────────────────────────
   useEffect(() => {
     const fetchFilters = async () => {
       const nowIso = new Date().toISOString();
-
       const { data, error } = await supabase
         .from("properties")
         .select("country, city")
@@ -293,10 +436,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
         .eq("is_paused", false)
         .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
 
-      if (error) {
-        console.error("Supabase filter fetch error:", error);
-        return;
-      }
+      if (error) return;
 
       const allCountries = [
         ...new Set((data || []).map((item) => item.country).filter(Boolean)),
@@ -312,54 +452,343 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
               .filter(Boolean)
           ),
         ] as string[];
-
         setCities(filteredCities);
       } else {
         setCities([]);
       }
     };
-
     fetchFilters();
   }, [country]);
 
-  const clearFilters = () => {
+  // ── Client-side filtering (çmim, m², dhoma) ───────────────────────────
+  const filteredProjects = useMemo(() => {
+    return projects.filter((p) => {
+      const price = p.price ?? null;
+      const area = p.area_m2 ?? p.areaM2 ?? null;
+      const beds = p.bedrooms ?? null;
+      const baths = p.bathrooms ?? null;
+
+      // Çmimi — nëse prona nuk ka çmim, e tregojmë gjithmonë
+      if (price !== null) {
+        if (price < priceRange[0] || price > priceRange[1]) return false;
+      }
+
+      // Sipërfaqja
+      if (area !== null) {
+        if (area < areaRange[0] || area > areaRange[1]) return false;
+      }
+
+      // Dhoma gjumi minimum
+      if (bedroomsMin !== null && (beds === null || beds < bedroomsMin)) return false;
+
+      // Banjo minimum
+      if (bathroomsMin !== null && (baths === null || baths < bathroomsMin)) return false;
+
+      return true;
+    });
+  }, [projects, priceRange, areaRange, bedroomsMin, bathroomsMin]);
+
+  // ── Clear all ─────────────────────────────────────────────────────────
+  const clearAllFilters = () => {
     shouldScrollToTopRef.current = true;
     setCountry("");
     setCity("");
     setSearch("");
+    setStatusFilter("");
+    setPropertyType("");
+    setPriceRange([PRICE_MIN, PRICE_MAX]);
+    setAreaRange([AREA_MIN, AREA_MAX]);
+    setBedroomsMin(null);
+    setBathroomsMin(null);
   };
 
+  // ── Pagination ────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const getVisiblePages = () => {
     const pages: (number | string)[] = [];
-
     if (totalPages <= 7) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
       return pages;
     }
-
     pages.push(1);
-
     if (page > 3) pages.push("...");
-
     const start = Math.max(2, page - 1);
     const end = Math.min(totalPages - 1, page + 1);
-
     for (let i = start; i <= end; i++) pages.push(i);
-
     if (page < totalPages - 2) pages.push("...");
-
     pages.push(totalPages);
-
     return pages;
   };
 
+  // ── Active chips data ─────────────────────────────────────────────────
+  const activeChips: { label: string; onRemove: () => void }[] = [
+    ...(search ? [{ label: `"${search}"`, onRemove: () => setSearch("") }] : []),
+    ...(country ? [{ label: country, onRemove: () => { setCountry(""); setCity(""); } }] : []),
+    ...(city ? [{ label: city, onRemove: () => setCity("") }] : []),
+    ...(statusFilter
+      ? [{ label: STATUS_OPTIONS.find((s) => s.value === statusFilter)?.label || statusFilter, onRemove: () => setStatusFilter("") }]
+      : []),
+    ...(propertyType
+      ? [{ label: PROPERTY_TYPES.find((t) => t.value === propertyType)?.label || propertyType, onRemove: () => setPropertyType("") }]
+      : []),
+    ...(priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX
+      ? [{
+          label: `${formatPrice(priceRange[0])} – ${formatPrice(priceRange[1])}`,
+          onRemove: () => setPriceRange([PRICE_MIN, PRICE_MAX]),
+        }]
+      : []),
+    ...(areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX
+      ? [{
+          label: `${areaRange[0]}–${areaRange[1]} m²`,
+          onRemove: () => setAreaRange([AREA_MIN, AREA_MAX]),
+        }]
+      : []),
+    ...(bedroomsMin !== null
+      ? [{ label: `${bedroomsMin}+ dhoma gjumi`, onRemove: () => setBedroomsMin(null) }]
+      : []),
+    ...(bathroomsMin !== null
+      ? [{ label: `${bathroomsMin}+ banjo`, onRemove: () => setBathroomsMin(null) }]
+      : []),
+  ];
+
+  // ── Bedroom / bathroom quick-select buttons ───────────────────────────
+  const RoomButtons = ({
+    value,
+    onChange,
+  }: {
+    value: number | null;
+    onChange: (v: number | null) => void;
+  }) => (
+    <div className="flex gap-2 flex-wrap">
+      {[null, 1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n ?? "any"}
+          type="button"
+          onClick={() => onChange(value === n ? null : n)}
+          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+            value === n
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+          }`}
+        >
+          {n === null ? "Të gjitha" : n === 5 ? "5+" : String(n)}
+        </button>
+      ))}
+    </div>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────
+
+  const FilterPanel = (
+    <div className="glass-panel p-6 rounded-2xl sticky top-24 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-xl text-foreground flex items-center gap-2">
+          <SlidersHorizontal size={18} className="text-primary" />
+          Filtrat
+        </h3>
+        {totalActiveFilters > 0 && (
+          <button
+            onClick={clearAllFilters}
+            className="text-xs text-primary hover:text-foreground flex items-center gap-1 font-medium transition-colors"
+            type="button"
+          >
+            <X size={13} /> Pastro të gjitha
+          </button>
+        )}
+      </div>
+
+      {/* Search */}
+      <FilterSection title="Kërko">
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Fjalë kyçe, adresë..."
+            className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+            value={search}
+            onChange={(e) => {
+              shouldScrollToTopRef.current = true;
+              setSearch(e.target.value);
+            }}
+          />
+        </div>
+      </FilterSection>
+
+      {/* Lloji i transaksionit */}
+      <FilterSection title="Lloji i Transaksionit" badge={statusFilter ? 1 : 0}>
+        <div className="flex gap-2">
+          {STATUS_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                shouldScrollToTopRef.current = true;
+                setStatusFilter(statusFilter === opt.value ? "" : opt.value);
+              }}
+              className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-all ${
+                statusFilter === opt.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </FilterSection>
+
+      {/* Lloji i pronës */}
+      <FilterSection title="Lloji i Pronës" badge={propertyType ? 1 : 0}>
+        <div className="grid grid-cols-2 gap-2">
+          {PROPERTY_TYPES.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                shouldScrollToTopRef.current = true;
+                setPropertyType(propertyType === opt.value ? "" : opt.value);
+              }}
+              className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all text-left ${
+                propertyType === opt.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </FilterSection>
+
+      {/* Shteti / Qyteti */}
+      <FilterSection title="Vendndodhja" badge={(country ? 1 : 0) + (city ? 1 : 0)}>
+        <div className="space-y-3">
+          <select
+            className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
+            value={country}
+            onChange={(e) => {
+              shouldScrollToTopRef.current = true;
+              setCountry(e.target.value);
+              setCity("");
+            }}
+          >
+            <option value="">Të gjitha shtetet</option>
+            {countries.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <select
+            className={`w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors ${
+              !country ? "opacity-50" : ""
+            }`}
+            value={city}
+            onChange={(e) => {
+              shouldScrollToTopRef.current = true;
+              setCity(e.target.value);
+            }}
+            disabled={!country}
+          >
+            <option value="">Të gjitha qytetet</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </FilterSection>
+
+      {/* Çmimi */}
+      <FilterSection
+        title="Çmimi"
+        badge={priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX ? 1 : 0}
+      >
+        <RangeSlider
+          min={PRICE_MIN}
+          max={PRICE_MAX}
+          step={PRICE_STEP}
+          value={priceRange}
+          onChange={setPriceRange}
+          formatLabel={(v) => formatPrice(v, "EUR")}
+        />
+        {/* Input numerik manual */}
+        <div className="flex gap-2 mt-3">
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Nga</label>
+            <input
+              type="number"
+              min={PRICE_MIN}
+              max={priceRange[1] - PRICE_STEP}
+              step={PRICE_STEP}
+              value={priceRange[0]}
+              onChange={(e) => {
+                const v = Math.max(PRICE_MIN, Math.min(Number(e.target.value), priceRange[1] - PRICE_STEP));
+                setPriceRange([v, priceRange[1]]);
+              }}
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Deri</label>
+            <input
+              type="number"
+              min={priceRange[0] + PRICE_STEP}
+              max={PRICE_MAX}
+              step={PRICE_STEP}
+              value={priceRange[1]}
+              onChange={(e) => {
+                const v = Math.min(PRICE_MAX, Math.max(Number(e.target.value), priceRange[0] + PRICE_STEP));
+                setPriceRange([priceRange[0], v]);
+              }}
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+            />
+          </div>
+        </div>
+      </FilterSection>
+
+      {/* Sipërfaqja m² */}
+      <FilterSection
+        title="Sipërfaqja (m²)"
+        badge={areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX ? 1 : 0}
+      >
+        <RangeSlider
+          min={AREA_MIN}
+          max={AREA_MAX}
+          step={AREA_STEP}
+          value={areaRange}
+          onChange={setAreaRange}
+          formatLabel={(v) => (v === AREA_MAX ? `${v}+ m²` : `${v} m²`)}
+        />
+      </FilterSection>
+
+      {/* Dhoma gjumi */}
+      <FilterSection title="Dhoma Gjumi" badge={bedroomsMin !== null ? 1 : 0}>
+        <RoomButtons value={bedroomsMin} onChange={setBedroomsMin} />
+      </FilterSection>
+
+      {/* Banjo */}
+      <FilterSection title="Banjo" badge={bathroomsMin !== null ? 1 : 0} defaultOpen={false}>
+        <RoomButtons value={bathroomsMin} onChange={setBathroomsMin} />
+      </FilterSection>
+    </div>
+  );
+
   return (
     <Layout>
+      {/* CSS për range slider thumbs */}
+      <style>{`
+        .range-thumb::-webkit-slider-thumb { width: 16px; height: 16px; }
+        .range-thumb::-moz-range-thumb { width: 16px; height: 16px; border: none; background: transparent; }
+      `}</style>
+
       <div ref={pageTopRef} className="pt-32 pb-24 bg-background min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-12">
+
+          {/* Titulli */}
+          <div className="mb-8">
             <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
               Prona
             </h1>
@@ -368,106 +797,59 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
             </p>
           </div>
 
+          {/* Active filter chips */}
+          {activeChips.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {activeChips.map((chip, i) => (
+                <FilterChip key={i} label={chip.label} onRemove={chip.onRemove} />
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-col lg:flex-row gap-8 items-start">
+
+            {/* Mobile toggle button */}
             <button
-              className="lg:hidden w-full py-4 border border-border rounded-xl flex items-center justify-center gap-2 text-foreground font-medium bg-card"
+              className="lg:hidden w-full py-3.5 border border-border rounded-xl flex items-center justify-center gap-2 text-foreground font-medium bg-card"
               onClick={() => setShowFilters(!showFilters)}
+              type="button"
             >
-              <Filter size={20} />
+              <SlidersHorizontal size={18} />
               {showFilters ? "Fshih Filtrat" : "Shfaq Filtrat"}
+              {totalActiveFilters > 0 && (
+                <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                  {totalActiveFilters}
+                </span>
+              )}
             </button>
 
-            <div className={`w-full lg:w-80 shrink-0 space-y-8 ${showFilters ? "block" : "hidden lg:block"}`}>
-              <div className="glass-panel p-6 rounded-2xl sticky top-24">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-display text-xl text-foreground">Filtrat</h3>
-                  {(country || city || search) && (
-                    <button
-                      onClick={clearFilters}
-                      className="text-sm text-primary hover:text-foreground flex items-center gap-1"
-                    >
-                      <X size={14} /> Pastro
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                      Kërko
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Fjalë kyçe..."
-                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                      value={search}
-                      onChange={(e) => {
-                        shouldScrollToTopRef.current = true;
-                        setSearch(e.target.value);
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                      Shteti
-                    </label>
-                    <select
-                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
-                      value={country}
-                      onChange={(e) => {
-                        shouldScrollToTopRef.current = true;
-                        setCountry(e.target.value);
-                        setCity("");
-                      }}
-                    >
-                      <option value="">Të Gjitha Shtetet</option>
-                      {countries.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={!country ? "opacity-50" : ""}>
-                    <label className="block text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-                      Qyteti
-                    </label>
-                    <select
-                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
-                      value={city}
-                      onChange={(e) => {
-                        shouldScrollToTopRef.current = true;
-                        setCity(e.target.value);
-                      }}
-                      disabled={!country}
-                    >
-                      <option value="">Të Gjitha Qytetet</option>
-                      {cities.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+            {/* Sidebar filters */}
+            <div className={`w-full lg:w-80 shrink-0 ${showFilters ? "block" : "hidden lg:block"}`}>
+              {FilterPanel}
             </div>
 
+            {/* Results */}
             <div className="flex-1 w-full">
+
+              {/* Count + sort info */}
+              {!isLoading && (
+                <p className="text-muted-foreground text-sm mb-6">
+                  {filteredProjects.length !== projects.length
+                    ? `${filteredProjects.length} nga ${totalCount} prona`
+                    : `${totalCount} prona të gjetura`}
+                </p>
+              )}
+
               {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="animate-pulse bg-card rounded-2xl h-[400px]" />
                   ))}
                 </div>
-              ) : projects.length > 0 ? (
+              ) : filteredProjects.length > 0 ? (
                 <>
-                  <p className="text-muted-foreground mb-6">{totalCount} prona të gjetura</p>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {projects.map((project) => (
+                    {filteredProjects.map((project) => (
                       <div
                         key={project.id}
                         id={`project-card-${project.id}`}
@@ -478,6 +860,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
                     ))}
                   </div>
 
+                  {/* Pagination */}
                   {totalPages > 1 && (
                     <div className="mt-10 flex items-center justify-center gap-2 flex-wrap">
                       <button
@@ -491,10 +874,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
 
                       {getVisiblePages().map((item, index) =>
                         item === "..." ? (
-                          <span
-                            key={`ellipsis-${index}`}
-                            className="px-3 py-2 text-foreground/50 select-none"
-                          >
+                          <span key={`ellipsis-${index}`} className="px-3 py-2 text-foreground/50 select-none">
                             ...
                           </span>
                         ) : (
@@ -531,7 +911,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
                   <h3 className="font-display text-2xl text-foreground mb-2">Asnjë pronë nuk u gjet</h3>
                   <p className="text-muted-foreground">Provoni të rregulloni kërkimin ose filtrat.</p>
                   <button
-                    onClick={clearFilters}
+                    onClick={clearAllFilters}
                     className="mt-6 px-6 py-2 border border-primary text-primary hover:bg-primary hover:text-background rounded-full transition-colors"
                   >
                     Pastro Filtrat
