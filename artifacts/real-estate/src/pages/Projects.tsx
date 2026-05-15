@@ -192,8 +192,8 @@ export default function Projects() {
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const [propertyType, setPropertyType] = useState(searchParams.get("type") || "");
 
-type SortOption = "newest" | "oldest" | "price_asc" | "price_desc" | "area_asc" | "area_desc";
-const [sortBy, setSortBy] = useState<SortOption>("newest");
+type SortOption = "relevance" | "newest" | "price_asc" | "price_desc";
+const [sortBy, setSortBy] = useState<SortOption>("relevance");
 
   // ── Client-side filters (applied after fetch) ─────────────────────────
   const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, PRICE_MAX]);
@@ -370,9 +370,9 @@ useEffect(() => {
 
 // Sort server-side vetëm për created_at — çmimi/m² bëhen client-side
 const serverOrder =
-  sortBy === "oldest"
-    ? { column: "created_at", ascending: true }
-    : { column: "created_at", ascending: false }; // default: newest
+  sortBy === "newest" || sortBy === "relevance"
+    ? { column: "created_at", ascending: false }
+    : { column: "created_at", ascending: false };
 
 const { data, error, count } = await query
   .order(serverOrder.column, { ascending: serverOrder.ascending })
@@ -496,11 +496,7 @@ const filteredProjects = useMemo(() => {
         return (a.price ?? Infinity) - (b.price ?? Infinity);
       case "price_desc":
         return (b.price ?? -Infinity) - (a.price ?? -Infinity);
-      case "area_asc":
-        return ((a.area_m2 ?? a.areaM2) ?? Infinity) - ((b.area_m2 ?? b.areaM2) ?? Infinity);
-      case "area_desc":
-        return ((b.area_m2 ?? b.areaM2) ?? -Infinity) - ((a.area_m2 ?? a.areaM2) ?? -Infinity);
-      default:
+default:
         return 0; // newest/oldest — tashmë e bën Supabase
     }
   });
@@ -869,12 +865,10 @@ const filteredProjects = useMemo(() => {
         className="bg-card border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors pr-8"
         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}
       >
-        <option value="newest">Më i Riu</option>
-        <option value="oldest">Më i Vjetri</option>
-        <option value="price_asc">Çmimi ↑</option>
-        <option value="price_desc">Çmimi ↓</option>
-        <option value="area_asc">Sipërfaqja ↑</option>
-        <option value="area_desc">Sipërfaqja ↓</option>
+<option value="relevance">Sipas Relevancës</option>
+<option value="price_asc">Çmimi: ulët në të lartë</option>
+<option value="price_desc">Çmimi: të lartë në të ulët</option>
+<option value="newest">Më të rejat</option>
       </select>
     </div>
   </div>
