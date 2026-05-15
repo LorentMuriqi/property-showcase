@@ -158,9 +158,7 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
     },
     [getSceneStartOrientation],
   );
-const getOppositeYaw = (yaw: number): number => {
-  return (yaw + Math.PI) % (2 * Math.PI);
-};
+
 
 
   const updateTargetNodeOrientation = useCallback(
@@ -394,29 +392,13 @@ transitionOptions: () => ({
 
 vtPlugin.addEventListener("select-link", ({ link }: any) => {
   const targetSceneId = Number(link?.nodeId);
+  const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
 
-  // targetYaw manual nga admin — prioritet absolut
-  const hasCustomTarget =
-    typeof link?.data?.targetYaw === "number" &&
-    Number.isFinite(link?.data?.targetYaw);
-
-  if (hasCustomTarget) {
-    pendingEntryOrientationRef.current = {
-      yaw: link.data.targetYaw,
-      pitch: link.data.targetPitch ?? 0,
-    };
-    return;
-  }
-
-  // Llogarit nga hotspot yaw — drejtimi i kundërt
-  const hotspotYaw = link?.position?.yaw ?? 0;
-  const raw = (hotspotYaw + Math.PI) % (2 * Math.PI);
-  const entryYaw = raw > Math.PI ? raw - 2 * Math.PI : raw;
-
-  pendingEntryOrientationRef.current = {
-    yaw: entryYaw,
-    pitch: 0,
-  };
+  updateTargetNodeOrientation(
+    vtPlugin,
+    String(targetSceneId),
+    entryOrientation,
+  );
 });
 
 vtPlugin.addEventListener("node-changed", ({ node }: any) => {
