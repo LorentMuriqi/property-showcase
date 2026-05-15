@@ -52,6 +52,7 @@ export function VirtualTour360({
   const isNavigatingRef = useRef(false);
   const closeTouchHandledRef = useRef(false);
   const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+const pendingEntryOrientationRef = useRef<Orientation | null>(null);
 
    const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -394,40 +395,48 @@ transitionOptions: () => ({
 vtPlugin.addEventListener("select-link", ({ link }: any) => {
   const targetSceneId = Number(link?.nodeId);
 
-  // 1. targetYaw manual nga admin — prioritet absolut
+  // targetYaw manual nga admin — prioritet absolut
   const hasCustomTarget =
     typeof link?.data?.targetYaw === "number" &&
     Number.isFinite(link?.data?.targetYaw);
 
   if (hasCustomTarget) {
-    updateTargetNodeOrientation(vtPlugin, String(targetSceneId), {
+    pendingEntryOrientationRef.current = {
       yaw: link.data.targetYaw,
       pitch: link.data.targetPitch ?? 0,
-    });
+    };
     return;
   }
 
-  // 2. Llogarit nga yaw-i i hotspotit në skenën aktuale
-  // Hotspot.yaw = drejtimi KU shkon; hyrja = drejtimi nga KU erdhe
+  // Llogarit nga hotspot yaw — drejtimi i kundërt
   const hotspotYaw = link?.position?.yaw ?? 0;
-
-  // Normalizim i saktë në [-π, π] — shmang vlerat jashtë range
   const raw = (hotspotYaw + Math.PI) % (2 * Math.PI);
   const entryYaw = raw > Math.PI ? raw - 2 * Math.PI : raw;
 
-  updateTargetNodeOrientation(vtPlugin, String(targetSceneId), {
+  pendingEntryOrientationRef.current = {
     yaw: entryYaw,
-    pitch: 0, // pitch 0 — neutral,
-  });
+    pitch: 0,
+  };
 });
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      const nextId = Number(node.id);
-      const nextScene = getSceneById(nextId);
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  const nextScene = getSceneById(nextId);
 
-      currentSceneRef.current = nextScene;
-      setCurrentSceneId(nextId);
+  currentSceneRef.current = nextScene;
+  setCurrentSceneId(nextId);
+
+  // Apliko orientimin e hyrjes menjëherë pas ndërrimit të skenës
+  const pending = pendingEntryOrientationRef.current;
+  pendingEntryOrientationRef.current = null;
+
+  if (pending && Number.isFinite(pending.yaw)) {
+    // requestAnimationFrame siguron që PSV ka mbaruar render-in
+    requestAnimationFrame(() => {
+      viewer.rotate({ yaw: pending.yaw, pitch: pending.pitch });
     });
+  }
+});
 
     const fallbackTimer = window.setTimeout(() => {
       console.warn("Initial panorama load is taking longer than expected.");
