@@ -58,7 +58,6 @@ export function VirtualTour360({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
-  const [isSceneTransitioning, setIsSceneTransitioning] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
 const [canUseFullscreen, setCanUseFullscreen] = useState(false);
@@ -158,7 +157,9 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
     },
     [getSceneStartOrientation],
   );
-
+const getOppositeYaw = (yaw: number): number => {
+  return (yaw + Math.PI) % (2 * Math.PI);
+};
 
 
   const updateTargetNodeOrientation = useCallback(
@@ -390,16 +391,32 @@ transitionOptions: () => ({
       finishInitialLoad();
     });
 
-    vtPlugin.addEventListener("select-link", ({ link }: any) => {
-      const targetSceneId = Number(link?.nodeId);
-      const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
+vtPlugin.addEventListener("select-link", ({ link }: any) => {
+  const targetSceneId = Number(link?.nodeId);
 
-      updateTargetNodeOrientation(
-        vtPlugin,
-        String(targetSceneId),
-        entryOrientation,
-      );
-    });
+  const hotspotYaw  = link?.position?.yaw ?? 0;
+  const hotspotPitch = link?.position?.pitch ?? 0;
+
+  const hasCustomTarget =
+    typeof link?.data?.targetYaw === "number" &&
+    Number.isFinite(link?.data?.targetYaw);
+
+  const entryOrientation: Orientation = hasCustomTarget
+    ? {
+        yaw: link.data.targetYaw,
+        pitch: link.data.targetPitch ?? 0,
+      }
+    : {
+        yaw: getOppositeYaw(hotspotYaw),
+        pitch: -(hotspotPitch * 0.4),
+      };
+
+  updateTargetNodeOrientation(
+    vtPlugin,
+    String(targetSceneId),
+    entryOrientation,
+  );
+});
 
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
       const nextId = Number(node.id);
@@ -429,7 +446,6 @@ transitionOptions: () => ({
     nodes,
     getSceneById,
     getSceneStartOrientation,
-    getHotspotEntryOrientation,
     updateTargetNodeOrientation,
   ]);
 
