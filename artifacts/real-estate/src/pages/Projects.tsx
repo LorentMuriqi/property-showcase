@@ -848,11 +848,9 @@ default:
               {/* Count + sort info */}
 {!isLoading && (
   <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-    <p className="text-muted-foreground text-sm">
-      {filteredProjects.length !== projects.length
-        ? `${filteredProjects.length} nga ${totalCount} prona`
-        : `${totalCount} prona të gjetura`}
-    </p>
+<p className="text-muted-foreground text-sm">
+  Të gjitha pronat
+</p>
 
     {/* Sort dropdown */}
     <div className="flex items-center gap-2 shrink-0">
