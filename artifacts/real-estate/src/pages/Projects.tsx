@@ -869,7 +869,7 @@ default:
       </select>
     </div>
   </div>
-</div>
+
 
               {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
