@@ -422,12 +422,27 @@ export default function AdminProjectForm() {
 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
   <Input label="Çmimi" type="number" {...register("price")} />
   <Input label="Sipërfaqja (m²)" type="number" {...register("areaM2")} />
-              <Input
-                label="Lloji i Pronës"
-                {...register("propertyType")}
-                placeholder="Vilë, Apartament..."
-              />
-              <Input
+
+
+<div className="flex flex-col gap-1.5">
+  <label className="text-sm font-medium text-foreground">Lloji i Pronës</label>
+  <select
+    {...register("propertyType")}
+    className="bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
+  >
+    <option value="">-- Zgjidh llojin --</option>
+    <option value="apartment">Apartament</option>
+    <option value="house">Shtëpi</option>
+    <option value="villa">Vilë</option>
+    <option value="land">Tokë</option>
+    <option value="commercial">Komerciale</option>
+    <option value="office">Zyrë</option>
+    <option value="garage">Garazh</option>
+    <option value="warehouse">Depo</option>
+  </select>
+</div>
+
+           <Input
                 label="Dhoma Gjumi"
                 type="number"
                 {...register("bedrooms")}
