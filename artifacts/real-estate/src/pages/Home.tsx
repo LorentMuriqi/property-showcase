@@ -34,51 +34,83 @@ export default function Home() {
   const [recentProjects, setRecentProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchHomeData = async () => {
-      setIsLoading(true);
 
+
+
+useEffect(() => {
+  const fetchHomeData = async () => {
+    setIsLoading(true);
+
+    try {
       const nowIso = new Date().toISOString();
 
-      const { data, error } = await supabase
-        .from("properties")
-.select(`
-  id,
-  title,
-  description,
-  country,
-  city,
-  address,
-  status,
-  property_type,
-  price,
-  currency,
-  images,
-  created_at,
-  listing_status,
-  is_paused,
-  expires_at,
-virtual_tour_status,
-virtual_tour_url,
-virtual_tour_embed_code
-`)
-        .eq("listing_status", "active")
-        .eq("is_paused", false)
-        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
-        .order("created_at", { ascending: false });
+      const [filtersResult, recentProjectsResult] = await Promise.all([
+        supabase
+          .from("properties")
+          .select("country, city")
+          .eq("listing_status", "active")
+          .eq("is_paused", false)
+          .or(`expires_at.is.null,expires_at.gte.${nowIso}`),
 
-      if (error) {
-        console.error("Fetch home data error:", error);
-        setRecentProjects([]);
+        supabase
+          .from("properties")
+          .select(`
+            id,
+            title,
+            description,
+            country,
+            city,
+            address,
+            status,
+            property_type,
+            price,
+            currency,
+            images,
+            created_at,
+            listing_status,
+            is_paused,
+            expires_at,
+            virtual_tour_status,
+            virtual_tour_url,
+            virtual_tour_embed_code
+          `)
+          .eq("listing_status", "active")
+          .eq("is_paused", false)
+          .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+          .order("created_at", { ascending: false })
+          .limit(6),
+      ]);
+
+      if (filtersResult.error) {
+        console.error("Fetch home filters error:", filtersResult.error);
         setAllFilterRows([]);
         setCountries([]);
         setCities([]);
-        setIsLoading(false);
+      } else {
+        const filterRows = filtersResult.data || [];
+
+        setAllFilterRows(
+          filterRows.map((item) => ({
+            country: item.country ?? null,
+            city: item.city ?? null,
+          }))
+        );
+
+        const allCountries = [
+          ...new Set(filterRows.map((item) => item.country).filter(Boolean)),
+        ] as string[];
+
+        setCountries(allCountries);
+      }
+
+      if (recentProjectsResult.error) {
+        console.error("Fetch recent projects error:", recentProjectsResult.error);
+        setRecentProjects([]);
         return;
       }
 
-      const rows = data || [];
-      const propertyIds = rows.map((item) => item.id);
+      const recentRows = recentProjectsResult.data || [];
+      const propertyIds = recentRows.map((item) => item.id);
 
       let scenePropertyIds = new Set<string>();
 
@@ -97,17 +129,18 @@ virtual_tour_embed_code
         }
       }
 
-      const rowsWithVirtualTour = rows.map((item) => {
-const hasFallbackVirtualTour = !!(
-  item.virtual_tour_url ||
-  item.virtual_tour_embed_code
-);
+      const rowsWithVirtualTour = recentRows.map((item) => {
+        const hasFallbackVirtualTour = !!(
+          item.virtual_tour_url ||
+          item.virtual_tour_embed_code
+        );
 
-const hasPublishedBuiltInVirtualTour =
-  item.virtual_tour_status === "published" &&
-  scenePropertyIds.has(String(item.id));
+        const hasPublishedBuiltInVirtualTour =
+          item.virtual_tour_status === "published" &&
+          scenePropertyIds.has(String(item.id));
 
-const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
+        const hasVirtualTour =
+          hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
 
         return {
           ...item,
@@ -115,25 +148,17 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
         };
       });
 
-      setRecentProjects(rowsWithVirtualTour.slice(0, 6));
-
-      setAllFilterRows(
-        rows.map((item) => ({
-          country: item.country ?? null,
-          city: item.city ?? null,
-        }))
-      );
-
-      const allCountries = [
-        ...new Set(rows.map((item) => item.country).filter(Boolean)),
-      ] as string[];
-
-      setCountries(allCountries);
+      setRecentProjects(rowsWithVirtualTour);
+    } finally {
       setIsLoading(false);
-    };
+    }
+  };
 
-    fetchHomeData();
-  }, []);
+  fetchHomeData();
+}, []);
+
+
+
 
   useEffect(() => {
     if (country) {
