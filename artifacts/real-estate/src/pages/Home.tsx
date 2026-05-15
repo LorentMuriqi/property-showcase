@@ -204,6 +204,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
     <label className="absolute left-4 top-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground pointer-events-none">
       Shteti
     </label>
+
     <select
       className="w-full h-16 bg-transparent border border-border rounded-[18px] px-4 pt-7 pb-2 text-sm font-semibold text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
       value={country}
@@ -227,6 +228,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
     <label className="absolute left-4 top-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground pointer-events-none">
       Qyteti
     </label>
+
     <select
       className="w-full h-16 bg-transparent border border-border rounded-[18px] px-4 pt-7 pb-2 text-sm font-semibold text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
       value={city}
@@ -248,10 +250,12 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
     <label className="absolute left-12 top-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground pointer-events-none">
       Kërko
     </label>
+
     <Search
       className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
       size={19}
     />
+
     <input
       type="text"
       placeholder="Emri i pronës, adresë..."
@@ -272,61 +276,7 @@ const hasVirtualTour = hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour;
 
 
 
-              <select
-                className="w-full md:w-auto flex-1 bg-white/90 border border-border rounded-xl px-4 py-4 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer"
-                value={country}
-                onChange={(e) => {
-                  setCountry(e.target.value);
-                  setCity("");
-                }}
-              >
-                <option value="" className="bg-white text-foreground">
-                  Të Gjitha Shtetet
-                </option>
-                {countries.map((c) => (
-                  <option key={c} value={c} className="bg-white text-foreground">
-                    {c}
-                  </option>
-                ))}
-              </select>
 
-              <select
-                className="w-full md:w-auto flex-1 bg-white/90 border border-border rounded-xl px-4 py-4 text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer disabled:opacity-50"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                disabled={!country}
-              >
-                <option value="" className="bg-white text-foreground">
-                  Të Gjitha Qytetet
-                </option>
-                {cities.map((c) => (
-                  <option key={c} value={c} className="bg-white text-foreground">
-                    {c}
-                  </option>
-                ))}
-              </select>
-
-              <div className="w-full md:w-auto flex-[1.5] relative">
-                <Search
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  size={20}
-                />
-                <input
-                  type="text"
-                  placeholder="Fjalë kyçe, emri i pronës..."
-                  className="w-full bg-white/90 border border-border rounded-xl pl-12 pr-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full md:w-auto px-8 py-4 bg-primary text-primary-foreground font-bold tracking-wider uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors"
-              >
-                Kërko
-              </button>
-            </form>
           </motion.div>
         </div>
       </section>
