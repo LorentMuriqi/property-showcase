@@ -322,7 +322,7 @@ const [sortBy, setSortBy] = useState<SortOption>("newest");
   }, []);
 
   // ── Reset page on server-filter change ────────────────────────────────
-  useEffect(() => {
+
 useEffect(() => {
   if (!didInitRef.current) return;
   shouldScrollToTopRef.current = true;
