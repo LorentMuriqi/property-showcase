@@ -192,6 +192,9 @@ export default function Projects() {
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const [propertyType, setPropertyType] = useState(searchParams.get("type") || "");
 
+type SortOption = "newest" | "oldest" | "price_asc" | "price_desc" | "area_asc" | "area_desc";
+const [sortBy, setSortBy] = useState<SortOption>("newest");
+
   // ── Client-side filters (applied after fetch) ─────────────────────────
   const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, PRICE_MAX]);
   const [areaRange, setAreaRange] = useState<[number, number]>([AREA_MIN, AREA_MAX]);
@@ -320,10 +323,11 @@ export default function Projects() {
 
   // ── Reset page on server-filter change ────────────────────────────────
   useEffect(() => {
-    if (!didInitRef.current) return;
-    shouldScrollToTopRef.current = true;
-    setPage(1);
-  }, [country, city, search, statusFilter, propertyType]);
+useEffect(() => {
+  if (!didInitRef.current) return;
+  shouldScrollToTopRef.current = true;
+  setPage(1);
+}, [country, city, search, statusFilter, propertyType, sortBy]);
 
   // ── Save scroll on scroll ─────────────────────────────────────────────
   useEffect(() => {
@@ -364,9 +368,15 @@ export default function Projects() {
         );
       }
 
-      const { data, error, count } = await query
-        .order("created_at", { ascending: false })
-        .range(from, to);
+// Sort server-side vetëm për created_at — çmimi/m² bëhen client-side
+const serverOrder =
+  sortBy === "oldest"
+    ? { column: "created_at", ascending: true }
+    : { column: "created_at", ascending: false }; // default: newest
+
+const { data, error, count } = await query
+  .order(serverOrder.column, { ascending: serverOrder.ascending })
+  .range(from, to);
 
       if (error) {
         console.error("Supabase fetch error:", error);
@@ -423,7 +433,7 @@ export default function Projects() {
     };
 
     fetchProjects();
-  }, [country, city, search, statusFilter, propertyType, page]);
+  }, [country, city, search, statusFilter, propertyType, sortBy, page]);
 
   // ── Fetch filter options ──────────────────────────────────────────────
   useEffect(() => {
@@ -460,33 +470,41 @@ export default function Projects() {
     fetchFilters();
   }, [country]);
 
-  // ── Client-side filtering (çmim, m², dhoma) ───────────────────────────
-  const filteredProjects = useMemo(() => {
-    return projects.filter((p) => {
-      const price = p.price ?? null;
-      const area = p.area_m2 ?? p.areaM2 ?? null;
-      const beds = p.bedrooms ?? null;
-      const baths = p.bathrooms ?? null;
+const filteredProjects = useMemo(() => {
+  const filtered = projects.filter((p) => {
+    const price = p.price ?? null;
+    const area = p.area_m2 ?? p.areaM2 ?? null;
+    const beds = p.bedrooms ?? null;
+    const baths = p.bathrooms ?? null;
 
-      // Çmimi — nëse prona nuk ka çmim, e tregojmë gjithmonë
-      if (price !== null) {
-        if (price < priceRange[0] || price > priceRange[1]) return false;
-      }
+    if (price !== null) {
+      if (price < priceRange[0] || price > priceRange[1]) return false;
+    }
+    if (area !== null) {
+      if (area < areaRange[0] || area > areaRange[1]) return false;
+    }
+    if (bedroomsMin !== null && (beds === null || beds < bedroomsMin)) return false;
+    if (bathroomsMin !== null && (baths === null || baths < bathroomsMin)) return false;
 
-      // Sipërfaqja
-      if (area !== null) {
-        if (area < areaRange[0] || area > areaRange[1]) return false;
-      }
+    return true;
+  });
 
-      // Dhoma gjumi minimum
-      if (bedroomsMin !== null && (beds === null || beds < bedroomsMin)) return false;
-
-      // Banjo minimum
-      if (bathroomsMin !== null && (baths === null || baths < bathroomsMin)) return false;
-
-      return true;
-    });
-  }, [projects, priceRange, areaRange, bedroomsMin, bathroomsMin]);
+  // Sort client-side për çmim dhe m²
+  return [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case "price_asc":
+        return (a.price ?? Infinity) - (b.price ?? Infinity);
+      case "price_desc":
+        return (b.price ?? -Infinity) - (a.price ?? -Infinity);
+      case "area_asc":
+        return ((a.area_m2 ?? a.areaM2) ?? Infinity) - ((b.area_m2 ?? b.areaM2) ?? Infinity);
+      case "area_desc":
+        return ((b.area_m2 ?? b.areaM2) ?? -Infinity) - ((a.area_m2 ?? a.areaM2) ?? -Infinity);
+      default:
+        return 0; // newest/oldest — tashmë e bën Supabase
+    }
+  });
+}, [projects, priceRange, areaRange, bedroomsMin, bathroomsMin, sortBy]);
 
   // ── Clear all ─────────────────────────────────────────────────────────
   const clearAllFilters = () => {
@@ -832,13 +850,35 @@ export default function Projects() {
             <div className="flex-1 w-full">
 
               {/* Count + sort info */}
-              {!isLoading && (
-                <p className="text-muted-foreground text-sm mb-6">
-                  {filteredProjects.length !== projects.length
-                    ? `${filteredProjects.length} nga ${totalCount} prona`
-                    : `${totalCount} prona të gjetura`}
-                </p>
-              )}
+{!isLoading && (
+  <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+    <p className="text-muted-foreground text-sm">
+      {filteredProjects.length !== projects.length
+        ? `${filteredProjects.length} nga ${totalCount} prona`
+        : `${totalCount} prona të gjetura`}
+    </p>
+
+    {/* Sort dropdown */}
+    <div className="flex items-center gap-2 shrink-0">
+      <span className="text-xs text-muted-foreground uppercase tracking-wider hidden sm:block">
+        Rendit:
+      </span>
+      <select
+        value={sortBy}
+        onChange={(e) => setSortBy(e.target.value as SortOption)}
+        className="bg-card border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors pr-8"
+        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}
+      >
+        <option value="newest">Më i Riu</option>
+        <option value="oldest">Më i Vjetri</option>
+        <option value="price_asc">Çmimi ↑</option>
+        <option value="price_desc">Çmimi ↓</option>
+        <option value="area_asc">Sipërfaqja ↑</option>
+        <option value="area_desc">Sipërfaqja ↓</option>
+      </select>
+    </div>
+  </div>
+)}
 
               {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
