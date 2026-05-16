@@ -1,14 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Real Estate & Virtual Tours</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  </head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+
+  <!-- Default title (override-ohet nga react-helmet-async për çdo faqe) -->
+<Helmet>
+  <title>Aura Estates | Prona Ekskluzive me Tur Virtual 360°</title>
+  <meta name="description" content="Zbulo pronat më ekskluzive në Kosovë me ture virtuale 360°. Shfleto vilat, apartamentet dhe shtëpitë tona." />
+  <meta property="og:title" content="Aura Estates | Prona Ekskluzive" />
+  <meta property="og:description" content="Zbulo pronat më ekskluzive në Kosovë me ture virtuale 360°." />
+  <meta property="og:url" content="https://auraks.com/" />
+  <meta property="og:type" content="website" />
+</Helmet>
+
+  <!-- Open Graph (Facebook, LinkedIn, Viber) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Aura Estates" />
+  <meta property="og:title" content="Aura Estates | Prona Ekskluzive me Tur Virtual 360°" />
+  <meta property="og:description" content="Zbulo pronat më ekskluzive në Kosovë me ture virtuale 360°." />
+  <meta property="og:image" content="/images/hero-bg.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:locale" content="sq_AL" />
+
+  <!-- WhatsApp specifike (përdor og: tags) -->
+  <meta property="og:url" content="https://auraks.com" />
+
+  <!-- Twitter/X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Aura Estates | Prona Ekskluzive" />
+  <meta name="twitter:description" content="Zbulo pronat më ekskluzive në Kosovë me ture virtuale 360°." />
+  <meta name="twitter:image" content="/images/hero-bg.png" />
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

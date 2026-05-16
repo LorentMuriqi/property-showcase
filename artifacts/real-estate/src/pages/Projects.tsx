@@ -3,6 +3,7 @@ import { Filter, X, Search, ChevronDown, SlidersHorizontal } from "lucide-react"
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
+import { Helmet } from "react-helmet-async";
 
 // ─── Session storage keys (të njëjtat si më parë) ───────────────────────────
 const PROJECTS_SCROLL_Y_KEY = "projects-scroll-y";
@@ -790,6 +791,12 @@ default:
 
   return (
     <Layout>
+	      <Helmet>
+        <title>Të Gjitha Pronat | Aura Estates</title>
+        <meta name="description" content="Shfleto koleksionin e plotë të pronave ekskluzive. Filtro sipas çmimit, sipërfaqes dhe llojit të pronës." />
+        <meta property="og:title" content="Të Gjitha Pronat | Aura Estates" />
+        <meta property="og:url" content="https://auraks.com/projects" />
+      </Helmet>
       {/* CSS për range slider thumbs */}
       <style>{`
         .range-thumb::-webkit-slider-thumb { width: 16px; height: 16px; }

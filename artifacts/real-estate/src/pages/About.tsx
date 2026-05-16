@@ -1,9 +1,17 @@
 import { Layout } from "@/components/Layout";
 import { motion } from "framer-motion";
+import { Helmet } from "react-helmet-async";
+
 
 export default function About() {
   return (
     <Layout>
+	<Helmet>
+  <title>Rreth Nesh | Aura Estates</title>
+  <meta name="description" content="Mëso më shumë rreth Aura Estates — agjencia juaj e besuar për prona ekskluzive me ture virtuale 360° në Kosovë." />
+  <meta property="og:title" content="Rreth Nesh | Aura Estates" />
+  <meta property="og:url" content="https://auraks.com/about" />
+</Helmet>
       <div className="bg-background min-h-screen">
         {/* Header */}
         <section className="relative h-[60vh] flex items-center justify-center">

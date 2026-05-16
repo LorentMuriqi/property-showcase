@@ -2,6 +2,8 @@ import { Layout } from "@/components/Layout";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
+
 
 export default function Contact() {
   const { toast } = useToast();
@@ -122,6 +124,12 @@ if (!res.ok) {
 
   return (
     <Layout>
+	<Helmet>
+  <title>Kontakt | Aura Estates</title>
+  <meta name="description" content="Kontaktoni Aura Estates për konsultim privat mbi blerjen, shitjen ose qiranë e pronave. Zyra në Pejë, Kosovë." />
+  <meta property="og:title" content="Kontakt | Aura Estates" />
+  <meta property="og:url" content="https://auraks.com/contact" />
+</Helmet>
       <div className="bg-background min-h-screen pt-32 pb-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           

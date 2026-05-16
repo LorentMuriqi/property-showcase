@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/lib/supabase";
+import { Helmet } from "react-helmet-async";
 
 type ProjectImage = {
   id?: string | number;
@@ -354,6 +355,42 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
   return (
     <Layout>
+	<Helmet>
+        <title>
+          {project
+            ? `${project.title ?? "Pronë"}${project.city ? ` — ${project.city}` : ""}${project.country ? `, ${project.country}` : ""} | Aura Estates`
+            : "Pronë | Aura Estates"}
+        </title>
+        <meta
+          name="description"
+          content={
+            project
+              ? `${project.title ?? "Pronë ekskluzive"}. ${project.areaM2 ? `${project.areaM2}m². ` : ""}${project.bedrooms ? `${project.bedrooms} dhoma gjumi. ` : ""}${project.city ?? ""}${project.country ? `, ${project.country}` : ""}.`
+              : "Shiko detajet e pronës në Aura Estates."
+          }
+        />
+        <meta
+          property="og:title"
+          content={project ? `${project.title} | Aura Estates` : "Pronë | Aura Estates"}
+        />
+        <meta
+          property="og:description"
+          content={
+            project?.price
+              ? `€${project.price.toLocaleString()} — ${project.city ?? ""}`
+              : "Shiko detajet e pronës."
+          }
+        />
+        <meta
+          property="og:image"
+          content={project?.images?.[0]?.url || "/images/hero-bg.png"}
+        />
+        <meta
+          property="og:url"
+          content={`https://auraks.com/projects/${project?.id ?? ""}`}
+        />
+        <meta property="og:type" content="article" />
+      </Helmet>
       <div className="bg-background pt-24 pb-32 min-h-screen">
         <div className="relative w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 mb-12">
           <div

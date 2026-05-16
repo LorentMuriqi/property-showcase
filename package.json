@@ -18,6 +18,7 @@
     "@photo-sphere-viewer/markers-plugin": "^5.14.1",
     "@photo-sphere-viewer/virtual-tour-plugin": "^5.14.1",
     "@supabase/supabase-js": "^2.99.3",
+    "react-helmet-async": "^3.0.0",
     "resend": "^6.10.0"
   }
 }

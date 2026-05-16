@@ -5,6 +5,7 @@ import { Search, Building2, Map, ShieldCheck } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
+import { Helmet } from "react-helmet-async";
 
 const clearProjectsRestoreState = () => {
   sessionStorage.removeItem("projects-scroll-y");
