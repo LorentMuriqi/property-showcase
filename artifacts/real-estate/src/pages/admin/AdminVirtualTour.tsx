@@ -63,8 +63,10 @@ type Hotspot = {
 type Project = {
   id: string;
   title: string;
-  virtual_tour_status?: "draft" | "published";
+  virtual_tour_status?: "draft" | "published" | "client";
   virtual_tour_published_at?: string | null;
+  tour_expires_at?: string | null;
+  tour_duration_days?: number | null;
 };
 
 type HotspotFormState = {
@@ -248,6 +250,7 @@ export default function AdminVirtualTour() {
   });
 
   const [cameraCenter, setCameraCenter] = useState<{ yaw: number; pitch: number } | null>(null);
+  const [daysInput, setDaysInput] = useState<string>("");
 
   const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
   const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
@@ -328,7 +331,7 @@ export default function AdminVirtualTour() {
 
     const { data: projectData, error: projectError } = await supabase
       .from("properties")
-      .select("id, title, virtual_tour_status, virtual_tour_published_at")
+      .select("id, title, virtual_tour_status, virtual_tour_published_at, tour_expires_at, tour_duration_days")
       .eq("id", projectId)
       .single();
 
@@ -518,12 +521,7 @@ const handleUnpublishTour = async () => {
     if (error) throw error;
 
     setProject((prev) =>
-      prev
-        ? {
-            ...prev,
-            virtual_tour_status: "draft",
-          }
-        : prev,
+      prev ? { ...prev, virtual_tour_status: "draft" } : prev
     );
 
     toast({
@@ -539,6 +537,50 @@ const handleUnpublishTour = async () => {
   }
 };
 
+const handleSetClientTour = async () => {
+  const days = daysInput ? Number(daysInput) : null;
+  const expiresAt = days
+    ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+
+  try {
+    const { error } = await supabase
+      .from("properties")
+      .update({
+        virtual_tour_status: "client",
+        virtual_tour_published_at: new Date().toISOString(),
+        tour_expires_at: expiresAt,
+        tour_duration_days: days,
+      })
+      .eq("id", projectId);
+
+    if (error) throw error;
+
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            virtual_tour_status: "client",
+            tour_expires_at: expiresAt,
+            tour_duration_days: days,
+          }
+        : prev
+    );
+
+    toast({
+      title: "Client Only",
+      description: days
+        ? `Turi aktiv për ${days} ditë — vetëm me link.`
+        : "Turi aktiv pa datë skadimi — vetëm me link.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Operacioni dështoi.",
+      variant: "destructive",
+    });
+  }
+};
 
   const openCreateScene = () => {
     setEditingSceneId(null);
@@ -1409,25 +1451,34 @@ const copyText = async (text: string, label: string) => {
             </p>
           </div>
 		  
-		  <div className="flex items-center gap-2">
-  <span
-    className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border ${
-      project?.virtual_tour_status === "published"
-        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
-        : "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
-    }`}
-  >
-    {project?.virtual_tour_status === "published" ? "Published" : "Draft"}
+		  
+		  
+		  <div className="flex items-center gap-2 flex-wrap">
+
+  {/* Badge statusi */}
+  <span className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border ${
+    project?.virtual_tour_status === "published"
+      ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+      : project?.virtual_tour_status === "client"
+      ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+      : "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+  }`}>
+    {project?.virtual_tour_status === "published"
+      ? "Published"
+      : project?.virtual_tour_status === "client"
+      ? "Client Only"
+      : "Draft"}
   </span>
 
-  {project?.virtual_tour_status === "published" ? (
-    <button
-      onClick={handleUnpublishTour}
-      className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
-    >
-      Kthe në Draft
-    </button>
-  ) : (
+  {/* Data skadimit nëse është Client */}
+  {project?.virtual_tour_status === "client" && project?.tour_expires_at && (
+    <span className="text-xs text-muted-foreground border border-border px-3 py-2 rounded-xl">
+      Skadon: {new Date(project.tour_expires_at).toLocaleDateString("sq-AL")}
+    </span>
+  )}
+
+  {/* Publiko në faqe — nëse Draft ose Client */}
+  {project?.virtual_tour_status !== "published" && (
     <button
       onClick={handlePublishTour}
       disabled={scenes.length === 0}
@@ -1436,7 +1487,42 @@ const copyText = async (text: string, label: string) => {
       Publiko Turin
     </button>
   )}
+
+  {/* Client Only — input ditë + buton */}
+  {project?.virtual_tour_status !== "client" && (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        min="1"
+        max="365"
+        placeholder="Ditë"
+        value={daysInput}
+        onChange={(e) => setDaysInput(e.target.value)}
+        className="w-20 px-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:border-primary"
+      />
+      <button
+        onClick={handleSetClientTour}
+        disabled={scenes.length === 0}
+        className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Client Only
+      </button>
+    </div>
+  )}
+
+  {/* Kthe në Draft — nëse Published ose Client */}
+  {(project?.virtual_tour_status === "published" ||
+    project?.virtual_tour_status === "client") && (
+    <button
+      onClick={handleUnpublishTour}
+      className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
+    >
+      Kthe në Draft
+    </button>
+  )}
 </div>
+		  
+		  
         </div>
       </div>
 

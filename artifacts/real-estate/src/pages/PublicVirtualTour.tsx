@@ -3,28 +3,32 @@ import { useParams } from "wouter";
 import PropertyVirtualTourViewer from "@/components/PropertyVirtualTourViewer";
 import { supabase } from "@/lib/supabase";
 
+
 type PropertyStatus = {
   id: string;
   title: string | null;
-  listing_status: string | null;
-  is_paused: boolean | null;
-  expires_at: string | null;
   virtual_tour_status: string | null;
+  tour_expires_at: string | null;
 };
 
 function isTourAvailable(property: PropertyStatus | null) {
   if (!property) return false;
-  if (property.virtual_tour_status !== "published") return false;
-  if (property.listing_status !== "active") return false;
-  if (property.is_paused) return false;
 
-  if (property.expires_at) {
-    const expiresAt = new Date(property.expires_at).getTime();
+  // Duhet të jetë published ose client
+  if (
+    property.virtual_tour_status !== "published" &&
+    property.virtual_tour_status !== "client"
+  ) return false;
+
+  // Verifiko skadimin e tour-it (i pavarur nga projekti)
+  if (property.tour_expires_at) {
+    const expiresAt = new Date(property.tour_expires_at).getTime();
     if (Number.isFinite(expiresAt) && expiresAt < Date.now()) return false;
   }
 
   return true;
 }
+
 
 export default function PublicVirtualTour() {
   const { id } = useParams();
@@ -45,14 +49,12 @@ export default function PublicVirtualTour() {
 
       const { data, error } = await supabase
         .from("properties")
-        .select(`
-          id,
-          title,
-          listing_status,
-          is_paused,
-          expires_at,
-          virtual_tour_status
-        `)
+.select(`
+  id,
+  title,
+  virtual_tour_status,
+  tour_expires_at
+`)
         .eq("id", id)
         .single();
 
