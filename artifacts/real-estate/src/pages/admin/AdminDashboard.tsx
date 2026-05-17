@@ -422,6 +422,15 @@ const filtered = projects.filter((project) => {
           >
             <Home size={18} /> Properties
           </Link>
+		  
+		  {permissions.canManageVirtualTours && (
+  <Link
+    href="/admin/client-tours"
+    className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl font-medium transition-colors"
+  >
+    <Focus size={18} /> Client Virtual Tours
+  </Link>
+)}
 
           {isSuperAdmin && (
             <>

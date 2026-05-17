@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import NotFound from "@/pages/not-found";
-
+import PublicClientVirtualTour from "@/pages/PublicClientVirtualTour";
 
 // Pages
 import Home from "@/pages/Home";
@@ -21,6 +21,7 @@ import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminRules from "@/pages/admin/AdminRules";
 import PublicVirtualTour from "@/pages/PublicVirtualTour";
 import EmbeddedVirtualTour from "@/pages/EmbeddedVirtualTour";
+import AdminClientTours from "@/pages/admin/AdminClientTours";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,7 +52,10 @@ function Router() {
 
 <Route path="/tour/:id" component={PublicVirtualTour} />
 <Route path="/embed/tour/:id" component={EmbeddedVirtualTour} />
-
+<Route path="/client-tour/:token" component={PublicClientVirtualTour} />
+<Route path="/embed/client-tour/:token" component={PublicClientVirtualTour} />
+<Route path="/admin/client-tours" component={AdminClientTours} />
+<Route path="/admin/client-tours/:id/virtual-tour" component={AdminVirtualTour} />
 
       <Route component={NotFound} />
 	  

@@ -36,7 +36,8 @@ import {
 
 type Scene = {
   id: number;
-  property_id: string;
+  property_id: string | null;
+  virtual_tour_id?: string | null;
   title: string;
   image_url: string;
   thumbnail_url: string | null;
@@ -63,10 +64,11 @@ type Hotspot = {
 type Project = {
   id: string;
   title: string;
-  virtual_tour_status?: "draft" | "published" | "client";
+  client_token?: string | null;
+  virtual_tour_status?: "draft" | "published" | "active" | "paused" | "expired";
   virtual_tour_published_at?: string | null;
   tour_expires_at?: string | null;
-  tour_duration_days?: number | null;
+  paused_at?: string | null;
 };
 
 type HotspotFormState = {
@@ -215,10 +217,13 @@ const toNullableNumber = (value: any) => {
 
 export default function AdminVirtualTour() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { id } = useParams();
-  const projectId = id as string;
+  const recordId = id as string;
   const { toast } = useToast();
+
+  const isClientTourEditor = location.startsWith("/admin/client-tours/");
+  const ownerColumn = isClientTourEditor ? "virtual_tour_id" : "property_id";
 
   const [project, setProject] = useState<Project | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -249,17 +254,55 @@ export default function AdminVirtualTour() {
     pitch: null,
   });
 
-  const [cameraCenter, setCameraCenter] = useState<{ yaw: number; pitch: number } | null>(null);
-  const [daysInput, setDaysInput] = useState<string>("");
+  const [cameraCenter, setCameraCenter] = useState<{
+    yaw: number;
+    pitch: number;
+  } | null>(null);
+
+  const [expiresAtInput, setExpiresAtInput] = useState<string>("");
 
   const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
-  const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(null);
-  const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] = useState(false);
+  const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(
+    null,
+  );
+  const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] =
+    useState(false);
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const editorViewerRef = useRef<Viewer | null>(null);
   const previewViewerRef = useRef<Viewer | null>(null);
+
+  const todayInputValue = useMemo(() => {
+    return new Date().toISOString().slice(0, 10);
+  }, []);
+
+  const computedTourStatus = useMemo(() => {
+    if (
+      project?.virtual_tour_status === "active" &&
+      project?.tour_expires_at
+    ) {
+      const expiresAt = new Date(project.tour_expires_at).getTime();
+
+      if (Number.isFinite(expiresAt) && expiresAt < Date.now()) {
+        return "expired";
+      }
+    }
+
+    return project?.virtual_tour_status;
+  }, [project?.virtual_tour_status, project?.tour_expires_at]);
+
+  const getExpiresAtFromInput = useCallback(() => {
+    if (!expiresAtInput) return null;
+
+    const expiresAt = new Date(`${expiresAtInput}T23:59:59`);
+
+    if (!Number.isFinite(expiresAt.getTime())) {
+      return null;
+    }
+
+    return expiresAt.toISOString();
+  }, [expiresAtInput]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -325,29 +368,56 @@ export default function AdminVirtualTour() {
   }, [scenes, selectedScene, usedTargetSceneIds]);
 
   const refreshTour = useCallback(async () => {
-    if (!projectId) return;
+    if (!recordId) return;
 
     const currentSelectedSceneId = selectedSceneId;
 
-    const { data: projectData, error: projectError } = await supabase
-      .from("properties")
-      .select("id, title, virtual_tour_status, virtual_tour_published_at, tour_expires_at, tour_duration_days")
-      .eq("id", projectId)
-      .single();
+    const { data: rawRecordData, error: recordError } = isClientTourEditor
+      ? await supabase
+          .from("virtual_tours")
+          .select(
+            "id, title, status, client_token, expires_at, activated_at, paused_at",
+          )
+          .eq("id", recordId)
+          .single()
+      : await supabase
+          .from("properties")
+          .select("id, title, virtual_tour_status, virtual_tour_published_at")
+          .eq("id", recordId)
+          .single();
 
-    if (projectError) {
+    if (recordError || !rawRecordData) {
       toast({
         title: "Gabim",
-        description: "Projekti nuk u gjet.",
+        description: isClientTourEditor
+          ? "Virtual tour nuk u gjet."
+          : "Projekti nuk u gjet.",
         variant: "destructive",
       });
       return;
     }
 
+    const projectData: Project = isClientTourEditor
+      ? {
+          id: rawRecordData.id,
+          title: rawRecordData.title || "Virtual Tour",
+          client_token: rawRecordData.client_token,
+          virtual_tour_status: rawRecordData.status,
+          tour_expires_at: rawRecordData.expires_at,
+          virtual_tour_published_at: rawRecordData.activated_at,
+          paused_at: rawRecordData.paused_at,
+        }
+      : {
+          id: rawRecordData.id,
+          title: rawRecordData.title || "Pronë",
+          virtual_tour_status: rawRecordData.virtual_tour_status || "draft",
+          virtual_tour_published_at: rawRecordData.virtual_tour_published_at,
+        };
+
     const { data: scenesData, error: scenesError } = await supabase
       .from("virtual_tour_scenes")
       .select("*")
-      .eq("property_id", projectId)
+      .eq(ownerColumn, recordId)
       .order("sort_order", { ascending: true });
 
     if (scenesError) {
@@ -376,20 +446,21 @@ export default function AdminVirtualTour() {
         });
       } else {
         for (const hotspot of hotspotsData || []) {
-const normalizedHotspot: Hotspot = {
-  id: toNumber(hotspot.id),
-  scene_id: toNumber(hotspot.scene_id),
-  to_scene_id: toNumber(hotspot.to_scene_id),
-  yaw: Number(hotspot.yaw),
-  pitch: Number(hotspot.pitch),
-  target_yaw: toNullableNumber(hotspot.target_yaw),
-  target_pitch: toNullableNumber(hotspot.target_pitch),
-  label: hotspot.label || null,
-};
+          const normalizedHotspot: Hotspot = {
+            id: toNumber(hotspot.id),
+            scene_id: toNumber(hotspot.scene_id),
+            to_scene_id: toNumber(hotspot.to_scene_id),
+            yaw: Number(hotspot.yaw),
+            pitch: Number(hotspot.pitch),
+            target_yaw: toNullableNumber(hotspot.target_yaw),
+            target_pitch: toNullableNumber(hotspot.target_pitch),
+            label: hotspot.label || null,
+          };
 
           if (!hotspotsMap.has(normalizedHotspot.scene_id)) {
             hotspotsMap.set(normalizedHotspot.scene_id, []);
           }
+
           hotspotsMap.get(normalizedHotspot.scene_id)!.push(normalizedHotspot);
         }
       }
@@ -400,7 +471,8 @@ const normalizedHotspot: Hotspot = {
 
       return {
         id: normalizedId,
-        property_id: scene.property_id,
+        property_id: scene.property_id ?? null,
+        virtual_tour_id: scene.virtual_tour_id ?? null,
         title: scene.title || "",
         image_url: (scene.image_url || "").trim(),
         thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
@@ -414,7 +486,7 @@ const normalizedHotspot: Hotspot = {
       };
     });
 
-    setProject(projectData || null);
+    setProject(projectData);
     setScenes(normalizedScenes);
 
     if (normalizedScenes.length === 0) {
@@ -426,6 +498,7 @@ const normalizedHotspot: Hotspot = {
       const existingSelected = normalizedScenes.find(
         (scene) => Number(scene.id) === Number(currentSelectedSceneId),
       );
+
       if (existingSelected) {
         setSelectedSceneId(Number(existingSelected.id));
         return;
@@ -434,19 +507,21 @@ const normalizedHotspot: Hotspot = {
 
     const defaultScene =
       normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
+
     setSelectedSceneId(Number(defaultScene.id));
-  }, [projectId, selectedSceneId, toast]);
+  }, [recordId, ownerColumn, isClientTourEditor, selectedSceneId, toast]);
 
   useEffect(() => {
     const load = async () => {
-      if (authLoading || !isAdmin || !projectId) return;
+      if (authLoading || !isAdmin || !recordId) return;
+
       setIsLoading(true);
       await refreshTour();
       setIsLoading(false);
     };
 
     load();
-  }, [authLoading, isAdmin, projectId, refreshTour]);
+  }, [authLoading, isAdmin, recordId, refreshTour]);
 
   useEffect(() => {
     setViewerError("");
@@ -458,129 +533,277 @@ const normalizedHotspot: Hotspot = {
     setCameraCenter(null);
   }, [selectedSceneId, resetDraft]);
 
-const handlePublishTour = async () => {
-  if (
-    !confirm(
-      "A jeni i sigurt që dëshironi ta publikoni turin virtual? Pasi të publikohet, do të shfaqet në faqen publike."
-    )
-  ) {
-    return;
-  }
+  useEffect(() => {
+    if (project?.tour_expires_at) {
+      setExpiresAtInput(project.tour_expires_at.slice(0, 10));
+    } else {
+      setExpiresAtInput("");
+    }
+  }, [project?.tour_expires_at]);
 
-  try {
-    const { error } = await supabase
-      .from("properties")
-      .update({
-        virtual_tour_status: "published",
-        virtual_tour_published_at: new Date().toISOString(),
-      })
-      .eq("id", projectId);
+  const handlePublishTour = async () => {
+    if (scenes.length === 0) {
+      toast({
+        title: "Gabim",
+        description: "Shto të paktën një skenë para aktivizimit.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (error) throw error;
+    const confirmMessage = isClientTourEditor
+      ? "A dëshironi ta aktivizoni këtë virtual tour privat?"
+      : "A jeni i sigurt që dëshironi ta publikoni turin virtual? Pasi të publikohet, do të shfaqet në faqen publike.";
 
-    setProject((prev) =>
-      prev
-        ? {
-            ...prev,
-            virtual_tour_status: "published",
-            virtual_tour_published_at: new Date().toISOString(),
-          }
-        : prev,
-    );
+    if (!confirm(confirmMessage)) return;
 
-    toast({
-      title: "Sukses",
-      description: "Turi virtual u publikua dhe tani është live.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Publikimi i turit virtual dështoi.",
-      variant: "destructive",
-    });
-  }
-};
+    const nowIso = new Date().toISOString();
+    const expiresAt = getExpiresAtFromInput();
 
-const handleUnpublishTour = async () => {
-  if (
-    !confirm(
-      "A jeni i sigurt që dëshironi ta ktheni turin virtual në Draft? Pasi të kthehet në Draft, nuk do të shfaqet më në faqen publike."
-    )
-  ) {
-    return;
-  }
+    if (isClientTourEditor && expiresAt) {
+      const expiresAtTime = new Date(expiresAt).getTime();
 
-  try {
-    const { error } = await supabase
-      .from("properties")
-      .update({
-        virtual_tour_status: "draft",
-      })
-      .eq("id", projectId);
+      if (Number.isFinite(expiresAtTime) && expiresAtTime < Date.now()) {
+        toast({
+          title: "Datë e pavlefshme",
+          description: "Data e skadimit nuk mund të jetë në të kaluarën.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
-    if (error) throw error;
+    try {
+      if (isClientTourEditor) {
+        const { error } = await supabase
+          .from("virtual_tours")
+          .update({
+            status: "active",
+            expires_at: expiresAt,
+            activated_at: nowIso,
+            paused_at: null,
+            updated_at: nowIso,
+          })
+          .eq("id", recordId);
 
-    setProject((prev) =>
-      prev ? { ...prev, virtual_tour_status: "draft" } : prev
-    );
+        if (error) throw error;
 
-    toast({
-      title: "Draft u ruajt",
-      description: "Turi virtual nuk është publik.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Ruajtja si draft dështoi.",
-      variant: "destructive",
-    });
-  }
-};
+        setProject((prev) =>
+          prev
+            ? {
+                ...prev,
+                virtual_tour_status: "active",
+                tour_expires_at: expiresAt,
+                virtual_tour_published_at: nowIso,
+                paused_at: null,
+              }
+            : prev,
+        );
 
-const handleSetClientTour = async () => {
-  const days = daysInput ? Number(daysInput) : null;
-  const expiresAt = days
-    ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-    : null;
+        toast({
+          title: "Virtual Tour u aktivizua",
+          description: expiresAt
+            ? `Turi është aktiv deri më ${new Date(expiresAt).toLocaleDateString("sq-AL")}.`
+            : "Turi është aktiv pa datë skadimi.",
+        });
 
-  try {
-    const { error } = await supabase
-      .from("properties")
-      .update({
-        virtual_tour_status: "client",
-        virtual_tour_published_at: new Date().toISOString(),
-        tour_expires_at: expiresAt,
-        tour_duration_days: days,
-      })
-      .eq("id", projectId);
+        return;
+      }
 
-    if (error) throw error;
+      const { error } = await supabase
+        .from("properties")
+        .update({
+          virtual_tour_status: "published",
+          virtual_tour_published_at: nowIso,
+        })
+        .eq("id", recordId);
 
-    setProject((prev) =>
-      prev
-        ? {
-            ...prev,
-            virtual_tour_status: "client",
-            tour_expires_at: expiresAt,
-            tour_duration_days: days,
-          }
-        : prev
-    );
+      if (error) throw error;
 
-    toast({
-      title: "Client Only",
-      description: days
-        ? `Turi aktiv për ${days} ditë — vetëm me link.`
-        : "Turi aktiv pa datë skadimi — vetëm me link.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Operacioni dështoi.",
-      variant: "destructive",
-    });
-  }
-};
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              virtual_tour_status: "published",
+              virtual_tour_published_at: nowIso,
+            }
+          : prev,
+      );
+
+      toast({
+        title: "Sukses",
+        description: "Turi virtual u publikua dhe tani është live.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Publikimi i turit virtual dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUnpublishTour = async () => {
+    const confirmMessage = isClientTourEditor
+      ? "A dëshironi ta ktheni këtë virtual tour privat në Draft?"
+      : "A jeni i sigurt që dëshironi ta ktheni turin virtual në Draft? Pasi të kthehet në Draft, nuk do të shfaqet më në faqen publike.";
+
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      if (isClientTourEditor) {
+        const { error } = await supabase
+          .from("virtual_tours")
+          .update({
+            status: "draft",
+            paused_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", recordId);
+
+        if (error) throw error;
+
+        setProject((prev) =>
+          prev
+            ? {
+                ...prev,
+                virtual_tour_status: "draft",
+                paused_at: null,
+              }
+            : prev,
+        );
+
+        toast({
+          title: "Draft u ruajt",
+          description: "Virtual tour privat nuk është aktiv.",
+        });
+
+        return;
+      }
+
+      const { error } = await supabase
+        .from("properties")
+        .update({
+          virtual_tour_status: "draft",
+        })
+        .eq("id", recordId);
+
+      if (error) throw error;
+
+      setProject((prev) =>
+        prev ? { ...prev, virtual_tour_status: "draft" } : prev,
+      );
+
+      toast({
+        title: "Draft u ruajt",
+        description: "Turi virtual nuk është publik.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Ruajtja si draft dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePauseTour = async () => {
+    if (!isClientTourEditor) return;
+
+    if (!confirm("A dëshironi ta pezulloni këtë virtual tour privat?")) return;
+
+    try {
+      const pausedAt = new Date().toISOString();
+
+      const { error } = await supabase
+        .from("virtual_tours")
+        .update({
+          status: "paused",
+          paused_at: pausedAt,
+          updated_at: pausedAt,
+        })
+        .eq("id", recordId);
+
+      if (error) throw error;
+
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              virtual_tour_status: "paused",
+              paused_at: pausedAt,
+            }
+          : prev,
+      );
+
+      toast({
+        title: "Virtual tour u pezullua",
+        description:
+          "Linku publik nuk do të jetë aktiv derisa ta aktivizoni përsëri.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Pezullimi dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveClientExpiry = async () => {
+    if (!isClientTourEditor) return;
+
+    const expiresAt = getExpiresAtFromInput();
+
+    if (expiresAt) {
+      const expiresAtTime = new Date(expiresAt).getTime();
+
+      if (Number.isFinite(expiresAtTime) && expiresAtTime < Date.now()) {
+        toast({
+          title: "Datë e pavlefshme",
+          description: "Data e skadimit nuk mund të jetë në të kaluarën.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    try {
+      const updatedAt = new Date().toISOString();
+
+      const { error } = await supabase
+        .from("virtual_tours")
+        .update({
+          expires_at: expiresAt,
+          updated_at: updatedAt,
+        })
+        .eq("id", recordId);
+
+      if (error) throw error;
+
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              tour_expires_at: expiresAt,
+            }
+          : prev,
+      );
+
+      toast({
+        title: "Data u ruajt",
+        description: expiresAt
+          ? `Turi do të skadojë më ${new Date(expiresAt).toLocaleDateString("sq-AL")}.`
+          : "Turi nuk ka datë skadimi.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Ruajtja e datës dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const openCreateScene = () => {
     setEditingSceneId(null);
@@ -607,16 +830,17 @@ const handleSetClientTour = async () => {
   };
 
   const openEditHotspot = (hotspot: Hotspot) => {
-setEditingHotspot({
-  id: hotspot.id,
-  scene_id: hotspot.scene_id,
-  to_scene_id: hotspot.to_scene_id,
-  label: hotspot.label || "",
-  yaw: hotspot.yaw,
-  pitch: hotspot.pitch,
-  target_yaw: hotspot.target_yaw,
-  target_pitch: hotspot.target_pitch,
-});
+    setEditingHotspot({
+      id: hotspot.id,
+      scene_id: hotspot.scene_id,
+      to_scene_id: hotspot.to_scene_id,
+      label: hotspot.label || "",
+      yaw: hotspot.yaw,
+      pitch: hotspot.pitch,
+      target_yaw: hotspot.target_yaw,
+      target_pitch: hotspot.target_pitch,
+    });
+
     setIsEditingHotspotPlacement(false);
     setIsPlacementMode(false);
     resetDraft(false);
@@ -638,7 +862,7 @@ setEditingHotspot({
         await supabase
           .from("virtual_tour_scenes")
           .update({ is_default: false })
-          .eq("property_id", projectId);
+          .eq(ownerColumn, recordId);
       }
 
       if (editingSceneId) {
@@ -659,7 +883,9 @@ setEditingHotspot({
         toast({ title: "Sukses", description: "Skena u përditësua." });
       } else {
         const { error } = await supabase.from("virtual_tour_scenes").insert({
-          property_id: projectId,
+          ...(isClientTourEditor
+            ? { virtual_tour_id: recordId }
+            : { property_id: recordId }),
           title: sceneForm.title.trim(),
           image_url: sceneForm.imageUrl.trim(),
           thumbnail_url: sceneForm.thumbnailUrl.trim() || null,
@@ -764,7 +990,7 @@ setEditingHotspot({
       await supabase
         .from("virtual_tour_scenes")
         .update({ is_default: false })
-        .eq("property_id", projectId);
+        .eq(ownerColumn, recordId);
 
       const { error } = await supabase
         .from("virtual_tour_scenes")
@@ -869,104 +1095,100 @@ setEditingHotspot({
   };
 
   const handlePlaceEditedHotspotAtCenter = () => {
-  if (!editingHotspot) return;
+    if (!editingHotspot) return;
 
-  const livePosition = getLiveViewerPosition();
+    const livePosition = getLiveViewerPosition();
 
-  if (!livePosition) {
+    if (!livePosition) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEditingHotspot((prev) =>
+      prev
+        ? {
+            ...prev,
+            yaw: livePosition.yaw,
+            pitch: livePosition.pitch,
+          }
+        : prev,
+    );
+
+    setCameraCenter(livePosition);
+    setIsEditingHotspotPlacement(true);
+
     toast({
-      title: "Gabim",
-      description: "Pozicioni aktual i kamerës nuk u lexua.",
-      variant: "destructive",
+      title: "Pozicioni u përditësua",
+      description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
     });
-    return;
-  }
+  };
 
-  setEditingHotspot((prev) =>
-    prev
-      ? {
-          ...prev,
-          yaw: livePosition.yaw,
-          pitch: livePosition.pitch,
-        }
-      : prev,
-  );
+  const handleSaveHotspotTargetView = async (hotspotId: number) => {
+    const livePosition = getLiveViewerPosition();
 
-  setCameraCenter(livePosition);
-  setIsEditingHotspotPlacement(true);
+    if (!livePosition) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  toast({
-    title: "Pozicioni u përditësua",
-    description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
-  });
-};
+    try {
+      const { error } = await supabase
+        .from("virtual_tour_hotspots")
+        .update({
+          target_yaw: livePosition.yaw,
+          target_pitch: livePosition.pitch,
+        })
+        .eq("id", hotspotId);
 
-const handleSaveHotspotTargetView = async (hotspotId: number) => {
-  const livePosition = getLiveViewerPosition();
+      if (error) throw error;
 
-  if (!livePosition) {
-    toast({
-      title: "Gabim",
-      description: "Pozicioni aktual i kamerës nuk u lexua.",
-      variant: "destructive",
-    });
-    return;
-  }
+      setScenes((prev) =>
+        prev.map((scene) => ({
+          ...scene,
+          hotspots: scene.hotspots.map((hotspot) =>
+            hotspot.id === hotspotId
+              ? {
+                  ...hotspot,
+                  target_yaw: livePosition.yaw,
+                  target_pitch: livePosition.pitch,
+                }
+              : hotspot,
+          ),
+        })),
+      );
 
-  try {
-    const { error } = await supabase
-      .from("virtual_tour_hotspots")
-      .update({
-        target_yaw: livePosition.yaw,
-        target_pitch: livePosition.pitch,
-      })
-      .eq("id", hotspotId);
-
-    if (error) throw error;
-
-    setScenes((prev) =>
-      prev.map((scene) => ({
-        ...scene,
-        hotspots: scene.hotspots.map((hotspot) =>
-          hotspot.id === hotspotId
+      if (editingHotspot?.id === hotspotId) {
+        setEditingHotspot((prev) =>
+          prev
             ? {
-                ...hotspot,
+                ...prev,
                 target_yaw: livePosition.yaw,
                 target_pitch: livePosition.pitch,
               }
-            : hotspot,
-        ),
-      })),
-    );
+            : prev,
+        );
+      }
 
-    if (editingHotspot?.id === hotspotId) {
-      setEditingHotspot((prev) =>
-        prev
-          ? {
-              ...prev,
-              target_yaw: livePosition.yaw,
-              target_pitch: livePosition.pitch,
-            }
-          : prev,
-      );
+      toast({
+        title: "Sukses",
+        description: "Target view i hotspot-it u ruajt.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Ruajtja e target view dështoi.",
+        variant: "destructive",
+      });
     }
-
-    toast({
-      title: "Sukses",
-      description: "Target view i hotspot-it u ruajt.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Ruajtja e target view dështoi.",
-      variant: "destructive",
-    });
-  }
-};
-  
-  
-  
-  
+  };
 
   const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
     setEditingHotspot((prev) => {
@@ -981,7 +1203,12 @@ const handleSaveHotspotTargetView = async (hotspotId: number) => {
   };
 
   const handleAddHotspot = async () => {
-    if (!selectedScene || draft.to_scene_id === "" || draft.yaw === null || draft.pitch === null) {
+    if (
+      !selectedScene ||
+      draft.to_scene_id === "" ||
+      draft.yaw === null ||
+      draft.pitch === null
+    ) {
       toast({
         title: "Gabim",
         description: "Zgjidh destinacionin dhe vendose pozicionin e hotspot-it.",
@@ -993,32 +1220,34 @@ const handleSaveHotspotTargetView = async (hotspotId: number) => {
     try {
       const { data: insertedHotspot, error } = await supabase
         .from("virtual_tour_hotspots")
-.insert({
-  scene_id: selectedScene.id,
-  to_scene_id: Number(draft.to_scene_id),
-  yaw: draft.yaw,
-  pitch: draft.pitch,
-  target_yaw:
-    scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.initial_yaw ?? null,
-  target_pitch:
-    scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.initial_pitch ?? null,
-  label: draft.label.trim() || null,
-})
+        .insert({
+          scene_id: selectedScene.id,
+          to_scene_id: Number(draft.to_scene_id),
+          yaw: draft.yaw,
+          pitch: draft.pitch,
+          target_yaw:
+            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
+              ?.initial_yaw ?? null,
+          target_pitch:
+            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
+              ?.initial_pitch ?? null,
+          label: draft.label.trim() || null,
+        })
         .select("*")
         .single();
 
       if (error) throw error;
 
-const normalizedInsertedHotspot: Hotspot = {
-  id: toNumber(insertedHotspot.id),
-  scene_id: toNumber(insertedHotspot.scene_id),
-  to_scene_id: toNumber(insertedHotspot.to_scene_id),
-  yaw: Number(insertedHotspot.yaw),
-  pitch: Number(insertedHotspot.pitch),
-  target_yaw: toNullableNumber(insertedHotspot.target_yaw),
-  target_pitch: toNullableNumber(insertedHotspot.target_pitch),
-  label: insertedHotspot.label || null,
-};
+      const normalizedInsertedHotspot: Hotspot = {
+        id: toNumber(insertedHotspot.id),
+        scene_id: toNumber(insertedHotspot.scene_id),
+        to_scene_id: toNumber(insertedHotspot.to_scene_id),
+        yaw: Number(insertedHotspot.yaw),
+        pitch: Number(insertedHotspot.pitch),
+        target_yaw: toNullableNumber(insertedHotspot.target_yaw),
+        target_pitch: toNullableNumber(insertedHotspot.target_pitch),
+        label: insertedHotspot.label || null,
+      };
 
       setScenes((prev) =>
         prev.map((scene) =>
@@ -1039,7 +1268,8 @@ const normalizedInsertedHotspot: Hotspot = {
 
       toast({
         title: "Hotspot u ruajt",
-        description: "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
+        description:
+          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
       });
     } catch (error: any) {
       toast({
@@ -1063,14 +1293,14 @@ const normalizedInsertedHotspot: Hotspot = {
     try {
       const { error } = await supabase
         .from("virtual_tour_hotspots")
-.update({
-  to_scene_id: Number(editingHotspot.to_scene_id),
-  label: editingHotspot.label.trim() || null,
-  yaw: editingHotspot.yaw,
-  pitch: editingHotspot.pitch,
-  target_yaw: editingHotspot.target_yaw,
-  target_pitch: editingHotspot.target_pitch,
-})
+        .update({
+          to_scene_id: Number(editingHotspot.to_scene_id),
+          label: editingHotspot.label.trim() || null,
+          yaw: editingHotspot.yaw,
+          pitch: editingHotspot.pitch,
+          target_yaw: editingHotspot.target_yaw,
+          target_pitch: editingHotspot.target_pitch,
+        })
         .eq("id", editingHotspot.id);
 
       if (error) throw error;
@@ -1080,19 +1310,19 @@ const normalizedInsertedHotspot: Hotspot = {
           scene.id === selectedSceneId
             ? {
                 ...scene,
-hotspots: scene.hotspots.map((hotspot) =>
-  hotspot.id === editingHotspot.id
-    ? {
-        ...hotspot,
-        to_scene_id: Number(editingHotspot.to_scene_id),
-        label: editingHotspot.label.trim() || null,
-        yaw: editingHotspot.yaw,
-        pitch: editingHotspot.pitch,
-        target_yaw: editingHotspot.target_yaw,
-        target_pitch: editingHotspot.target_pitch,
-      }
-    : hotspot,
-),
+                hotspots: scene.hotspots.map((hotspot) =>
+                  hotspot.id === editingHotspot.id
+                    ? {
+                        ...hotspot,
+                        to_scene_id: Number(editingHotspot.to_scene_id),
+                        label: editingHotspot.label.trim() || null,
+                        yaw: editingHotspot.yaw,
+                        pitch: editingHotspot.pitch,
+                        target_yaw: editingHotspot.target_yaw,
+                        target_pitch: editingHotspot.target_pitch,
+                      }
+                    : hotspot,
+                ),
               }
             : scene,
         ),
@@ -1197,20 +1427,20 @@ hotspots: scene.hotspots.map((hotspot) =>
     let cameraInterval: number | null = null;
 
     try {
-viewer = new Viewer({
-  container: editorContainerRef.current,
-  panorama: selectedScene.image_url,
-  navbar: ["zoom", "move", "fullscreen"],
-  adapter: EquirectangularAdapter.withConfig({
-    resolution: 128,
-  }),
-  defaultYaw: selectedScene.initial_yaw ?? 0,
-  defaultPitch: selectedScene.initial_pitch ?? 0,
-  moveInertia: true,
-  mousewheelCtrlKey: false,
-  touchmoveTwoFingers: false,
-  plugins: [[MarkersPlugin, {}]],
-});
+      viewer = new Viewer({
+        container: editorContainerRef.current,
+        panorama: selectedScene.image_url,
+        navbar: ["zoom", "move", "fullscreen"],
+        adapter: EquirectangularAdapter.withConfig({
+          resolution: 128,
+        }),
+        defaultYaw: selectedScene.initial_yaw ?? 0,
+        defaultPitch: selectedScene.initial_pitch ?? 0,
+        moveInertia: true,
+        mousewheelCtrlKey: false,
+        touchmoveTwoFingers: false,
+        plugins: [[MarkersPlugin, {}]],
+      });
 
       editorViewerRef.current = viewer;
       const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
@@ -1221,7 +1451,9 @@ viewer = new Viewer({
       });
 
       selectedScene.hotspots.forEach((hotspot) => {
-        const target = scenes.find((s) => Number(s.id) === Number(hotspot.to_scene_id));
+        const target = scenes.find(
+          (scene) => Number(scene.id) === Number(hotspot.to_scene_id),
+        );
         const isEditingThis = editingHotspot?.id === hotspot.id;
 
         markersPlugin.addMarker({
@@ -1304,42 +1536,43 @@ viewer = new Viewer({
     isEditingHotspotPlacement,
   ]);
 
-const virtualTourNodes = useMemo(() => {
-  const validScenes = scenes.filter(
-    (scene) => scene.image_url && String(scene.image_url).trim() !== "",
-  );
+  const virtualTourNodes = useMemo(() => {
+    const validScenes = scenes.filter(
+      (scene) => scene.image_url && String(scene.image_url).trim() !== "",
+    );
 
-  const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
+    const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
 
-  return validScenes.map((scene) => ({
-    id: String(scene.id),
-    panorama: scene.image_url,
-    name: scene.title,
-    thumbnail: scene.thumbnail_url || scene.image_url,
-    data: {
-      initialYaw: scene.initial_yaw ?? null,
-      initialPitch: scene.initial_pitch ?? null,
-    },
-    links: scene.hotspots
-      .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
-      .map((hotspot) => ({
-        nodeId: String(hotspot.to_scene_id),
-        position: {
-          yaw: hotspot.yaw,
-          pitch: hotspot.pitch,
-        },
-        name:
-          hotspot.label ||
-          validScenes.find((target) => Number(target.id) === Number(hotspot.to_scene_id))
-            ?.title ||
-          "Lidhje",
-        data: {
-          targetYaw: hotspot.target_yaw ?? null,
-          targetPitch: hotspot.target_pitch ?? null,
-        },
-      })),
-  }));
-}, [scenes]);
+    return validScenes.map((scene) => ({
+      id: String(scene.id),
+      panorama: scene.image_url,
+      name: scene.title,
+      thumbnail: scene.thumbnail_url || scene.image_url,
+      data: {
+        initialYaw: scene.initial_yaw ?? null,
+        initialPitch: scene.initial_pitch ?? null,
+      },
+      links: scene.hotspots
+        .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
+        .map((hotspot) => ({
+          nodeId: String(hotspot.to_scene_id),
+          position: {
+            yaw: hotspot.yaw,
+            pitch: hotspot.pitch,
+          },
+          name:
+            hotspot.label ||
+            validScenes.find(
+              (target) => Number(target.id) === Number(hotspot.to_scene_id),
+            )?.title ||
+            "Lidhje",
+          data: {
+            targetYaw: hotspot.target_yaw ?? null,
+            targetPitch: hotspot.target_pitch ?? null,
+          },
+        })),
+    }));
+  }, [scenes]);
 
   useEffect(() => {
     if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
@@ -1396,6 +1629,7 @@ const virtualTourNodes = useMemo(() => {
       if (viewer) {
         viewer.destroy();
       }
+
       previewViewerRef.current = null;
     };
   }, [virtualTourNodes, scenes]);
@@ -1406,195 +1640,238 @@ const virtualTourNodes = useMemo(() => {
 
   if (!isAdmin) return null;
 
-const appOrigin =
-  typeof window !== "undefined" ? window.location.origin : "";
+  const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
-const publicTourUrl = project ? `${appOrigin}/tour/${project.id}` : "";
+  const publicTourUrl = project
+    ? isClientTourEditor
+      ? `${appOrigin}/client-tour/${project.client_token}`
+      : `${appOrigin}/tour/${project.id}`
+    : "";
 
-const embedTourCode = project
-  ? `<iframe src="${appOrigin}/embed/tour/${project.id}" width="100%" height="600" style="border:none;" allowfullscreen loading="lazy"></iframe>`
-  : "";
+  const embedTourCode = project
+    ? isClientTourEditor
+      ? `<iframe src="${appOrigin}/embed/client-tour/${project.client_token}" width="100%" height="600" style="border:none;" allowfullscreen loading="lazy"></iframe>`
+      : `<iframe src="${appOrigin}/embed/tour/${project.id}" width="100%" height="600" style="border:none;" allowfullscreen loading="lazy"></iframe>`
+    : "";
 
-const copyText = async (text: string, label: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
 
-    toast({
-      title: "U kopjua",
-      description: `${label} u kopjua me sukses.`,
-    });
-  } catch (error) {
-    toast({
-      title: "Gabim",
-      description: "Kopjimi dështoi. Kopjoje manualisht.",
-      variant: "destructive",
-    });
-  }
-};
+      toast({
+        title: "U kopjua",
+        description: `${label} u kopjua me sukses.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Gabim",
+        description: "Kopjimi dështoi. Kopjoje manualisht.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap w-full">
           <button
-            onClick={() => setLocation("/admin")}
+            onClick={() =>
+              setLocation(isClientTourEditor ? "/admin/client-tours" : "/admin")
+            }
             className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
-          <div>
+
+          <div className="min-w-0">
             <h1 className="font-display text-2xl font-bold text-foreground leading-none">
               Menaxho Turin Virtual
             </h1>
-            <p className="text-muted-foreground text-xs uppercase tracking-widest mt-1">
+            <p className="text-muted-foreground text-xs uppercase tracking-widest mt-1 truncate">
               {project?.title || "Duke ngarkuar..."}
             </p>
           </div>
-		  
-		  
-		  
-		  <div className="flex items-center gap-2 flex-wrap">
 
-  {/* Badge statusi */}
-  <span className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border ${
-    project?.virtual_tour_status === "published"
-      ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
-      : project?.virtual_tour_status === "client"
-      ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-      : "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
-  }`}>
-    {project?.virtual_tour_status === "published"
-      ? "Published"
-      : project?.virtual_tour_status === "client"
-      ? "Client Only"
-      : "Draft"}
-  </span>
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <span
+              className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border ${
+                computedTourStatus === "published" ||
+                computedTourStatus === "active"
+                  ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+                  : computedTourStatus === "paused"
+                    ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+                    : computedTourStatus === "expired"
+                      ? "bg-red-500/10 text-red-400 border-red-500/30"
+                      : "bg-muted text-muted-foreground border-border"
+              }`}
+            >
+              {isClientTourEditor
+                ? computedTourStatus === "active"
+                  ? "Active"
+                  : computedTourStatus === "paused"
+                    ? "Paused"
+                    : computedTourStatus === "expired"
+                      ? "Expired"
+                      : "Draft"
+                : computedTourStatus === "published"
+                  ? "Published"
+                  : "Draft"}
+            </span>
 
-  {/* Data skadimit nëse është Client */}
-  {project?.virtual_tour_status === "client" && project?.tour_expires_at && (
-    <span className="text-xs text-muted-foreground border border-border px-3 py-2 rounded-xl">
-      Skadon: {new Date(project.tour_expires_at).toLocaleDateString("sq-AL")}
-    </span>
-  )}
+            {isClientTourEditor && project?.tour_expires_at && (
+              <span className="text-xs text-muted-foreground border border-border px-3 py-2 rounded-xl">
+                Skadon:{" "}
+                {new Date(project.tour_expires_at).toLocaleDateString("sq-AL")}
+              </span>
+            )}
 
-  {/* Publiko në faqe — nëse Draft ose Client */}
-  {project?.virtual_tour_status !== "published" && (
-    <button
-      onClick={handlePublishTour}
-      disabled={scenes.length === 0}
-      className="px-4 py-2 rounded-xl bg-primary text-black hover:bg-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      Publiko Turin
-    </button>
-  )}
+            {isClientTourEditor && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  min={todayInputValue}
+                  value={expiresAtInput}
+                  onChange={(e) => setExpiresAtInput(e.target.value)}
+                  className="px-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:border-primary"
+                />
 
-  {/* Client Only — input ditë + buton */}
-  {project?.virtual_tour_status !== "client" && (
-    <div className="flex items-center gap-2">
-      <input
-        type="number"
-        min="1"
-        max="365"
-        placeholder="Ditë"
-        value={daysInput}
-        onChange={(e) => setDaysInput(e.target.value)}
-        className="w-20 px-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:border-primary"
-      />
-      <button
-        onClick={handleSetClientTour}
-        disabled={scenes.length === 0}
-        className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        Client Only
-      </button>
-    </div>
-  )}
+                <button
+                  onClick={handleSaveClientExpiry}
+                  className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
+                >
+                  Ruaj Datën
+                </button>
+              </div>
+            )}
 
-  {/* Kthe në Draft — nëse Published ose Client */}
-  {(project?.virtual_tour_status === "published" ||
-    project?.virtual_tour_status === "client") && (
-    <button
-      onClick={handleUnpublishTour}
-      className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
-    >
-      Kthe në Draft
-    </button>
-  )}
-</div>
-		  
-		  
+            {isClientTourEditor ? (
+              <>
+                {computedTourStatus !== "active" && (
+                  <button
+                    onClick={handlePublishTour}
+                    disabled={scenes.length === 0}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Aktivizo Turin
+                  </button>
+                )}
+
+                {computedTourStatus === "active" && (
+                  <button
+                    onClick={handlePauseTour}
+                    className="px-4 py-2 rounded-xl bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 font-semibold text-sm"
+                  >
+                    Pezullo
+                  </button>
+                )}
+
+                {computedTourStatus !== "draft" && (
+                  <button
+                    onClick={handleUnpublishTour}
+                    className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
+                  >
+                    Kthe në Draft
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {computedTourStatus === "published" ? (
+                  <button
+                    onClick={handleUnpublishTour}
+                    className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
+                  >
+                    Kthe në Draft
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePublishTour}
+                    disabled={scenes.length === 0}
+                    className="px-4 py-2 rounded-xl bg-primary text-black hover:bg-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Publiko Turin
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 space-y-8">
-	  {project?.virtual_tour_status === "published" && (
-  <div className="glass-panel p-6 rounded-2xl border border-primary/20">
-    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 border-b border-border pb-4 mb-5">
-      <div>
-        <h2 className="font-display text-xl text-primary font-bold">
-          Share Virtual Tour
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Dërgoja klientit si link ose vendose në website-in e tij me embed code.
-        </p>
-      </div>
+        {((!isClientTourEditor && computedTourStatus === "published") ||
+          (isClientTourEditor && computedTourStatus === "active")) && (
+          <div className="glass-panel p-6 rounded-2xl border border-primary/20">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 border-b border-border pb-4 mb-5">
+              <div>
+                <h2 className="font-display text-xl text-primary font-bold">
+                  Share Virtual Tour
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Dërgoja klientit si link ose vendose në website-in e tij me embed code.
+                </p>
+              </div>
 
-      <span className="px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
-        Live
-      </span>
-    </div>
+              <span className="px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                Live
+              </span>
+            </div>
 
-    <div className="space-y-5">
-      <div>
-        <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-          Public Link
-        </label>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Public Link
+                </label>
 
-        <div className="flex flex-col md:flex-row gap-2">
-          <input
-            readOnly
-            value={publicTourUrl}
-            className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none"
-          />
+                <div className="flex flex-col md:flex-row gap-2">
+                  <input
+                    readOnly
+                    value={publicTourUrl}
+                    className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none"
+                  />
 
-          <button
-            type="button"
-            onClick={() => copyText(publicTourUrl, "Linku")}
-            className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors"
-          >
-            Copy Link
-          </button>
-        </div>
-      </div>
+                  <button
+                    type="button"
+                    onClick={() => copyText(publicTourUrl, "Linku")}
+                    className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors"
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              </div>
 
-      <div>
-        <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-          Embed Code
-        </label>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Embed Code
+                </label>
 
-        <div className="flex flex-col md:flex-row gap-2">
-          <textarea
-            readOnly
-            value={embedTourCode}
-            className="flex-1 min-h-[96px] bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono resize-none focus:outline-none"
-          />
+                <div className="flex flex-col md:flex-row gap-2">
+                  <textarea
+                    readOnly
+                    value={embedTourCode}
+                    className="flex-1 min-h-[96px] bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono resize-none focus:outline-none"
+                  />
 
-          <button
-            type="button"
-            onClick={() => copyText(embedTourCode, "Embed code")}
-            className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors md:self-start"
-          >
-            Copy Embed
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                  <button
+                    type="button"
+                    onClick={() => copyText(embedTourCode, "Embed code")}
+                    className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors md:self-start"
+                  >
+                    Copy Embed
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="glass-panel p-6 rounded-2xl">
           <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
             <div>
-              <h2 className="font-display text-xl text-primary font-bold">1. Skenat 360°</h2>
+              <h2 className="font-display text-xl text-primary font-bold">
+                1. Skenat 360°
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Shto panoramat, renditjen dhe skenën fillestare.
               </p>
@@ -1609,7 +1886,9 @@ const copyText = async (text: string, label: string) => {
           </div>
 
           {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground">Duke ngarkuar...</div>
+            <div className="text-center py-10 text-muted-foreground">
+              Duke ngarkuar...
+            </div>
           ) : scenes.length === 0 ? (
             <div className="text-center py-14 text-muted-foreground">
               <p>Nuk ka skena ende për këtë projekt.</p>
@@ -1646,7 +1925,9 @@ const copyText = async (text: string, label: string) => {
 
                     <div className="p-4 space-y-3">
                       <div>
-                        <h3 className="text-foreground font-medium truncate">{scene.title}</h3>
+                        <h3 className="text-foreground font-medium truncate">
+                          {scene.title}
+                        </h3>
                         <p className="text-xs text-muted-foreground mt-1">
                           Renditja: {scene.sort_order}
                         </p>
@@ -1704,8 +1985,9 @@ const copyText = async (text: string, label: string) => {
                   2. Editor Profesional i Hotspot-eve
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin, aktivizo placement mode,
-                  rrotullo panoramën dhe vendose hotspot-in në qendrën e pamjes.
+                  Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin,
+                  aktivizo placement mode, rrotullo panoramën dhe vendose hotspot-in në
+                  qendrën e pamjes.
                 </p>
               </div>
             </div>
@@ -1718,11 +2000,12 @@ const copyText = async (text: string, label: string) => {
                 Ruaj këndin fillestar të kësaj skene
               </button>
 
-{selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
-  <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
-    Start view: {selectedScene.initial_yaw.toFixed(3)} / {selectedScene.initial_pitch.toFixed(3)}
-  </div>
-)}
+              {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
+                <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
+                  Start view: {selectedScene.initial_yaw.toFixed(3)} /{" "}
+                  {selectedScene.initial_pitch.toFixed(3)}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1750,10 +2033,10 @@ const copyText = async (text: string, label: string) => {
                     {isEditingHotspotPlacement
                       ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
                       : isPlacementMode
-                      ? draft.yaw !== null && draft.pitch !== null
-                        ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
-                        : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
-                      : "Zgjidh target-in dhe aktivizo placement mode"}
+                        ? draft.yaw !== null && draft.pitch !== null
+                          ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
+                          : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
+                        : "Zgjidh target-in dhe aktivizo placement mode"}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
@@ -1794,8 +2077,9 @@ const copyText = async (text: string, label: string) => {
 
                       {availableTargetScenes.length === 0 && (
                         <p className="mt-2 text-xs text-amber-300">
-                          Të gjitha skenat e tjera janë përdorur tashmë si destinacion për këtë panoramë.
-                          Nëse dëshiron një target tjetër, fshi ose edito një hotspot ekzistues.
+                          Të gjitha skenat e tjera janë përdorur tashmë si destinacion
+                          për këtë panoramë. Nëse dëshiron një target tjetër, fshi ose
+                          edito një hotspot ekzistues.
                         </p>
                       )}
                     </div>
@@ -1835,8 +2119,9 @@ const copyText = async (text: string, label: string) => {
                         <strong className="text-foreground">Target:</strong>{" "}
                         {draft.to_scene_id === ""
                           ? "Pa zgjedhur"
-                          : scenes.find((scene) => scene.id === Number(draft.to_scene_id))?.title ||
-                            "Pa zgjedhur"}
+                          : scenes.find(
+                              (scene) => scene.id === Number(draft.to_scene_id),
+                            )?.title || "Pa zgjedhur"}
                       </span>
                     </div>
                   </div>
@@ -1929,7 +2214,9 @@ const copyText = async (text: string, label: string) => {
               </div>
 
               <div className="rounded-2xl border border-border bg-card p-4">
-                <h3 className="text-foreground font-medium mb-4">Hotspot-et ekzistuese</h3>
+                <h3 className="text-foreground font-medium mb-4">
+                  Hotspot-et ekzistuese
+                </h3>
 
                 {selectedScene.hotspots.length === 0 ? (
                   <p className="text-sm text-muted-foreground italic">
@@ -1957,7 +2244,8 @@ const copyText = async (text: string, label: string) => {
                                 {hotspot.label || "Pa etiketë"}
                               </div>
                               <div className="text-[11px] text-muted-foreground mt-1">
-                                yaw {hotspot.yaw.toFixed(3)} / pitch {hotspot.pitch.toFixed(3)}
+                                yaw {hotspot.yaw.toFixed(3)} / pitch{" "}
+                                {hotspot.pitch.toFixed(3)}
                               </div>
                             </div>
 
@@ -1970,13 +2258,13 @@ const copyText = async (text: string, label: string) => {
                                 <Edit size={14} />
                               </button>
 
-  <button
-    onClick={() => handleSaveHotspotTargetView(hotspot.id)}
-    className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground"
-    title="Ruaj drejtimin e hyrjes"
-  >
-    <LocateFixed size={14} />
-  </button>
+                              <button
+                                onClick={() => handleSaveHotspotTargetView(hotspot.id)}
+                                className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground"
+                                title="Ruaj drejtimin e hyrjes"
+                              >
+                                <LocateFixed size={14} />
+                              </button>
 
                               <button
                                 onClick={() => handleDeleteHotspot(hotspot.id)}
@@ -1999,7 +2287,9 @@ const copyText = async (text: string, label: string) => {
         <div className="glass-panel p-6 rounded-2xl">
           <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
             <div>
-              <h2 className="font-display text-xl text-primary font-bold">3. Preview i Turit</h2>
+              <h2 className="font-display text-xl text-primary font-bold">
+                3. Preview i Turit
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Kjo është eksperienca finale e navigimit ndërmjet skenave.
               </p>
@@ -2033,7 +2323,9 @@ const copyText = async (text: string, label: string) => {
                         />
                       </div>
                       <div className="p-2">
-                        <p className="text-xs text-foreground truncate">{scene.title}</p>
+                        <p className="text-xs text-foreground truncate">
+                          {scene.title}
+                        </p>
                         <p className="text-[11px] text-muted-foreground">
                           {scene.hotspots.length} hotspot-e
                         </p>
@@ -2066,9 +2358,9 @@ const copyText = async (text: string, label: string) => {
                 backgroundSize: "20px 20px",
               }}
             >
-<div className="absolute inset-0 flex items-center justify-center text-muted-foreground/20 pointer-events-none select-none">
-  <MapIcon size={70} />
-</div>
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/20 pointer-events-none select-none">
+                <MapIcon size={70} />
+              </div>
 
               {scenes.map((scene) => {
                 const x = scene.position_x ?? 50;
@@ -2100,6 +2392,7 @@ const copyText = async (text: string, label: string) => {
                         0,
                         Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
                       );
+
                       handleUpdateScenePosition(scene.id, nx, ny);
                     }}
                   >
@@ -2134,7 +2427,9 @@ const copyText = async (text: string, label: string) => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground truncate">{scene.title}</p>
+                        <p className="text-sm text-foreground truncate">
+                          {scene.title}
+                        </p>
                         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Move size={11} />{" "}
                           {scene.position_x != null && scene.position_y != null
@@ -2285,7 +2580,9 @@ const copyText = async (text: string, label: string) => {
                       prev
                         ? {
                             ...prev,
-                            to_scene_id: e.target.value ? Number(e.target.value) : "",
+                            to_scene_id: e.target.value
+                              ? Number(e.target.value)
+                              : "",
                           }
                         : prev,
                     )
@@ -2297,6 +2594,7 @@ const copyText = async (text: string, label: string) => {
 
                       const isCurrentTarget =
                         Number(scene.id) === Number(editingHotspot?.to_scene_id);
+
                       if (isCurrentTarget) return true;
 
                       return !usedTargetSceneIds.has(Number(scene.id));
@@ -2329,7 +2627,8 @@ const copyText = async (text: string, label: string) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <span>
                     <strong className="text-foreground">Pozicioni:</strong>{" "}
-                    {editingHotspot.yaw.toFixed(3)} / {editingHotspot.pitch.toFixed(3)}
+                    {editingHotspot.yaw.toFixed(3)} /{" "}
+                    {editingHotspot.pitch.toFixed(3)}
                   </span>
                   <span>
                     <strong className="text-foreground">Statusi:</strong>{" "}
@@ -2349,13 +2648,12 @@ const copyText = async (text: string, label: string) => {
                   Vendose në Qendër
                 </button>
 
-
-  <button
-    onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
-    className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-  >
-    Ruaj drejtimin e hyrjes për këtë hotspot
-  </button>
+                <button
+                  onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
+                  className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
+                >
+                  Ruaj drejtimin e hyrjes për këtë hotspot
+                </button>
 
                 <button
                   type="button"
