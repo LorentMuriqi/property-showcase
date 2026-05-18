@@ -342,120 +342,120 @@ useEffect(() => {
   }, [currentProjectsUrl]);
 
   // ── Fetch projects from Supabase (server-side filters) ────────────────
+  
   useEffect(() => {
-    const fetchProjects = async () => {
-      setIsLoading(true);
+  const fetchProjects = async () => {
+    setIsLoading(true);
 
-      const nowIso = new Date().toISOString();
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
+    const nowIso = new Date().toISOString();
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
 
-      let query = supabase
-        .from("properties")
-        .select(
-  `
-    id,
-    title,
-    country,
-    city,
-    status,
-    property_type,
-    price,
-    currency,
-    area_m2,
-    bedrooms,
-    bathrooms,
-    images,
-    created_at,
-    virtual_tour_status,
-    virtual_tour_url,
-    virtual_tour_embed_code,
-    has_custom_virtual_tour
-  `,
-  { count: "exact" }
-)
-        .eq("listing_status", "active")
-        .eq("is_paused", false)
-        .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
+    let query = supabase
+      .from("properties")
+      .select(
+        `
+          id,
+          title,
+          description,
+          address,
+          country,
+          city,
+          status,
+          property_type,
+          price,
+          currency,
+          area_m2,
+          bedrooms,
+          bathrooms,
+          images,
+          created_at,
+          listing_status,
+          is_paused,
+          expires_at,
+          virtual_tour_status,
+          virtual_tour_url,
+          virtual_tour_embed_code
+        `,
+        { count: "exact" }
+      )
+      .eq("listing_status", "active")
+      .eq("is_paused", false)
+      .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
 
-      if (country) query = query.eq("country", country);
-      if (city) query = query.eq("city", city);
-      if (statusFilter) query = query.eq("status", statusFilter);
-      if (propertyType) query = query.eq("property_type", propertyType);
+    if (country) query = query.eq("country", country);
+    if (city) query = query.eq("city", city);
+    if (statusFilter) query = query.eq("status", statusFilter);
+    if (propertyType) query = query.eq("property_type", propertyType);
 
-      if (search.trim()) {
-        const safeSearch = search.trim().replace(/,/g, " ");
+    if (search.trim()) {
+      const safeSearch = search.trim().replace(/[%_,]/g, " ").trim();
+
+      if (safeSearch) {
         query = query.or(
-          `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,location.ilike.%${safeSearch}%`
+          `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,address.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,country.ilike.%${safeSearch}%`
         );
       }
+    }
 
-// Sort server-side vetëm për created_at — çmimi/m² bëhen client-side
-const serverOrder =
-  sortBy === "newest" || sortBy === "relevance"
-    ? { column: "created_at", ascending: false }
-    : { column: "created_at", ascending: false };
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
-const { data, error, count } = await query
-  .order(serverOrder.column, { ascending: serverOrder.ascending })
-  .range(from, to);
-
-      if (error) {
-        console.error("Supabase fetch error:", error);
-        setProjects([]);
-        setTotalCount(0);
-      } else {
-        const rows = data || [];
-        const propertyIds = rows.map((item) => item.id);
-
-        let scenePropertyIds = new Set<string>();
-        if (propertyIds.length > 0) {
-          const { data: sceneRows, error: sceneError } = await supabase
-            .from("virtual_tour_scenes")
-            .select("property_id")
-            .in("property_id", propertyIds);
-
-          if (!sceneError) {
-            scenePropertyIds = new Set(
-              (sceneRows || []).map((scene) => String(scene.property_id))
-            );
-          }
-        }
-
-        const rowsWithVirtualTour = rows.map((item) => {
-          const hasFallbackVirtualTour = !!(
-            item.virtual_tour_url ||
-            item.virtual_tour_embed_code ||
-            item.has_custom_virtual_tour
-          );
-          const hasPublishedBuiltInVirtualTour =
-            item.virtual_tour_status === "published" &&
-            scenePropertyIds.has(String(item.id));
-          return {
-            ...item,
-            hasVirtualTour: hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour,
-          };
-        });
-
-        setProjects(rowsWithVirtualTour);
-        setTotalCount(count || 0);
-      }
-
+    if (error) {
+      console.error("Supabase fetch projects error:", error);
+      setProjects([]);
+      setTotalCount(0);
       setIsLoading(false);
+      return;
+    }
 
-      requestAnimationFrame(() => {
-        if (shouldRestoreScrollRef.current) {
-          restoreProjectsPosition();
-        } else if (shouldScrollToTopRef.current) {
-          scrollToProjectsTop(didInitRef.current ? "smooth" : "auto");
-          shouldScrollToTopRef.current = false;
-        }
-        didInitRef.current = true;
-      });
-    };
+    const rows = data || [];
+    const propertyIds = rows.map((item) => item.id);
 
-    fetchProjects();
-  }, [country, city, search, statusFilter, propertyType, page]);
+    let scenePropertyIds = new Set<string>();
+
+    if (propertyIds.length > 0) {
+      const { data: sceneRows, error: sceneError } = await supabase
+        .from("virtual_tour_scenes")
+        .select("property_id")
+        .in("property_id", propertyIds);
+
+      if (sceneError) {
+        console.error("Fetch virtual tour scenes error:", sceneError);
+      } else {
+        scenePropertyIds = new Set(
+          (sceneRows || []).map((scene) => String(scene.property_id))
+        );
+      }
+    }
+
+    const rowsWithVirtualTour = rows.map((item) => {
+      const hasFallbackVirtualTour = !!(
+        item.virtual_tour_url ||
+        item.virtual_tour_embed_code
+      );
+
+      const hasPublishedBuiltInVirtualTour =
+        item.virtual_tour_status === "published" &&
+        scenePropertyIds.has(String(item.id));
+
+      return {
+        ...item,
+        hasVirtualTour: hasFallbackVirtualTour || hasPublishedBuiltInVirtualTour,
+      };
+    });
+
+    setProjects(rowsWithVirtualTour);
+    setTotalCount(count || 0);
+    setIsLoading(false);
+  };
+
+  fetchProjects();
+}, [country, city, search, statusFilter, propertyType, page]);
+  
+  
+  
 
   // ── Fetch filter options ──────────────────────────────────────────────
   useEffect(() => {
