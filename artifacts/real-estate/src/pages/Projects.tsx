@@ -492,37 +492,56 @@ const { data, error, count } = await query
     fetchFilters();
   }, [country]);
 
+
+
 const filteredProjects = useMemo(() => {
+  const isPriceFilterActive =
+    priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX;
+
+  const isAreaFilterActive =
+    areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX;
+
   const filtered = projects.filter((p) => {
     const price = p.price ?? null;
     const area = p.area_m2 ?? p.areaM2 ?? null;
     const beds = p.bedrooms ?? null;
     const baths = p.bathrooms ?? null;
 
-    if (price !== null) {
+    if (isPriceFilterActive) {
+      if (price === null) return false;
       if (price < priceRange[0] || price > priceRange[1]) return false;
     }
-    if (area !== null) {
+
+    if (isAreaFilterActive) {
+      if (area === null) return false;
       if (area < areaRange[0] || area > areaRange[1]) return false;
     }
-    if (bedroomsMin !== null && (beds === null || beds < bedroomsMin)) return false;
-    if (bathroomsMin !== null && (baths === null || baths < bathroomsMin)) return false;
+
+    if (bedroomsMin !== null && (beds === null || beds < bedroomsMin)) {
+      return false;
+    }
+
+    if (bathroomsMin !== null && (baths === null || baths < bathroomsMin)) {
+      return false;
+    }
 
     return true;
   });
 
-  // Sort client-side për çmim dhe m²
   return [...filtered].sort((a, b) => {
     switch (sortBy) {
       case "price_asc":
         return (a.price ?? Infinity) - (b.price ?? Infinity);
+
       case "price_desc":
         return (b.price ?? -Infinity) - (a.price ?? -Infinity);
-default:
-        return 0; // newest/oldest — tashmë e bën Supabase
+
+      default:
+        return 0;
     }
   });
 }, [projects, priceRange, areaRange, bedroomsMin, bathroomsMin, sortBy]);
+
 
   // ── Clear all ─────────────────────────────────────────────────────────
   const clearAllFilters = () => {
