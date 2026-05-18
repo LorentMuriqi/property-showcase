@@ -3,6 +3,13 @@ import { MapPin, Maximize, BedDouble, Bath } from "lucide-react";
 
 export function ProjectCard({ project }: { project: any }) {
   const primaryImage = project.images?.find((i: any) => i.isPrimary) || project.images?.[0];
+  
+  const primaryImageUrl =
+  primaryImage?.thumbnailUrl ||
+  primaryImage?.thumbnail_url ||
+  primaryImage?.thumbUrl ||
+  primaryImage?.thumb_url ||
+  primaryImage?.url;
 
   const statusColors: Record<string, string> = {
     for_sale: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -30,13 +37,15 @@ export function ProjectCard({ project }: { project: any }) {
     <Link href={`/projects/${project.id}`} className="group block h-full">
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col h-full hover:-translate-y-1">
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-          {primaryImage?.url ? (
-            <img
-              src={primaryImage.url}
-              alt={primaryImage.caption || project.title}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-            />
-          ) : (
+{primaryImageUrl ? (
+  <img
+    src={primaryImageUrl}
+    alt={primaryImage?.caption || project.title}
+    loading="lazy"
+    decoding="async"
+    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+  />
+) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground font-display italic">
               No image available
             </div>

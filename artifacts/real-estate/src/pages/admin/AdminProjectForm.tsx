@@ -69,7 +69,7 @@ export default function AdminProjectForm() {
   } = useForm<any>({
     defaultValues: {
       status: "for_sale",
-      images: [{ url: "", caption: "", isPrimary: true }],
+      images: [{ url: "", thumbnailUrl: "", caption: "", isPrimary: true }],
       customFields: {},
       title: "",
       description: "",
@@ -563,11 +563,12 @@ export default function AdminProjectForm() {
               <button
                 type="button"
                 onClick={() =>
-                  appendImage({
-                    url: "",
-                    caption: "",
-                    isPrimary: imageFields.length === 0,
-                  })
+appendImage({
+  url: "",
+  thumbnailUrl: "",
+  caption: "",
+  isPrimary: imageFields.length === 0,
+})
                 }
                 className="text-sm text-primary hover:text-foreground font-medium flex items-center gap-1"
               >
@@ -587,6 +588,11 @@ export default function AdminProjectForm() {
                       placeholder="URL e Fotos (https://...)"
                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
                     />
+					<input
+  {...register(`images.${index}.thumbnailUrl` as const)}
+  placeholder="Thumbnail URL (https://...)"
+  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+/>
                     <input
                       {...register(`images.${index}.caption` as const)}
                       placeholder="Përshkrimi (Opsionale)"

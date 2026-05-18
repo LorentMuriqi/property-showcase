@@ -27,6 +27,10 @@ import { Helmet } from "react-helmet-async";
 type ProjectImage = {
   id?: string | number;
   url: string;
+  thumbnailUrl?: string;
+  thumbnail_url?: string;
+  thumbUrl?: string;
+  thumb_url?: string;
   caption?: string;
   isPrimary?: boolean;
 };
@@ -172,6 +176,13 @@ export default function ProjectDetails() {
   const closeLightbox = () => setLightboxIndex(null);
 
   const images = project?.images || [];
+  
+  const getImagePreviewUrl = (img: any) =>
+  img?.thumbnailUrl ||
+  img?.thumbnail_url ||
+  img?.thumbUrl ||
+  img?.thumb_url ||
+  img?.url;
 
 const lightboxPrev = useCallback(() => {
   if (!images.length) return;
@@ -221,7 +232,38 @@ const lightboxNext = useCallback(() => {
 
       const { data, error } = await supabase
         .from("properties")
-        .select("*")
+        .select(`
+  id,
+  title,
+  description,
+  address,
+  city,
+  country,
+  status,
+  property_type,
+  price,
+  currency,
+  images,
+  area_m2,
+  bedrooms,
+  bathrooms,
+  living_rooms,
+  floors,
+  year_built,
+  custom_fields,
+  contact_company,
+  contact_phone,
+  contact_email,
+  has_custom_virtual_tour,
+  virtual_tour_url,
+  virtual_tour_embed_code,
+  virtual_tour_status,
+  virtual_tour_published_at,
+  default_scene_id,
+  listing_status,
+  is_paused,
+  expires_at
+`)
         .eq("id", id)
         .eq("listing_status", "active")
         .eq("is_paused", false)
@@ -381,10 +423,13 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
               : "Shiko detajet e pronës."
           }
         />
-        <meta
-          property="og:image"
-          content={project?.images?.[0]?.url || "/images/hero-bg.png"}
-        />
+<meta
+  property="og:image"
+  content={
+    project?.images?.[0]?.url ||
+    "https://auraks.com/images/hero-bg.png"
+  }
+/>
         <meta
           property="og:url"
           content={`https://auraks.com/projects/${project?.id ?? ""}`}
@@ -405,11 +450,14 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                     key={img.id || idx}
                     onClick={() => openLightbox(idx)}
                   >
-                    <img
-                      src={img.url}
-                      alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                    />
+<img
+  src={idx === 0 ? img.url : getImagePreviewUrl(img)}
+  alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+  loading={idx === 0 ? "eager" : "lazy"}
+  decoding="async"
+  fetchPriority={idx === 0 ? "high" : "low"}
+  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+/>
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
                       <ZoomIn
                         size={40}
@@ -485,7 +533,13 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                   }}
                   className="flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors"
                 >
-                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <img
+  src={getImagePreviewUrl(img)}
+  alt=""
+  loading="lazy"
+  decoding="async"
+  className="w-full h-full object-cover"
+/>
                 </button>
               ))}
             </div>
@@ -792,11 +846,13 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
         key={img.id || idx}
         className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
       >
-        <img
-          src={img.url}
-          alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-          className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
-        />
+<img
+  src={idx === lightboxIndex ? img.url : getImagePreviewUrl(img)}
+  alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+  loading={idx === lightboxIndex ? "eager" : "lazy"}
+  decoding="async"
+  className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+/>
       </div>
     ))}
   </div>

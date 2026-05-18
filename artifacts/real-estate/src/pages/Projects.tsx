@@ -352,7 +352,28 @@ useEffect(() => {
 
       let query = supabase
         .from("properties")
-        .select("*", { count: "exact" })
+        .select(
+  `
+    id,
+    title,
+    country,
+    city,
+    status,
+    property_type,
+    price,
+    currency,
+    area_m2,
+    bedrooms,
+    bathrooms,
+    images,
+    created_at,
+    virtual_tour_status,
+    virtual_tour_url,
+    virtual_tour_embed_code,
+    has_custom_virtual_tour
+  `,
+  { count: "exact" }
+)
         .eq("listing_status", "active")
         .eq("is_paused", false)
         .or(`expires_at.is.null,expires_at.gte.${nowIso}`);

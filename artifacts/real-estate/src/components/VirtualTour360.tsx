@@ -262,7 +262,7 @@ const goToScene = useCallback(
 useEffect(() => {
   Cache.enabled = true;
   Cache.ttl = 30 * 60 * 1000; // 30 min — mban më gjatë në memorie
-  Cache.maxItems = 30;         // më shumë skena të cached
+  Cache.maxItems = 12;         // e kemi ulur ne 12 te mos ngarkohen Tel
 }, []);
   
   
