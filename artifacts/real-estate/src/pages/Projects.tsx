@@ -330,6 +330,10 @@ useEffect(() => {
   setPage(1);
 }, [country, city, search, statusFilter, propertyType]);
 
+useEffect(() => {
+  didInitRef.current = true;
+}, []);
+
   // ── Save scroll on scroll ─────────────────────────────────────────────
   useEffect(() => {
     const saveScrollState = () => {

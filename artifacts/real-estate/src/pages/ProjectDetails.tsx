@@ -212,93 +212,68 @@ const lightboxNext = useCallback(() => {
     return () => window.removeEventListener("keydown", handleKey);
   }, [lightboxIndex, lightboxPrev, lightboxNext, showContactModal, showVirtualTour]);
 
+  
+  
   useEffect(() => {
-    let isMounted = true;
+  let isMounted = true;
 
-    const fetchProject = async () => {
-      if (!id) {
-        if (isMounted) {
-          setProject(null);
-          setFetchError(true);
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      setIsLoading(true);
-      setFetchError(false);
-
-      const nowIso = new Date().toISOString();
-
-      const { data, error } = await supabase
-        .from("properties")
-        .select(`
-  id,
-  title,
-  description,
-  address,
-  city,
-  country,
-  status,
-  property_type,
-  price,
-  currency,
-  images,
-  area_m2,
-  bedrooms,
-  bathrooms,
-  living_rooms,
-  floors,
-  year_built,
-  custom_fields,
-  contact_company,
-  contact_phone,
-  contact_email,
-  has_custom_virtual_tour,
-  virtual_tour_url,
-  virtual_tour_embed_code,
-  virtual_tour_status,
-  virtual_tour_published_at,
-  default_scene_id,
-  listing_status,
-  is_paused,
-  expires_at
-`)
-        .eq("id", id)
-        .eq("listing_status", "active")
-        .eq("is_paused", false)
-        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
-        .single();
-
-      if (!isMounted) return;
-
-      if (error || !data) {
-        console.error("Project details fetch error:", error);
+  const fetchProject = async () => {
+    if (!id) {
+      if (isMounted) {
         setProject(null);
-        setHasBuiltInVirtualTour(false);
         setFetchError(true);
-      } else {
-        setProject(normalizeProject(data));
-
-        const { count } = await supabase
-          .from("virtual_tour_scenes")
-          .select("*", { count: "exact", head: true })
-          .eq("property_id", data.id);
-
-setHasBuiltInVirtualTour(
-  data.virtual_tour_status === "published" && (count || 0) > 0
-);
-        setFetchError(false);
+        setIsLoading(false);
       }
+      return;
+    }
+
+    setIsLoading(true);
+    setFetchError(false);
+
+    const { data, error } = await supabase
+      .from("properties")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!isMounted) return;
+
+    if (error || !data) {
+      console.error("Project details fetch error:", error);
+      setProject(null);
+      setHasBuiltInVirtualTour(false);
+      setFetchError(true);
       setIsLoading(false);
-    };
+      return;
+    }
 
-    fetchProject();
+    setProject(normalizeProject(data));
 
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
+    const { count, error: scenesError } = await supabase
+      .from("virtual_tour_scenes")
+      .select("id", { count: "exact", head: true })
+      .eq("property_id", data.id);
+
+    if (scenesError) {
+      console.error("Virtual tour scenes count error:", scenesError);
+      setHasBuiltInVirtualTour(false);
+    } else {
+      setHasBuiltInVirtualTour(
+        data.virtual_tour_status === "published" && (count || 0) > 0
+      );
+    }
+
+    setFetchError(false);
+    setIsLoading(false);
+  };
+
+  fetchProject();
+
+  return () => {
+    isMounted = false;
+  };
+}, [id]);
+  
 
 
 useEffect(() => {
@@ -333,7 +308,7 @@ useEffect(() => {
     lightboxApi.reInit();
     lightboxApi.scrollTo(lightboxIndex, true);
   });
-}, [lightboxApi]);
+}, [lightboxIndex, lightboxApi]);
 
   if (isLoading) {
     return (
