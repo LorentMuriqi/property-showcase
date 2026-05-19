@@ -283,14 +283,19 @@ const [sortBy, setSortBy] = useState<SortOption>("relevance");
       window.scrollTo({ top: savedScrollY, left: 0, behavior: "auto" });
     };
 
-    requestAnimationFrame(() => {
-      applyRestore();
-      setTimeout(() => {
-        applyRestore();
-        shouldRestoreScrollRef.current = false;
-        sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
-      }, 150);
-    });
+requestAnimationFrame(() => {
+  applyRestore();
+
+  setTimeout(() => {
+    applyRestore();
+  }, 150);
+
+  setTimeout(() => {
+    applyRestore();
+    shouldRestoreScrollRef.current = false;
+    sessionStorage.removeItem(PROJECTS_RESTORE_SCROLL_KEY);
+  }, 450);
+});
   };
 
   const saveProjectsState = (projectId?: string | number) => {
@@ -459,7 +464,21 @@ useEffect(() => {
 }, [country, city, search, statusFilter, propertyType, page]);
   
   
-  
+  useEffect(() => {
+  if (isLoading) return;
+
+  if (shouldRestoreScrollRef.current) {
+    restoreProjectsPosition();
+    return;
+  }
+
+  if (shouldScrollToTopRef.current) {
+    requestAnimationFrame(() => {
+      scrollToProjectsTop("auto");
+      shouldScrollToTopRef.current = false;
+    });
+  }
+}, [isLoading, projects.length, currentProjectsUrl]);
 
   // ── Fetch filter options ──────────────────────────────────────────────
   useEffect(() => {
