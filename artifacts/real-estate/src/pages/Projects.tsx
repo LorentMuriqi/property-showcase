@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Filter, X, Search, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { X, Search, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
@@ -182,6 +182,34 @@ const AREA_MIN = 0;
 const AREA_MAX = 1_000;
 const AREA_STEP = 5;
 
+
+
+
+const parseNumberParam = (value: string | null, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseNullableNumberParam = (value: string | null) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+function useDebouncedValue<T>(value: T, delay = 350) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 export default function Projects() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -194,13 +222,33 @@ export default function Projects() {
   const [propertyType, setPropertyType] = useState(searchParams.get("type") || "");
 
 type SortOption = "relevance" | "newest" | "price_asc" | "price_desc";
-const [sortBy, setSortBy] = useState<SortOption>("relevance");
 
-  // ── Client-side filters (applied after fetch) ─────────────────────────
-  const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, PRICE_MAX]);
-  const [areaRange, setAreaRange] = useState<[number, number]>([AREA_MIN, AREA_MAX]);
-  const [bedroomsMin, setBedroomsMin] = useState<number | null>(null);
-  const [bathroomsMin, setBathroomsMin] = useState<number | null>(null);
+const [sortBy, setSortBy] = useState<SortOption>(
+  (searchParams.get("sort") as SortOption) || "relevance"
+);
+
+// Këta filtra tani aplikohen në Supabase, para pagination
+const [priceRange, setPriceRange] = useState<[number, number]>([
+  parseNumberParam(searchParams.get("priceMin"), PRICE_MIN),
+  parseNumberParam(searchParams.get("priceMax"), PRICE_MAX),
+]);
+
+const [areaRange, setAreaRange] = useState<[number, number]>([
+  parseNumberParam(searchParams.get("areaMin"), AREA_MIN),
+  parseNumberParam(searchParams.get("areaMax"), AREA_MAX),
+]);
+
+const [bedroomsMin, setBedroomsMin] = useState<number | null>(
+  parseNullableNumberParam(searchParams.get("beds"))
+);
+
+const [bathroomsMin, setBathroomsMin] = useState<number | null>(
+  parseNullableNumberParam(searchParams.get("baths"))
+);
+
+const debouncedSearch = useDebouncedValue(search.trim(), 350);
+const debouncedPriceRange = useDebouncedValue(priceRange, 350);
+const debouncedAreaRange = useDebouncedValue(areaRange, 350);
 
   // ── UI state ──────────────────────────────────────────────────────────
   const [showFilters, setShowFilters] = useState(false);
@@ -221,7 +269,15 @@ const [sortBy, setSortBy] = useState<SortOption>("relevance");
   const pageSize = 8;
 
   // ── Derived: active filter count (for badge on mobile button) ─────────
-  const activeServerFilters = [country, city, search, statusFilter, propertyType].filter(Boolean).length;
+  const activeServerFilters = [
+  country,
+  city,
+  search,
+  statusFilter,
+  propertyType,
+  sortBy !== "relevance" ? sortBy : "",
+].filter(Boolean).length;
+
   const activeClientFilters = [
     priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX,
     areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX,
@@ -231,21 +287,58 @@ const [sortBy, setSortBy] = useState<SortOption>("relevance");
   const totalActiveFilters = activeServerFilters + activeClientFilters;
 
   // ── URL sync ──────────────────────────────────────────────────────────
-  const buildProjectsUrl = useCallback(
-    (pg: number, co: string, ci: string, se: string, st: string, ty: string) => {
-      const params = new URLSearchParams();
-      if (co) params.set("country", co);
-      if (ci) params.set("city", ci);
-      if (se) params.set("search", se);
-      if (st) params.set("status", st);
-      if (ty) params.set("type", ty);
-      if (pg > 1) params.set("page", String(pg));
-      return `/projects${params.toString() ? `?${params.toString()}` : ""}`;
-    },
-    []
-  );
+const buildProjectsUrl = useCallback(
+  (
+    pg: number,
+    co: string,
+    ci: string,
+    se: string,
+    st: string,
+    ty: string,
+    price: [number, number],
+    area: [number, number],
+    beds: number | null,
+    baths: number | null,
+    sort: SortOption
+  ) => {
+    const params = new URLSearchParams();
 
-  const currentProjectsUrl = buildProjectsUrl(page, country, city, search, statusFilter, propertyType);
+    if (co) params.set("country", co);
+    if (ci) params.set("city", ci);
+    if (se) params.set("search", se);
+    if (st) params.set("status", st);
+    if (ty) params.set("type", ty);
+
+    if (price[0] > PRICE_MIN) params.set("priceMin", String(price[0]));
+    if (price[1] < PRICE_MAX) params.set("priceMax", String(price[1]));
+
+    if (area[0] > AREA_MIN) params.set("areaMin", String(area[0]));
+    if (area[1] < AREA_MAX) params.set("areaMax", String(area[1]));
+
+    if (beds !== null) params.set("beds", String(beds));
+    if (baths !== null) params.set("baths", String(baths));
+
+    if (sort !== "relevance") params.set("sort", sort);
+    if (pg > 1) params.set("page", String(pg));
+
+    return `/projects${params.toString() ? `?${params.toString()}` : ""}`;
+  },
+  []
+);
+
+const currentProjectsUrl = buildProjectsUrl(
+  page,
+  country,
+  city,
+  search,
+  statusFilter,
+  propertyType,
+  priceRange,
+  areaRange,
+  bedroomsMin,
+  bathroomsMin,
+  sortBy
+);
 
   useEffect(() => {
     window.history.replaceState({}, "", currentProjectsUrl);
@@ -331,9 +424,21 @@ requestAnimationFrame(() => {
 
 useEffect(() => {
   if (!didInitRef.current) return;
+
   shouldScrollToTopRef.current = true;
   setPage(1);
-}, [country, city, search, statusFilter, propertyType]);
+}, [
+  country,
+  city,
+  search,
+  statusFilter,
+  propertyType,
+  priceRange,
+  areaRange,
+  bedroomsMin,
+  bathroomsMin,
+  sortBy,
+]);
 
 useEffect(() => {
   didInitRef.current = true;
@@ -393,23 +498,41 @@ useEffect(() => {
       .or(`expires_at.is.null,expires_at.gte.${nowIso}`);
 
     if (country) query = query.eq("country", country);
-    if (city) query = query.eq("city", city);
-    if (statusFilter) query = query.eq("status", statusFilter);
-    if (propertyType) query = query.eq("property_type", propertyType);
+if (city) query = query.eq("city", city);
+if (statusFilter) query = query.eq("status", statusFilter);
+if (propertyType) query = query.eq("property_type", propertyType);
 
-    if (search.trim()) {
-      const safeSearch = search.trim().replace(/[%_,]/g, " ").trim();
+const [priceMin, priceMax] = debouncedPriceRange;
+const [areaMin, areaMax] = debouncedAreaRange;
 
-      if (safeSearch) {
-        query = query.or(
-          `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,address.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,country.ilike.%${safeSearch}%`
-        );
-      }
-    }
+if (priceMin > PRICE_MIN) query = query.gte("price", priceMin);
+if (priceMax < PRICE_MAX) query = query.lte("price", priceMax);
 
-    const { data, error, count } = await query
-      .order("created_at", { ascending: false })
-      .range(from, to);
+if (areaMin > AREA_MIN) query = query.gte("area_m2", areaMin);
+if (areaMax < AREA_MAX) query = query.lte("area_m2", areaMax);
+
+if (bedroomsMin !== null) query = query.gte("bedrooms", bedroomsMin);
+if (bathroomsMin !== null) query = query.gte("bathrooms", bathroomsMin);
+
+if (debouncedSearch) {
+  const safeSearch = debouncedSearch.replace(/[%,]/g, " ").trim();
+
+  if (safeSearch) {
+    query = query.or(
+      `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,address.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,country.ilike.%${safeSearch}%`
+    );
+  }
+}
+
+if (sortBy === "price_asc") {
+  query = query.order("price", { ascending: true, nullsFirst: false });
+} else if (sortBy === "price_desc") {
+  query = query.order("price", { ascending: false, nullsFirst: false });
+} else {
+  query = query.order("created_at", { ascending: false });
+}
+
+const { data, error, count } = await query.range(from, to);
 
     if (error) {
       console.error("Supabase fetch projects error:", error);
@@ -461,7 +584,19 @@ useEffect(() => {
   };
 
   fetchProjects();
-}, [country, city, search, statusFilter, propertyType, page]);
+}, [
+  country,
+  city,
+  debouncedSearch,
+  statusFilter,
+  propertyType,
+  debouncedPriceRange,
+  debouncedAreaRange,
+  bedroomsMin,
+  bathroomsMin,
+  sortBy,
+  page,
+]);
   
   
   useEffect(() => {
@@ -517,68 +652,28 @@ useEffect(() => {
 
 
 
-const filteredProjects = useMemo(() => {
-  const isPriceFilterActive =
-    priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX;
 
-  const isAreaFilterActive =
-    areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX;
 
-  const filtered = projects.filter((p) => {
-    const price = p.price ?? null;
-    const area = p.area_m2 ?? p.areaM2 ?? null;
-    const beds = p.bedrooms ?? null;
-    const baths = p.bathrooms ?? null;
+const visibleProjects = projects;
 
-    if (isPriceFilterActive) {
-      if (price === null) return false;
-      if (price < priceRange[0] || price > priceRange[1]) return false;
-    }
 
-    if (isAreaFilterActive) {
-      if (area === null) return false;
-      if (area < areaRange[0] || area > areaRange[1]) return false;
-    }
 
-    if (bedroomsMin !== null && (beds === null || beds < bedroomsMin)) {
-      return false;
-    }
-
-    if (bathroomsMin !== null && (baths === null || baths < bathroomsMin)) {
-      return false;
-    }
-
-    return true;
-  });
-
-  return [...filtered].sort((a, b) => {
-    switch (sortBy) {
-      case "price_asc":
-        return (a.price ?? Infinity) - (b.price ?? Infinity);
-
-      case "price_desc":
-        return (b.price ?? -Infinity) - (a.price ?? -Infinity);
-
-      default:
-        return 0;
-    }
-  });
-}, [projects, priceRange, areaRange, bedroomsMin, bathroomsMin, sortBy]);
 
 
   // ── Clear all ─────────────────────────────────────────────────────────
-  const clearAllFilters = () => {
-    shouldScrollToTopRef.current = true;
-    setCountry("");
-    setCity("");
-    setSearch("");
-    setStatusFilter("");
-    setPropertyType("");
-    setPriceRange([PRICE_MIN, PRICE_MAX]);
-    setAreaRange([AREA_MIN, AREA_MAX]);
-    setBedroomsMin(null);
-    setBathroomsMin(null);
-  };
+const clearAllFilters = () => {
+  shouldScrollToTopRef.current = true;
+  setCountry("");
+  setCity("");
+  setSearch("");
+  setStatusFilter("");
+  setPropertyType("");
+  setPriceRange([PRICE_MIN, PRICE_MAX]);
+  setAreaRange([AREA_MIN, AREA_MAX]);
+  setBedroomsMin(null);
+  setBathroomsMin(null);
+  setSortBy("relevance");
+};
 
   // ── Pagination ────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -945,10 +1040,10 @@ const filteredProjects = useMemo(() => {
                     <div key={i} className="animate-pulse bg-card rounded-2xl h-[400px]" />
                   ))}
                 </div>
-              ) : filteredProjects.length > 0 ? (
+              ) : visibleProjects.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {filteredProjects.map((project) => (
+                    {visibleProjects.map((project) => (
                       <div
                         key={project.id}
                         id={`project-card-${project.id}`}
