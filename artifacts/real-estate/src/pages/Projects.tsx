@@ -186,6 +186,8 @@ const AREA_STEP = 5;
 
 
 const parseNumberParam = (value: string | null, fallback: number) => {
+  if (value === null || value === "") return fallback;
+
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
@@ -515,7 +517,7 @@ if (bedroomsMin !== null) query = query.gte("bedrooms", bedroomsMin);
 if (bathroomsMin !== null) query = query.gte("bathrooms", bathroomsMin);
 
 if (debouncedSearch) {
-  const safeSearch = debouncedSearch.replace(/[%,]/g, " ").trim();
+  const safeSearch = debouncedSearch.replace(/[%_,]/g, " ").trim();
 
   if (safeSearch) {
     query = query.or(
