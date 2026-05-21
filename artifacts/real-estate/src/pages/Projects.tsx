@@ -349,6 +349,11 @@ const initialProjectsCacheRef = useRef(
   readProjectsListCache(getCurrentProjectsCacheUrl())
 );
 
+const shouldSkipInitialCachedFetchRef = useRef(
+  !!initialProjectsCacheRef.current &&
+    sessionStorage.getItem(PROJECTS_RESTORE_SCROLL_KEY) === "1"
+);
+
 const [projects, setProjects] = useState<any[]>(
   () => initialProjectsCacheRef.current?.projects ?? []
 );
@@ -560,7 +565,13 @@ useEffect(() => {
 
   // ── Fetch projects from Supabase (server-side filters) ────────────────
   
-  useEffect(() => {
+useEffect(() => {
+  if (shouldSkipInitialCachedFetchRef.current) {
+    shouldSkipInitialCachedFetchRef.current = false;
+    setIsLoading(false);
+    return;
+  }
+
 const fetchProjects = async () => {
   const cachedList = readProjectsListCache(currentProjectsUrl);
   const hasCachedList = !!cachedList && cachedList.projects.length > 0;
