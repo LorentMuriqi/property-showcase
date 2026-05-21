@@ -358,6 +358,14 @@ const [projects, setProjects] = useState<any[]>(
   () => initialProjectsCacheRef.current?.projects ?? []
 );
 
+const projectsRef = useRef<any[]>(
+  initialProjectsCacheRef.current?.projects ?? []
+);
+
+useEffect(() => {
+  projectsRef.current = projects;
+}, [projects]);
+
 const [countries, setCountries] = useState<string[]>([]);
 const [cities, setCities] = useState<string[]>([]);
 
@@ -441,8 +449,8 @@ const currentProjectsUrl = buildProjectsUrl(
   search,
   statusFilter,
   propertyType,
-  priceRange,
-  areaRange,
+  debouncedPriceRange,
+  debouncedAreaRange,
   bedroomsMin,
   bathroomsMin,
   sortBy
@@ -541,11 +549,21 @@ useEffect(() => {
   search,
   statusFilter,
   propertyType,
-  priceRange,
-  areaRange,
   bedroomsMin,
   bathroomsMin,
   sortBy,
+]);
+
+useEffect(() => {
+  if (!didInitRef.current) return;
+
+  // Për çmim dhe sipërfaqe nuk duam ta çojmë përdoruesin lart.
+  // Vetëm e kthejmë pagination në faqen e parë.
+  shouldScrollToTopRef.current = false;
+  setPage(1);
+}, [
+  debouncedPriceRange,
+  debouncedAreaRange,
 ]);
 
 useEffect(() => {
@@ -576,9 +594,9 @@ const fetchProjects = async () => {
   const cachedList = readProjectsListCache(currentProjectsUrl);
   const hasCachedList = !!cachedList && cachedList.projects.length > 0;
 
-  if (!hasCachedList) {
-    setIsLoading(true);
-  }
+if (!hasCachedList && projectsRef.current.length === 0) {
+  setIsLoading(true);
+}
 
   const nowIso = new Date().toISOString();
     const from = (page - 1) * pageSize;
