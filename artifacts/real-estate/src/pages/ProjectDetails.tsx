@@ -148,11 +148,13 @@ export default function ProjectDetails() {
 
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
-  const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: true });
+const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
 const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 const lightboxStartIndexRef = useRef(0);
+const [canLightboxPrev, setCanLightboxPrev] = useState(false);
+const [canLightboxNext, setCanLightboxNext] = useState(false);
 const [showContactModal, setShowContactModal] = useState(false);
 
   useEffect(() => {
@@ -205,13 +207,13 @@ const closeLightbox = () => setLightboxIndex(null);
   
 
 const lightboxPrev = useCallback(() => {
-  if (!images.length) return;
-  lightboxApi?.scrollPrev();
+  if (!images.length || !lightboxApi || !lightboxApi.canScrollPrev()) return;
+  lightboxApi.scrollPrev();
 }, [lightboxApi, images.length]);
 
 const lightboxNext = useCallback(() => {
-  if (!images.length) return;
-  lightboxApi?.scrollNext();
+  if (!images.length || !lightboxApi || !lightboxApi.canScrollNext()) return;
+  lightboxApi.scrollNext();
 }, [lightboxApi, images.length]);
 
   useEffect(() => {
@@ -310,14 +312,20 @@ useEffect(() => {
 useEffect(() => {
   if (!lightboxApi) return;
 
-  const onSelect = () => {
+  const updateLightboxState = () => {
     setLightboxIndex(lightboxApi.selectedScrollSnap());
+    setCanLightboxPrev(lightboxApi.canScrollPrev());
+    setCanLightboxNext(lightboxApi.canScrollNext());
   };
 
-  lightboxApi.on("select", onSelect);
+  updateLightboxState();
+
+  lightboxApi.on("select", updateLightboxState);
+  lightboxApi.on("reInit", updateLightboxState);
 
   return () => {
-    lightboxApi.off("select", onSelect);
+    lightboxApi.off("select", updateLightboxState);
+    lightboxApi.off("reInit", updateLightboxState);
   };
 }, [lightboxApi]);
 
@@ -875,7 +883,13 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
     e.stopPropagation();
     lightboxPrev();
   }}
-  className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 hover:border-white/20 group"
+  disabled={!canLightboxPrev}
+  aria-disabled={!canLightboxPrev}
+  className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
+    canLightboxPrev
+      ? "hover:bg-white/20 hover:border-white/20"
+      : "opacity-30 cursor-not-allowed"
+  }`}
 >
   <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
 </button>
@@ -884,7 +898,13 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
     e.stopPropagation();
     lightboxNext();
   }}
-  className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 hover:border-white/20 group"
+  disabled={!canLightboxNext}
+  aria-disabled={!canLightboxNext}
+  className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
+    canLightboxNext
+      ? "hover:bg-white/20 hover:border-white/20"
+      : "opacity-30 cursor-not-allowed"
+  }`}
 >
   <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
 </button>
