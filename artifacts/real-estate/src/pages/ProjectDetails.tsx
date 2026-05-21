@@ -1,5 +1,5 @@
 import PropertyVirtualTourViewer from "@/components/PropertyVirtualTourViewer";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
 import {
@@ -151,8 +151,9 @@ export default function ProjectDetails() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [showContactModal, setShowContactModal] = useState(false);
+const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+const lightboxStartIndexRef = useRef(0);
+const [showContactModal, setShowContactModal] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -172,8 +173,12 @@ export default function ProjectDetails() {
     if (emblaApi) emblaApi.scrollNext();
   }, [emblaApi]);
 
-  const openLightbox = (idx: number) => setLightboxIndex(idx);
-  const closeLightbox = () => setLightboxIndex(null);
+const openLightbox = (idx: number) => {
+  lightboxStartIndexRef.current = idx;
+  setLightboxIndex(idx);
+};
+
+const closeLightbox = () => setLightboxIndex(null);
 
   const images = project?.images || [];
   
@@ -183,6 +188,21 @@ export default function ProjectDetails() {
   img?.thumbUrl ||
   img?.thumb_url ||
   img?.url;
+  
+  const getLightboxImageUrl = (img: any, idx: number) => {
+  if (lightboxIndex === null || images.length === 0) {
+    return getImagePreviewUrl(img);
+  }
+
+  const prevIndex = (lightboxIndex - 1 + images.length) % images.length;
+  const nextIndex = (lightboxIndex + 1) % images.length;
+
+  const shouldLoadFullImage =
+    idx === lightboxIndex || idx === prevIndex || idx === nextIndex;
+
+  return shouldLoadFullImage ? img.url : getImagePreviewUrl(img);
+};
+  
 
 const lightboxPrev = useCallback(() => {
   if (!images.length) return;
@@ -301,14 +321,16 @@ useEffect(() => {
   };
 }, [lightboxApi]);
 
+const isLightboxOpen = lightboxIndex !== null;
+
 useEffect(() => {
-  if (lightboxIndex === null || !lightboxApi) return;
+  if (!isLightboxOpen || !lightboxApi) return;
 
   requestAnimationFrame(() => {
     lightboxApi.reInit();
-    lightboxApi.scrollTo(lightboxIndex, true);
+    lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
   });
-}, [lightboxIndex, lightboxApi]);
+}, [isLightboxOpen, lightboxApi]);
 
   if (isLoading) {
     return (
@@ -811,7 +833,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
           </div>
 
 <div
-  className="w-full h-full overflow-hidden"
+  className="w-full h-full overflow-hidden touch-pan-y"
   ref={lightboxRef}
   onClick={(e) => e.stopPropagation()}
 >
@@ -822,9 +844,16 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
         className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
       >
 <img
-  src={idx === lightboxIndex ? img.url : getImagePreviewUrl(img)}
+  src={getLightboxImageUrl(img, idx)}
   alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-  loading={idx === lightboxIndex ? "eager" : "lazy"}
+  loading={
+    lightboxIndex !== null &&
+    (idx === lightboxIndex ||
+      idx === (lightboxIndex - 1 + images.length) % images.length ||
+      idx === (lightboxIndex + 1) % images.length)
+      ? "eager"
+      : "lazy"
+  }
   decoding="async"
   className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
 />
