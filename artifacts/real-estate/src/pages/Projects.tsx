@@ -538,33 +538,28 @@ requestAnimationFrame(() => {
 
   // ── Reset page on server-filter change ────────────────────────────────
 
+
 useEffect(() => {
   if (!didInitRef.current) return;
 
-  shouldScrollToTopRef.current = true;
+  // Kur ndryshon filtër, mos e çoj përdoruesin në fillim.
+  // Vetëm kthe pagination në faqen e parë që rezultatet të jenë korrekte.
+  shouldScrollToTopRef.current = false;
   setPage(1);
 }, [
   country,
   city,
-  search,
+  debouncedSearch,
   statusFilter,
   propertyType,
+  debouncedPriceRange,
+  debouncedAreaRange,
   bedroomsMin,
   bathroomsMin,
   sortBy,
 ]);
 
-useEffect(() => {
-  if (!didInitRef.current) return;
 
-  // Për çmim dhe sipërfaqe nuk duam ta çojmë përdoruesin lart.
-  // Vetëm e kthejmë pagination në faqen e parë.
-  shouldScrollToTopRef.current = false;
-  setPage(1);
-}, [
-  debouncedPriceRange,
-  debouncedAreaRange,
-]);
 
 useEffect(() => {
   didInitRef.current = true;
@@ -829,7 +824,7 @@ const visibleProjects = projects;
 
   // ── Clear all ─────────────────────────────────────────────────────────
 const clearAllFilters = () => {
-  shouldScrollToTopRef.current = true;
+  shouldScrollToTopRef.current = false;
   setCountry("");
   setCity("");
   setSearch("");
@@ -950,10 +945,9 @@ const clearAllFilters = () => {
             placeholder="Fjalë kyçe, adresë..."
             className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
             value={search}
-            onChange={(e) => {
-              shouldScrollToTopRef.current = true;
-              setSearch(e.target.value);
-            }}
+onChange={(e) => {
+  setSearch(e.target.value);
+}}
           />
         </div>
       </FilterSection>
@@ -966,7 +960,7 @@ const clearAllFilters = () => {
               key={opt.value}
               type="button"
               onClick={() => {
-                shouldScrollToTopRef.current = true;
+                
                 setStatusFilter(statusFilter === opt.value ? "" : opt.value);
               }}
               className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-all ${
@@ -987,7 +981,7 @@ const clearAllFilters = () => {
     className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
     value={propertyType}
     onChange={(e) => {
-      shouldScrollToTopRef.current = true;
+      
       setPropertyType(e.target.value);
     }}
   >
@@ -1007,7 +1001,7 @@ const clearAllFilters = () => {
             className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
             value={country}
             onChange={(e) => {
-              shouldScrollToTopRef.current = true;
+              
               setCountry(e.target.value);
               setCity("");
             }}
@@ -1024,7 +1018,7 @@ const clearAllFilters = () => {
             }`}
             value={city}
             onChange={(e) => {
-              shouldScrollToTopRef.current = true;
+              
               setCity(e.target.value);
             }}
             disabled={!country}
