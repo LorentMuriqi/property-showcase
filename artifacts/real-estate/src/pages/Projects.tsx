@@ -12,6 +12,56 @@ const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
 const PROJECTS_ACTIVE_CARD_ID_KEY = "projects-active-card-id";
 const PROJECTS_ACTIVE_CARD_TOP_KEY = "projects-active-card-top";
 
+const PROJECTS_LIST_CACHE_KEY = "projects-list-cache-v1";
+const PROJECTS_LIST_CACHE_TTL = 5 * 60 * 1000;
+
+type ProjectsListCache = {
+  url: string;
+  projects: any[];
+  totalCount: number;
+  savedAt: number;
+};
+
+const getCurrentProjectsCacheUrl = () => {
+  return `${window.location.pathname}${window.location.search}`;
+};
+
+const readProjectsListCache = (url: string): ProjectsListCache | null => {
+  try {
+    const raw = sessionStorage.getItem(PROJECTS_LIST_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as ProjectsListCache;
+
+    if (!parsed || parsed.url !== url) return null;
+    if (!Array.isArray(parsed.projects)) return null;
+    if (Date.now() - parsed.savedAt > PROJECTS_LIST_CACHE_TTL) return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeProjectsListCache = (
+  url: string,
+  projects: any[],
+  totalCount: number
+) => {
+  try {
+    const payload: ProjectsListCache = {
+      url,
+      projects,
+      totalCount,
+      savedAt: Date.now(),
+    };
+
+    sessionStorage.setItem(PROJECTS_LIST_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Nëse browser-i nuk lejon sessionStorage ose është full, thjesht vazhdo normalisht.
+  }
+};
+
 const clearProjectsRestoreState = () => {
   sessionStorage.removeItem(PROJECTS_SCROLL_Y_KEY);
   sessionStorage.removeItem(PROJECTS_RETURN_URL_KEY);
@@ -256,12 +306,25 @@ const debouncedAreaRange = useDebouncedValue(areaRange, 350);
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || "1") || 1));
 
-  // ── Data state ────────────────────────────────────────────────────────
-  const [projects, setProjects] = useState<any[]>([]);
-  const [countries, setCountries] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
+// ── Data state ────────────────────────────────────────────────────────
+const initialProjectsCacheRef = useRef(
+  readProjectsListCache(getCurrentProjectsCacheUrl())
+);
+
+const [projects, setProjects] = useState<any[]>(
+  () => initialProjectsCacheRef.current?.projects ?? []
+);
+
+const [countries, setCountries] = useState<string[]>([]);
+const [cities, setCities] = useState<string[]>([]);
+
+const [isLoading, setIsLoading] = useState(
+  () => !initialProjectsCacheRef.current
+);
+
+const [totalCount, setTotalCount] = useState(
+  () => initialProjectsCacheRef.current?.totalCount ?? 0
+);
 
   const pageTopRef = useRef<HTMLDivElement | null>(null);
   const shouldRestoreScrollRef = useRef(false);
@@ -460,10 +523,15 @@ useEffect(() => {
   // ── Fetch projects from Supabase (server-side filters) ────────────────
   
   useEffect(() => {
-  const fetchProjects = async () => {
-    setIsLoading(true);
+const fetchProjects = async () => {
+  const cachedList = readProjectsListCache(currentProjectsUrl);
+  const hasCachedList = !!cachedList && cachedList.projects.length > 0;
 
-    const nowIso = new Date().toISOString();
+  if (!hasCachedList) {
+    setIsLoading(true);
+  }
+
+  const nowIso = new Date().toISOString();
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
@@ -536,13 +604,22 @@ if (sortBy === "price_asc") {
 
 const { data, error, count } = await query.range(from, to);
 
-    if (error) {
-      console.error("Supabase fetch projects error:", error);
-      setProjects([]);
-      setTotalCount(0);
-      setIsLoading(false);
-      return;
-    }
+if (error) {
+  console.error("Supabase fetch projects error:", error);
+
+  const cachedList = readProjectsListCache(currentProjectsUrl);
+
+  if (cachedList) {
+    setProjects(cachedList.projects);
+    setTotalCount(cachedList.totalCount);
+  } else {
+    setProjects([]);
+    setTotalCount(0);
+  }
+
+  setIsLoading(false);
+  return;
+}
 
     const rows = data || [];
     const propertyIds = rows.map((item) => item.id);
@@ -580,9 +657,16 @@ const { data, error, count } = await query.range(from, to);
       };
     });
 
-    setProjects(rowsWithVirtualTour);
-    setTotalCount(count || 0);
-    setIsLoading(false);
+setProjects(rowsWithVirtualTour);
+setTotalCount(count || 0);
+
+writeProjectsListCache(
+  currentProjectsUrl,
+  rowsWithVirtualTour,
+  count || 0
+);
+
+setIsLoading(false);
   };
 
   fetchProjects();
