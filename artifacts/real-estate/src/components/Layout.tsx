@@ -134,29 +134,29 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
 
       <main className="flex-grow w-full flex flex-col">{children}</main>
 
-      <footer className="bg-[#060913] border-t border-white/5 pt-20 pb-10 mt-auto w-full">
+      <footer className="bg-[#060913] border-t border-white/10 pt-20 pb-10 mt-auto w-full">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-2">
 <span className="font-display text-2xl font-bold tracking-wider text-white mb-6 block">
   AURA
-  <span className="font-sans font-light text-muted-foreground ml-2 text-sm tracking-widest uppercase">
+  <span className="font-sans font-light text-white/55 ml-2 text-sm tracking-widest uppercase">
     Estates
   </span>
 </span>
-              <p className="text-muted-foreground leading-relaxed max-w-md mb-8">
+              <p className="text-white/65 leading-relaxed max-w-md mb-8">
                 Ne përzgjedhim dhe prezantojmë prona përmes tureve virtuale dhe një qasjeje moderne, ofrojmë një eksperiencë të qartë dhe profesionale për klientët tanë.
               </p>
               <div className="flex gap-4">
                 <a
                   href="#"
-                  className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
+                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/55 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
                 >
                   <Instagram size={18} />
                 </a>
                 <a
                   href="#"
-                  className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
+                 className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/55 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
                 >
                   <Facebook size={18} />
                 </a>
@@ -165,7 +165,7 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
 
             <div>
               <h4 className="font-display text-lg text-white mb-6">Kontakt</h4>
-              <ul className="space-y-4 text-muted-foreground">
+              <ul className="space-y-4 text-white/65">
                 <li className="flex items-start gap-3">
                   <MapPin size={18} className="text-primary mt-1 shrink-0" />
                   <span>Pejë<br />Kosovë</span>
@@ -187,10 +187,10 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
                   .filter((l) => !["Paneli Administrativ"].includes(l.name))
                   .map((link) => (
                     <li key={link.href}>
-                      <Link
-                        href={link.href}
-                        className="text-muted-foreground hover:text-primary transition-colors"
-                      >
+<Link
+  href={link.href}
+  className="text-white/60 hover:text-primary transition-colors"
+>
                         {link.name}
                       </Link>
                     </li>
@@ -199,13 +199,19 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
             </div>
           </div>
 
-          <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between text-sm text-muted-foreground/60">
-            <p>&copy; {new Date().getFullYear()} Aura Estates. Të gjitha të drejtat e rezervuara.</p>
-            <div className="flex gap-6 mt-4 md:mt-0">
-              <a href="#" className="hover:text-white transition-colors">Politika e Privatësisë</a>
-              <a href="#" className="hover:text-white transition-colors">Kushtet e Shërbimit</a>
-            </div>
-          </div>
+<div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between text-sm">
+  <p className="text-white/65">
+    &copy; {new Date().getFullYear()} Aura Estates. Të gjitha të drejtat e rezervuara.
+  </p>
+  <div className="flex gap-6 mt-4 md:mt-0">
+    <a href="#" className="text-white/55 hover:text-primary transition-colors">
+      Politika e Privatësisë
+    </a>
+    <a href="#" className="text-white/55 hover:text-primary transition-colors">
+      Kushtet e Shërbimit
+    </a>
+  </div>
+</div>
         </div>
       </footer>
     </div>
