@@ -11,6 +11,8 @@ const Projects = lazy(() => import("@/pages/Projects"));
 const ProjectDetails = lazy(() => import("@/pages/ProjectDetails"));
 const About = lazy(() => import("@/pages/About"));
 const Contact = lazy(() => import("@/pages/Contact"));
+const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("@/pages/TermsOfService"));
 
 const AdminLogin = lazy(() => import("@/pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
@@ -52,6 +54,8 @@ function Router() {
         <Route path="/projects/:id" component={ProjectDetails} />
         <Route path="/about" component={About} />
         <Route path="/contact" component={Contact} />
+<Route path="/politika-e-privatesise" component={PrivacyPolicy} />
+<Route path="/kushtet-e-sherbimit" component={TermsOfService} />
 
         {/* Admin Routes */}
         <Route path="/admin/login" component={AdminLogin} />

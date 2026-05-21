@@ -217,19 +217,19 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
       </p>
 
       <div className="flex gap-6 mt-4 md:mt-0">
-        <a
-          href="#"
-          className="text-white/75 hover:text-primary transition-colors"
-        >
-          Politika e Privatësisë
-        </a>
+<Link
+  href="/politika-e-privatesise"
+  className="text-white/75 hover:text-primary transition-colors"
+>
+  Politika e Privatësisë
+</Link>
 
-        <a
-          href="#"
-          className="text-white/75 hover:text-primary transition-colors"
-        >
-          Kushtet e Shërbimit
-        </a>
+<Link
+  href="/kushtet-e-sherbimit"
+  className="text-white/75 hover:text-primary transition-colors"
+>
+  Kushtet e Shërbimit
+</Link>
       </div>
     </div>
   </div>
