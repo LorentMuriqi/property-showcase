@@ -134,86 +134,109 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
 
       <main className="flex-grow w-full flex flex-col">{children}</main>
 
-      <footer className="bg-[#060913] border-t border-white/10 pt-20 pb-10 mt-auto w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-            <div className="col-span-1 md:col-span-2">
-<span className="font-display text-2xl font-bold tracking-wider text-white mb-6 block">
-  AURA
-  <span className="font-sans font-light text-white/55 ml-2 text-sm tracking-widest uppercase">
-    Estates
-  </span>
-</span>
-              <p className="text-white/65 leading-relaxed max-w-md mb-8">
-                Ne përzgjedhim dhe prezantojmë prona përmes tureve virtuale dhe një qasjeje moderne, ofrojmë një eksperiencë të qartë dhe profesionale për klientët tanë.
-              </p>
-              <div className="flex gap-4">
-                <a
-                  href="#"
-                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/55 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
-                >
-                  <Instagram size={18} />
-                </a>
-                <a
-                  href="#"
-                 className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/55 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
-                >
-                  <Facebook size={18} />
-                </a>
-              </div>
-            </div>
 
-            <div>
-              <h4 className="font-display text-lg text-white mb-6">Kontakt</h4>
-              <ul className="space-y-4 text-white/65">
-                <li className="flex items-start gap-3">
-                  <MapPin size={18} className="text-primary mt-1 shrink-0" />
-                  <span>Pejë<br />Kosovë</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <Phone size={18} className="text-primary shrink-0" />
-                  <span>+383 49 123 456</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <Mail size={18} className="text-primary shrink-0" />
-                  <span>info@auraks.com</span>
-                </li>
-              </ul>
-            </div>
 
-            <div>
-              <ul className="space-y-3 pt-[54px]">
-                {navLinks
-                  .filter((l) => !["Paneli Administrativ"].includes(l.name))
-                  .map((link) => (
-                    <li key={link.href}>
-<Link
-  href={link.href}
-  className="text-white/60 hover:text-primary transition-colors"
->
-                        {link.name}
-                      </Link>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          </div>
+<footer className="bg-[#060913] border-t border-white/15 pt-20 pb-10 mt-auto w-full">
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+      <div className="col-span-1 md:col-span-2">
+        <span className="font-display text-2xl font-bold tracking-wider text-white mb-6 block">
+          AURA
+          <span className="font-sans font-light text-white/80 ml-2 text-sm tracking-widest uppercase">
+            Estates
+          </span>
+        </span>
 
-<div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between text-sm">
-  <p className="text-white/65">
-    &copy; {new Date().getFullYear()} Aura Estates. Të gjitha të drejtat e rezervuara.
-  </p>
-  <div className="flex gap-6 mt-4 md:mt-0">
-    <a href="#" className="text-white/55 hover:text-primary transition-colors">
-      Politika e Privatësisë
-    </a>
-    <a href="#" className="text-white/55 hover:text-primary transition-colors">
-      Kushtet e Shërbimit
-    </a>
-  </div>
-</div>
+        <p className="text-white/85 leading-relaxed max-w-md mb-8">
+          Ne përzgjedhim dhe prezantojmë prona përmes tureve virtuale dhe një qasjeje moderne, ofrojmë një eksperiencë të qartë dhe profesionale për klientët tanë.
+        </p>
+
+        <div className="flex gap-4">
+          <a
+            href="#"
+            className="w-10 h-10 rounded-full border border-white/25 flex items-center justify-center text-white/80 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
+          >
+            <Instagram size={18} />
+          </a>
+
+          <a
+            href="#"
+            className="w-10 h-10 rounded-full border border-white/25 flex items-center justify-center text-white/80 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
+          >
+            <Facebook size={18} />
+          </a>
         </div>
-      </footer>
+      </div>
+
+      <div>
+        <h4 className="font-display text-lg text-white mb-6">Kontakt</h4>
+
+        <ul className="space-y-4 text-white/85">
+          <li className="flex items-start gap-3">
+            <MapPin size={18} className="text-primary mt-1 shrink-0" />
+            <span>
+              Pejë
+              <br />
+              Kosovë
+            </span>
+          </li>
+
+          <li className="flex items-center gap-3">
+            <Phone size={18} className="text-primary shrink-0" />
+            <span>+383 49 123 456</span>
+          </li>
+
+          <li className="flex items-center gap-3">
+            <Mail size={18} className="text-primary shrink-0" />
+            <span>info@auraks.com</span>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <ul className="space-y-3 pt-[54px]">
+          {navLinks
+            .filter((l) => !["Paneli Administrativ"].includes(l.name))
+            .map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className="text-white/80 hover:text-primary transition-colors"
+                >
+                  {link.name}
+                </Link>
+              </li>
+            ))}
+        </ul>
+      </div>
+    </div>
+
+    <div className="border-t border-white/15 pt-8 flex flex-col md:flex-row items-center justify-between text-sm">
+      <p className="text-white/90 font-medium">
+        &copy; {new Date().getFullYear()} Aura Estates. Të gjitha të drejtat e rezervuara.
+      </p>
+
+      <div className="flex gap-6 mt-4 md:mt-0">
+        <a
+          href="#"
+          className="text-white/75 hover:text-primary transition-colors"
+        >
+          Politika e Privatësisë
+        </a>
+
+        <a
+          href="#"
+          className="text-white/75 hover:text-primary transition-colors"
+        >
+          Kushtet e Shërbimit
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+
+
     </div>
   );
 }
