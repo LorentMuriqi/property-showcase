@@ -62,6 +62,44 @@ const writeProjectsListCache = (
   }
 };
 
+const getProjectListSignature = (projects: any[]) => {
+  return projects
+    .map((project) => {
+      const primaryImage =
+        project.images?.find((img: any) => img.isPrimary) ||
+        project.images?.[0];
+
+      const primaryImageUrl =
+        primaryImage?.thumbnailUrl ||
+        primaryImage?.thumbnail_url ||
+        primaryImage?.thumbUrl ||
+        primaryImage?.thumb_url ||
+        primaryImage?.url ||
+        "";
+
+      return [
+        project.id,
+        project.title,
+        project.price,
+        project.status,
+        project.property_type,
+        project.city,
+        project.country,
+        project.area_m2,
+        project.bedrooms,
+        project.bathrooms,
+        primaryImageUrl,
+        project.hasVirtualTour ? "tour" : "no-tour",
+      ].join("|");
+    })
+    .join("||");
+};
+
+const areProjectListsVisuallySame = (a: any[], b: any[]) => {
+  if (a.length !== b.length) return false;
+  return getProjectListSignature(a) === getProjectListSignature(b);
+};
+
 const clearProjectsRestoreState = () => {
   sessionStorage.removeItem(PROJECTS_SCROLL_Y_KEY);
   sessionStorage.removeItem(PROJECTS_RETURN_URL_KEY);
@@ -657,7 +695,21 @@ if (error) {
       };
     });
 
-setProjects(rowsWithVirtualTour);
+setProjects((currentProjects) => {
+  const nextTotalCount = count || 0;
+
+  const shouldKeepCurrentProjects =
+    currentProjects.length > 0 &&
+    totalCount === nextTotalCount &&
+    areProjectListsVisuallySame(currentProjects, rowsWithVirtualTour);
+
+  if (shouldKeepCurrentProjects) {
+    return currentProjects;
+  }
+
+  return rowsWithVirtualTour;
+});
+
 setTotalCount(count || 0);
 
 writeProjectsListCache(
