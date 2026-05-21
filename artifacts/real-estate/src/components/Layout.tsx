@@ -175,21 +175,31 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
           <li className="flex items-start gap-3">
             <MapPin size={18} className="text-primary mt-1 shrink-0" />
             <span>
-              Pejë
-              <br />
               Kosovë
             </span>
           </li>
 
-          <li className="flex items-center gap-3">
-            <Phone size={18} className="text-primary shrink-0" />
-            <span>+383 49 123 456</span>
-          </li>
+<li className="flex items-center gap-3">
+  <Phone size={18} className="text-primary shrink-0" />
+  <a
+    href="tel:+38349123456"
+    className="hover:text-primary transition-colors"
+    aria-label="Telefono Aura Estates"
+  >
+    +383 49 123 456
+  </a>
+</li>
 
-          <li className="flex items-center gap-3">
-            <Mail size={18} className="text-primary shrink-0" />
-            <span>info@auraks.com</span>
-          </li>
+<li className="flex items-center gap-3">
+  <Mail size={18} className="text-primary shrink-0" />
+  <a
+    href="mailto:info@auraks.com"
+    className="hover:text-primary transition-colors"
+    aria-label="Dërgo email te Aura Estates"
+  >
+    info@auraks.com
+  </a>
+</li>
         </ul>
       </div>
 
