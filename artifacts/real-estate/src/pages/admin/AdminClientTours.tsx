@@ -24,6 +24,25 @@ function getComputedStatus(tour: ClientTour) {
   return tour.status;
 }
 
+function getStatusConfirmationMessage(
+  tour: ClientTour,
+  status: ClientTour["status"]
+) {
+  if (status === "active") {
+    return `A dëshironi ta aktivizoni virtual tour-in "${tour.title}"?\n\nPas aktivizimit, linku publik do të jetë i qasshëm për klientin.`;
+  }
+
+  if (status === "paused") {
+    return `A dëshironi ta pezulloni virtual tour-in "${tour.title}"?\n\nPas pezullimit, linku publik nuk do të jetë aktiv derisa ta aktivizoni përsëri.`;
+  }
+
+  if (status === "draft") {
+    return `A dëshironi ta ktheni virtual tour-in "${tour.title}" në Draft?\n\nPas kthimit në Draft, turi nuk do të jetë aktiv për klientin.`;
+  }
+
+  return `A dëshironi ta ndryshoni statusin e virtual tour-it "${tour.title}"?`;
+}
+
 export default function AdminClientTours() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -103,28 +122,64 @@ export default function AdminClientTours() {
     setLocation(`/admin/client-tours/${data.id}/virtual-tour`);
   };
 
+  
   const updateStatus = async (tour: ClientTour, status: ClientTour["status"]) => {
-    const { error } = await supabase
-      .from("virtual_tours")
-      .update({
-        status,
-        paused_at: status === "paused" ? new Date().toISOString() : null,
-        activated_at: status === "active" ? new Date().toISOString() : undefined,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tour.id);
+  const confirmed = window.confirm(getStatusConfirmationMessage(tour, status));
 
-    if (error) {
-      toast({
-        title: "Gabim",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
+  if (!confirmed) return;
 
-    fetchTours();
+  const nowIso = new Date().toISOString();
+
+  const payload: Partial<{
+    status: ClientTour["status"];
+    paused_at: string | null;
+    activated_at: string | null;
+    updated_at: string;
+  }> = {
+    status,
+    updated_at: nowIso,
   };
+
+  if (status === "paused") {
+    payload.paused_at = nowIso;
+  }
+
+  if (status === "active") {
+    payload.activated_at = nowIso;
+    payload.paused_at = null;
+  }
+
+  if (status === "draft") {
+    payload.paused_at = null;
+  }
+
+  const { error } = await supabase
+    .from("virtual_tours")
+    .update(payload)
+    .eq("id", tour.id);
+
+  if (error) {
+    toast({
+      title: "Gabim",
+      description: error.message,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  toast({
+    title: "Sukses",
+    description:
+      status === "active"
+        ? "Virtual tour u aktivizua."
+        : status === "paused"
+          ? "Virtual tour u pezullua."
+          : "Virtual tour u kthye në Draft.",
+  });
+
+  fetchTours();
+};
+  
 
   const deleteTour = async (tour: ClientTour) => {
     if (!confirm(`A dëshironi ta fshini "${tour.title}"?`)) return;
