@@ -64,8 +64,22 @@ export default function AdminClientTours() {
     }
   }, [authLoading, isAdmin, permissions, setLocation]);
 
-  const fetchTours = async () => {
-    setIsLoading(true);
+const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
+  const savedScrollY = options?.preserveScroll ? window.scrollY : null;
+
+  if (!options?.silent) {
+    setIsLoading(false);
+
+if (savedScrollY !== null) {
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: savedScrollY,
+      left: 0,
+      behavior: "auto",
+    });
+  });
+}
+  }
 
     const { data, error } = await supabase
       .from("virtual_tours")
@@ -177,7 +191,7 @@ export default function AdminClientTours() {
           : "Virtual tour u kthye në Draft.",
   });
 
-  fetchTours();
+  fetchTours({ silent: true, preserveScroll: true });
 };
   
 
@@ -195,7 +209,7 @@ export default function AdminClientTours() {
       return;
     }
 
-    fetchTours();
+    fetchTours({ silent: true, preserveScroll: true });
   };
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";

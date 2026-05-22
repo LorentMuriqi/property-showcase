@@ -44,6 +44,21 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionId, setActionId] = useState<string | number | null>(null);
+  
+  const preserveAdminScroll = (callback?: () => void) => {
+  const currentScrollY = window.scrollY;
+
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: currentScrollY,
+      left: 0,
+      behavior: "auto",
+    });
+
+    callback?.();
+  });
+};
+  
   const [sortMode, setSortMode] = useState<SortMode>("default");
   const [statusFilters, setStatusFilters] = useState<AdminListingStatus[]>([]);
   const [virtualTourFilters, setVirtualTourFilters] = useState<VirtualTourStatusFilter[]>([]);
@@ -58,10 +73,15 @@ const [countryFilter, setCountryFilter] = useState("");
     }
   }, [authLoading, isAdmin, setLocation]);
 
-  const fetchProjects = async () => {
-    if (authLoading || !isAdmin) return;
+const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
+  if (authLoading || !isAdmin) return;
 
+  const shouldPreserveScroll = options?.preserveScroll === true;
+  const savedScrollY = shouldPreserveScroll ? window.scrollY : null;
+
+  if (!options?.silent) {
     setIsLoading(true);
+  }
 
     const { data, error } = await supabase
       .from("properties")
@@ -113,6 +133,16 @@ const [countryFilter, setCountryFilter] = useState("");
     }
 
     setIsLoading(false);
+
+if (savedScrollY !== null) {
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: savedScrollY,
+      left: 0,
+      behavior: "auto",
+    });
+  });
+}
   };
 
   useEffect(() => {
@@ -180,6 +210,7 @@ const [countryFilter, setCountryFilter] = useState("");
       if (propertyDeleteError) throw propertyDeleteError;
 
       setProjects((prev) => prev.filter((project) => project.id !== id));
+	  preserveAdminScroll();
 
       toast({
         title: "Projekti u Fshi",
@@ -219,7 +250,7 @@ const [countryFilter, setCountryFilter] = useState("");
         description: "Projekti u pezullua.",
       });
 
-      await fetchProjects();
+      await fetchProjects({ silent: true, preserveScroll: true });
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -254,7 +285,7 @@ const [countryFilter, setCountryFilter] = useState("");
         description: "Projekti u skadua.",
       });
 
-      await fetchProjects();
+      await fetchProjects({ silent: true, preserveScroll: true });
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -295,7 +326,7 @@ const [countryFilter, setCountryFilter] = useState("");
         description: "Projekti u riaktivizua.",
       });
 
-      await fetchProjects();
+      await fetchProjects({ silent: true, preserveScroll: true });
     } catch (error: any) {
       toast({
         title: "Gabim",
