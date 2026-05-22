@@ -1557,7 +1557,14 @@ setViewerError(
   }, 900);
 });
 } catch (error) {
-  console.error("Viewer init error:", error);
+  console.error("Viewer/editor setup error:", error);
+
+  // Nëse viewer-i është krijuar dhe panorama po shfaqet,
+  // mos shfaq error të kuq vetëm për shkak të markerave/pluginave.
+  if (viewer || editorViewerRef.current) {
+    return;
+  }
+
   setViewerError(
     `Fotoja 360°${
       selectedSceneDisplayNumber ? ` #${selectedSceneDisplayNumber}` : ""
