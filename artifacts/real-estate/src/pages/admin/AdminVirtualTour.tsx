@@ -244,6 +244,20 @@ export default function AdminVirtualTour() {
     if (selectedSceneId === null) return null;
     return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
   }, [scenes, selectedSceneId]);
+  
+  const selectedSceneDisplayNumber = useMemo(() => {
+  if (!selectedScene) return null;
+
+  const sortedScenes = scenes
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  const index = sortedScenes.findIndex(
+    (scene) => Number(scene.id) === Number(selectedScene.id)
+  );
+
+  return index >= 0 ? index + 1 : null;
+}, [scenes, selectedScene]);
 
   const [viewerError, setViewerError] = useState("");
   const [isPlacementMode, setIsPlacementMode] = useState(false);
@@ -268,10 +282,11 @@ export default function AdminVirtualTour() {
   const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] =
     useState(false);
 
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const previewContainerRef = useRef<HTMLDivElement>(null);
-  const editorViewerRef = useRef<Viewer | null>(null);
-  const previewViewerRef = useRef<Viewer | null>(null);
+const editorContainerRef = useRef<HTMLDivElement>(null);
+const previewContainerRef = useRef<HTMLDivElement>(null);
+const editorViewerRef = useRef<Viewer | null>(null);
+const previewViewerRef = useRef<Viewer | null>(null);
+const editorViewerLoadIdRef = useRef(0);
 
   const todayInputValue = useMemo(() => {
     return new Date().toISOString().slice(0, 10);
@@ -1416,15 +1431,20 @@ export default function AdminVirtualTour() {
       return;
     }
 
-    setViewerError("");
+setViewerError("");
 
-    if (editorViewerRef.current) {
-      editorViewerRef.current.destroy();
-      editorViewerRef.current = null;
-    }
+editorViewerLoadIdRef.current += 1;
+const currentLoadId = editorViewerLoadIdRef.current;
+let isCurrentViewerReady = false;
+let pendingErrorTimeout: number | null = null;
 
-    let viewer: Viewer | null = null;
-    let cameraInterval: number | null = null;
+if (editorViewerRef.current) {
+  editorViewerRef.current.destroy();
+  editorViewerRef.current = null;
+}
+
+let viewer: Viewer | null = null;
+let cameraInterval: number | null = null;
 
     try {
       viewer = new Viewer({
@@ -1504,37 +1524,73 @@ export default function AdminVirtualTour() {
       syncCameraCenter();
       cameraInterval = window.setInterval(syncCameraCenter, 150);
 
-      viewer.addEventListener("panorama-error", () => {
-        setViewerError(
-          "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
-        );
-      });
-    } catch (error) {
-      console.error("Viewer init error:", error);
-      setViewerError(
-        "Kjo panoramë nuk mund të ngarkohet. Mund ta editosh URL-në ose ta fshish skenën.",
-      );
-    }
+viewer.addEventListener("ready", () => {
+  if (editorViewerLoadIdRef.current !== currentLoadId) return;
 
-    return () => {
-      if (cameraInterval) {
-        window.clearInterval(cameraInterval);
-      }
+  isCurrentViewerReady = true;
+  setViewerError("");
 
-      if (viewer) {
-        viewer.destroy();
-      }
+  if (pendingErrorTimeout) {
+    window.clearTimeout(pendingErrorTimeout);
+    pendingErrorTimeout = null;
+  }
+});
 
-      editorViewerRef.current = null;
-    };
-  }, [
-    selectedScene,
-    scenes,
-    draft,
-    isPlacementMode,
-    editingHotspot,
-    isEditingHotspotPlacement,
-  ]);
+viewer.addEventListener("panorama-error", () => {
+  if (editorViewerLoadIdRef.current !== currentLoadId) return;
+
+  if (pendingErrorTimeout) {
+    window.clearTimeout(pendingErrorTimeout);
+  }
+
+  pendingErrorTimeout = window.setTimeout(() => {
+    if (editorViewerLoadIdRef.current !== currentLoadId) return;
+    if (isCurrentViewerReady) return;
+
+setViewerError(
+  `Fotoja 360°${
+    selectedSceneDisplayNumber ? ` #${selectedSceneDisplayNumber}` : ""
+  }${
+    selectedScene?.title ? ` (“${selectedScene.title}”)` : ""
+  } nuk mund të ngarkohet. Kontrollo URL-në e fotos ose zëvendësoje këtë skenë.`
+);
+  }, 900);
+});
+} catch (error) {
+  console.error("Viewer init error:", error);
+  setViewerError(
+    `Fotoja 360°${
+      selectedSceneDisplayNumber ? ` #${selectedSceneDisplayNumber}` : ""
+    }${
+      selectedScene?.title ? ` (“${selectedScene.title}”)` : ""
+    } nuk mund të inicializohet. Kontrollo URL-në e fotos ose zëvendësoje këtë skenë.`
+  );
+}
+
+return () => {
+  if (pendingErrorTimeout) {
+    window.clearTimeout(pendingErrorTimeout);
+  }
+
+  if (cameraInterval) {
+    window.clearInterval(cameraInterval);
+  }
+
+  if (viewer) {
+    viewer.destroy();
+  }
+
+  editorViewerRef.current = null;
+};
+}, [
+  selectedScene,
+  selectedSceneDisplayNumber,
+  scenes,
+  draft,
+  isPlacementMode,
+  editingHotspot,
+  isEditingHotspotPlacement,
+]);
 
   const virtualTourNodes = useMemo(() => {
     const validScenes = scenes.filter(
