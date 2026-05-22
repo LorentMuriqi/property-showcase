@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Plus, Pause, Play, RefreshCw, Trash2, ExternalLink } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Pause,
+  Play,
+  RefreshCw,
+  Trash2,
+  ExternalLink,
+  Search,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
@@ -48,8 +57,12 @@ export default function AdminClientTours() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [tours, setTours] = useState<ClientTour[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const [tours, setTours] = useState<ClientTour[]>([]);
+const [isLoading, setIsLoading] = useState(true);
+
+const [searchQuery, setSearchQuery] = useState("");
+const [page, setPage] = useState(1);
+const pageSize = 20;
 
   useEffect(() => {
     if (authLoading) return;
@@ -64,42 +77,44 @@ export default function AdminClientTours() {
     }
   }, [authLoading, isAdmin, permissions, setLocation]);
 
+
 const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
   const savedScrollY = options?.preserveScroll ? window.scrollY : null;
 
   if (!options?.silent) {
-    setIsLoading(false);
-
-if (savedScrollY !== null) {
-  requestAnimationFrame(() => {
-    window.scrollTo({
-      top: savedScrollY,
-      left: 0,
-      behavior: "auto",
-    });
-  });
-}
+    setIsLoading(true);
   }
 
-    const { data, error } = await supabase
-      .from("virtual_tours")
-      .select("id, title, client_name, status, client_token, expires_at, created_at")
-      .eq("visibility", "client_only")
-      .order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("virtual_tours")
+    .select("id, title, client_name, status, client_token, expires_at, created_at")
+    .eq("visibility", "client_only")
+    .order("created_at", { ascending: false });
 
-    if (error) {
-      toast({
-        title: "Gabim",
-        description: "Nuk u ngarkuan virtual tours.",
-        variant: "destructive",
+  if (error) {
+    toast({
+      title: "Gabim",
+      description: "Nuk u ngarkuan virtual tours.",
+      variant: "destructive",
+    });
+    setTours([]);
+  } else {
+    setTours((data || []) as ClientTour[]);
+  }
+
+  setIsLoading(false);
+
+  if (savedScrollY !== null) {
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: savedScrollY,
+        left: 0,
+        behavior: "auto",
       });
-      setTours([]);
-    } else {
-      setTours((data || []) as ClientTour[]);
-    }
+    });
+  }
+};
 
-    setIsLoading(false);
-  };
 
   useEffect(() => {
     if (!authLoading && isAdmin && permissions.canManageVirtualTours) {
@@ -211,6 +226,32 @@ if (savedScrollY !== null) {
 
     fetchTours({ silent: true, preserveScroll: true });
   };
+  
+  const filteredTours = tours.filter((tour) => {
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  if (!normalizedSearch) return true;
+
+  const computedStatus = getComputedStatus(tour);
+
+  return (
+    String(tour.title || "").toLowerCase().includes(normalizedSearch) ||
+    String(tour.client_name || "").toLowerCase().includes(normalizedSearch) ||
+    String(computedStatus || "").toLowerCase().includes(normalizedSearch)
+  );
+});
+
+const totalPages = Math.max(1, Math.ceil(filteredTours.length / pageSize));
+const safePage = Math.min(page, totalPages);
+
+const paginatedTours = filteredTours.slice(
+  (safePage - 1) * pageSize,
+  safePage * pageSize
+);
+
+useEffect(() => {
+  setPage(1);
+}, [searchQuery]);
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -249,12 +290,33 @@ if (savedScrollY !== null) {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
         <div className="glass-panel rounded-2xl border border-border overflow-hidden">
-          <div className="p-6 border-b border-border">
-            <h2 className="font-display text-xl">Lista e tureve private</h2>
-          </div>
+<div className="p-6 border-b border-border space-y-4">
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <h2 className="font-display text-xl">Lista e tureve private</h2>
+      <p className="text-sm text-muted-foreground mt-1">
+        {filteredTours.length}{" "}
+        {filteredTours.length === 1 ? "tur u gjet" : "ture u gjetën"}
+      </p>
+    </div>
+
+    <div className="relative w-full md:w-80">
+      <Search
+        size={17}
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Kërko sipas emrit ose klientit..."
+        className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+      />
+    </div>
+  </div>
+</div>
 
           <div className="divide-y divide-border">
-            {tours.map((tour) => {
+            {paginatedTours.map((tour) => {
               const computedStatus = getComputedStatus(tour);
               const publicUrl = `${appOrigin}/client-tour/${tour.client_token}`;
 
@@ -340,12 +402,48 @@ if (savedScrollY !== null) {
               );
             })}
 
-            {tours.length === 0 && (
-              <div className="p-10 text-center text-muted-foreground">
-                Nuk ka client virtual tours ende.
+            {filteredTours.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground">
+                {searchQuery.trim()
+                  ? "Nuk u gjet asnjë virtual tour me këtë kërkim."
+                  : "Nuk ka virtual tours ende."}
               </div>
             )}
           </div>
+
+          {filteredTours.length > pageSize && (
+            <div className="p-5 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                Duke shfaqur {(safePage - 1) * pageSize + 1}–
+                {Math.min(safePage * pageSize, filteredTours.length)} nga{" "}
+                {filteredTours.length}
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safePage === 1}
+                  className="px-4 py-2 rounded-xl border border-border text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                >
+                  Mbrapa
+                </button>
+
+                <span className="px-4 py-2 rounded-xl bg-muted text-sm text-foreground">
+                  {safePage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safePage === totalPages}
+                  className="px-4 py-2 rounded-xl border border-border text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                >
+                  Para
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
