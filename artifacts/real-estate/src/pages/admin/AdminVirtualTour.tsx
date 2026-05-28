@@ -1453,6 +1453,7 @@ let cameraInterval: number | null = null;
         navbar: ["zoom", "move", "fullscreen"],
         adapter: EquirectangularAdapter.withConfig({
           resolution: 128,
+		  useXmpData: false,
         }),
         defaultYaw: selectedScene.initial_yaw ?? 0,
         defaultPitch: selectedScene.initial_pitch ?? 0,
@@ -1672,6 +1673,7 @@ viewer = new Viewer({
   navbar: ["zoom", "move", "fullscreen"],
   adapter: EquirectangularAdapter.withConfig({
     resolution: 128,
+    useXmpData: false,
   }),
   plugins: [
           [

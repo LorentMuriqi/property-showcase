@@ -302,13 +302,13 @@ img.src = src;
   [sortedScenes],
 );
 
-useEffect(() => {
-  preloadSceneImages(resolvedStartScene?.id ?? null);
-}, [resolvedStartScene, preloadSceneImages]);
+// useEffect(() => {
+//   preloadSceneImages(resolvedStartScene?.id ?? null);
+// }, [resolvedStartScene, preloadSceneImages]);
 
-useEffect(() => {
-  preloadSceneImages(currentSceneId);
-}, [currentSceneId, preloadSceneImages]);
+// useEffect(() => {
+//   preloadSceneImages(currentSceneId);
+// }, [currentSceneId, preloadSceneImages]);
 
 
 
@@ -350,6 +350,7 @@ adapter: EquirectangularAdapter.withConfig({
       : window.innerWidth <= 1024
         ? 128
         : 256,
+		useXmpData: false,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
@@ -371,11 +372,11 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-preload: true,   // <-- PSV ngarkon fqinjët në background automatikisht
+preload: false,
 transitionOptions: () => ({
-  showLoader: false,
+  showLoader: true,
   effect: "fade",
-  speed: 180,    // <-- pak më shpejt (260 → 180ms)
+  speed: 180,
   rotation: false,
 }),
           },
