@@ -293,9 +293,10 @@ const preloadSceneImages = useCallback(
 
       preloadedImagesRef.current.add(src);
 
-      const img = new Image();
-      img.decoding = "async";
-      img.src = src;
+const img = new Image();
+img.crossOrigin = "anonymous";
+img.decoding = "async";
+img.src = src;
     });
   },
   [sortedScenes],
@@ -660,6 +661,7 @@ useEffect(() => {
 <img
   src={scene.thumbnailUrl || scene.imageUrl}
   alt={scene.title}
+  crossOrigin="anonymous"
   loading="lazy"
   decoding="async"
   fetchPriority={currentSceneId === scene.id ? "high" : "low"}

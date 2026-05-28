@@ -1667,10 +1667,13 @@ return () => {
     let viewer: Viewer | null = null;
 
     try {
-      viewer = new Viewer({
-        container: previewContainerRef.current,
-        navbar: ["zoom", "move", "fullscreen"],
-        plugins: [
+viewer = new Viewer({
+  container: previewContainerRef.current,
+  navbar: ["zoom", "move", "fullscreen"],
+  adapter: EquirectangularAdapter.withConfig({
+    resolution: 128,
+  }),
+  plugins: [
           [
             VirtualTourPlugin,
             {
@@ -1974,11 +1977,12 @@ return () => {
                     }`}
                   >
                     <div className="aspect-[2/1] bg-black relative">
-                      <img
-                        src={scene.thumbnail_url || scene.image_url}
-                        alt={scene.title}
-                        className="w-full h-full object-cover opacity-90"
-                      />
+<img
+  src={scene.thumbnail_url || scene.image_url}
+  alt={scene.title}
+  crossOrigin="anonymous"
+  className="w-full h-full object-cover opacity-90"
+/>
                       {scene.is_default && (
                         <span className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-primary text-black text-[10px] font-bold uppercase">
                           Default
@@ -2379,11 +2383,13 @@ return () => {
                       className="rounded-xl overflow-hidden border border-border bg-card"
                     >
                       <div className="aspect-[4/3] bg-black">
-                        <img
-                          src={scene.thumbnail_url || scene.image_url}
-                          alt={scene.title}
-                          className="w-full h-full object-cover"
-                        />
+<img
+  src={scene.thumbnail_url || scene.image_url}
+  alt={scene.title}
+  crossOrigin="anonymous"
+  className="w-full h-full object-cover"
+/>
+
                       </div>
                       <div className="p-2">
                         <p className="text-xs text-foreground truncate">
@@ -2478,11 +2484,12 @@ return () => {
                     >
                       <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
                         {scene.thumbnail_url || scene.image_url ? (
-                          <img
-                            src={scene.thumbnail_url || scene.image_url}
-                            alt={scene.title}
-                            className="w-full h-full object-cover"
-                          />
+<img
+  src={scene.thumbnail_url || scene.image_url}
+  alt={scene.title}
+  crossOrigin="anonymous"
+  className="w-full h-full object-cover"
+/>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/30">
                             <ImageIcon size={14} />
