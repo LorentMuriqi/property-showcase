@@ -293,22 +293,21 @@ const preloadSceneImages = useCallback(
 
       preloadedImagesRef.current.add(src);
 
-const img = new Image();
-img.crossOrigin = "anonymous";
-img.decoding = "async";
-img.src = src;
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
     });
   },
   [sortedScenes],
 );
 
-// useEffect(() => {
-//   preloadSceneImages(resolvedStartScene?.id ?? null);
-// }, [resolvedStartScene, preloadSceneImages]);
+useEffect(() => {
+  preloadSceneImages(resolvedStartScene?.id ?? null);
+}, [resolvedStartScene, preloadSceneImages]);
 
-// useEffect(() => {
-//   preloadSceneImages(currentSceneId);
-// }, [currentSceneId, preloadSceneImages]);
+useEffect(() => {
+  preloadSceneImages(currentSceneId);
+}, [currentSceneId, preloadSceneImages]);
 
 
 
@@ -350,7 +349,6 @@ adapter: EquirectangularAdapter.withConfig({
       : window.innerWidth <= 1024
         ? 128
         : 256,
-		useXmpData: false,
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
@@ -372,11 +370,11 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-preload: false,
+preload: true,   // <-- PSV ngarkon fqinjët në background automatikisht
 transitionOptions: () => ({
-  showLoader: true,
+  showLoader: false,
   effect: "fade",
-  speed: 180,
+  speed: 180,    // <-- pak më shpejt (260 → 180ms)
   rotation: false,
 }),
           },
@@ -662,7 +660,6 @@ useEffect(() => {
 <img
   src={scene.thumbnailUrl || scene.imageUrl}
   alt={scene.title}
-  crossOrigin="anonymous"
   loading="lazy"
   decoding="async"
   fetchPriority={currentSceneId === scene.id ? "high" : "low"}
