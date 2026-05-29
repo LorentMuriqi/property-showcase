@@ -1977,23 +1977,7 @@ return () => {
                       <img
                         src={scene.thumbnail_url || scene.image_url}
                         alt={scene.title}
-                        crossOrigin="anonymous"
                         className="w-full h-full object-cover opacity-90"
-                        onError={(e) => {
-                          const img = e.currentTarget;
-
-                          if (
-                            scene.thumbnail_url &&
-                            img.dataset.fallbackApplied !== "true" &&
-                            scene.image_url
-                          ) {
-                            img.dataset.fallbackApplied = "true";
-                            img.src = scene.image_url;
-                            return;
-                          }
-
-                          img.style.display = "none";
-                        }}
                       />
                       {scene.is_default && (
                         <span className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-primary text-black text-[10px] font-bold uppercase">
@@ -2090,27 +2074,8 @@ return () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 {viewerError && (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300 space-y-3">
-                    <p>{viewerError}</p>
-
-                    {selectedScene?.image_url && (
-                      <div className="rounded-xl bg-white/60 border border-red-500/20 p-3 text-xs text-red-400 break-all">
-                        <p className="font-semibold text-red-500 mb-1">
-                          URL reale e panoramës që po përdor viewer-i:
-                        </p>
-
-                        <p>{selectedScene.image_url}</p>
-
-                        <a
-                          href={selectedScene.image_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex mt-3 text-red-600 underline underline-offset-4 hover:text-red-700"
-                        >
-                          Hape panoramën në tab të ri
-                        </a>
-                      </div>
-                    )}
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                    {viewerError}
                   </div>
                 )}
 
@@ -2417,23 +2382,7 @@ return () => {
                         <img
                           src={scene.thumbnail_url || scene.image_url}
                           alt={scene.title}
-                          crossOrigin="anonymous"
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const img = e.currentTarget;
-
-                            if (
-                              scene.thumbnail_url &&
-                              img.dataset.fallbackApplied !== "true" &&
-                              scene.image_url
-                            ) {
-                              img.dataset.fallbackApplied = "true";
-                              img.src = scene.image_url;
-                              return;
-                            }
-
-                            img.style.display = "none";
-                          }}
                         />
                       </div>
                       <div className="p-2">
@@ -2532,23 +2481,7 @@ return () => {
                           <img
                             src={scene.thumbnail_url || scene.image_url}
                             alt={scene.title}
-                            crossOrigin="anonymous"
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              const img = e.currentTarget;
-
-                              if (
-                                scene.thumbnail_url &&
-                                img.dataset.fallbackApplied !== "true" &&
-                                scene.image_url
-                              ) {
-                                img.dataset.fallbackApplied = "true";
-                                img.src = scene.image_url;
-                                return;
-                              }
-
-                              img.style.display = "none";
-                            }}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/30">
