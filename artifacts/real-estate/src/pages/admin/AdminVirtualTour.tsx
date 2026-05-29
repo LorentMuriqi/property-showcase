@@ -1977,6 +1977,7 @@ return () => {
                       <img
                         src={scene.thumbnail_url || scene.image_url}
                         alt={scene.title}
+						crossOrigin="anonymous" // <---
                         className="w-full h-full object-cover opacity-90"
                       />
                       {scene.is_default && (
@@ -2382,6 +2383,7 @@ return () => {
                         <img
                           src={scene.thumbnail_url || scene.image_url}
                           alt={scene.title}
+						  crossOrigin="anonymous" // <---
                           className="w-full h-full object-cover"
                         />
                       </div>
@@ -2481,6 +2483,7 @@ return () => {
                           <img
                             src={scene.thumbnail_url || scene.image_url}
                             alt={scene.title}
+							crossOrigin="anonymous" // <---
                             className="w-full h-full object-cover"
                           />
                         ) : (

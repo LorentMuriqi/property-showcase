@@ -288,12 +288,13 @@ const preloadSceneImages = useCallback(
         .map((s) => s.imageUrl),
     ].filter(Boolean);
 
-    imagesToPreload.forEach((src) => {
+imagesToPreload.forEach((src) => {
       if (preloadedImagesRef.current.has(src)) return;
 
       preloadedImagesRef.current.add(src);
 
       const img = new Image();
+      img.crossOrigin = "anonymous"; // <--- 
       img.decoding = "async";
       img.src = src;
     });
@@ -660,6 +661,7 @@ useEffect(() => {
 <img
   src={scene.thumbnailUrl || scene.imageUrl}
   alt={scene.title}
+  crossOrigin="anonymous" // <---
   loading="lazy"
   decoding="async"
   fetchPriority={currentSceneId === scene.id ? "high" : "low"}
