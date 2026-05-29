@@ -41,6 +41,8 @@ type Orientation = { yaw: number; pitch: number };
 
 const INITIAL_LOADING_FALLBACK_MS = 15000;
 
+const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
+
 const getDeviceProfile = () => {
   const width = typeof window !== "undefined" ? window.innerWidth : 1200;
   const memory = typeof navigator !== "undefined"
@@ -75,11 +77,7 @@ const getViewerResolution = () => {
     return 64;
   }
 
-  if (profile.width <= 1024) {
-    return 128;
-  }
-
-  return 256;
+  return 128;
 };
 
 const getCacheMaxItems = () => {
@@ -89,11 +87,7 @@ const getCacheMaxItems = () => {
     return 4;
   }
 
-  if (profile.width <= 1024) {
-    return 6;
-  }
-
-  return 8;
+  return 6;
 };
 
 const getNeighborPreloadLimit = () => {
@@ -107,7 +101,7 @@ const getNeighborPreloadLimit = () => {
     return 1;
   }
 
-  return 3;
+  return 2;
 };
 
 const preloadImage = (src?: string | null, priority: "high" | "low" = "low") => {
@@ -170,7 +164,7 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
     return sortedScenes.map((scene) => ({
       id: String(scene.id),
       panorama: scene.imageUrl,
-      thumbnail: scene.thumbnailUrl || scene.imageUrl,
+      thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
       name: scene.title,
       data: {
         initialYaw: scene.initialYaw ?? null,
@@ -370,6 +364,18 @@ useEffect(() => {
   
 const preloadedImagesRef = useRef<Set<string>>(new Set());
 
+const preloadSceneImageOnce = useCallback(
+  (src?: string | null, priority: "high" | "low" = "low") => {
+    if (!src) return;
+
+    if (preloadedImagesRef.current.has(src)) return;
+
+    preloadedImagesRef.current.add(src);
+    preloadImage(src, priority);
+  },
+  [],
+);
+
 const preloadSceneImages = useCallback(
   (sceneId: number | null) => {
     if (sceneId === null) return;
@@ -392,19 +398,14 @@ const preloadSceneImages = useCallback(
 
     scheduleIdleTask(() => {
       imagesToPreload.forEach((src) => {
-        if (preloadedImagesRef.current.has(src)) return;
-
-        preloadedImagesRef.current.add(src);
-        preloadImage(src, "low");
+preloadSceneImageOnce(src, "low");
       });
     });
   },
-  [sortedScenes],
+  [sortedScenes, preloadSceneImageOnce],
 );
 
-useEffect(() => {
-  preloadSceneImages(resolvedStartScene?.id ?? null);
-}, [resolvedStartScene, preloadSceneImages]);
+
 
 useEffect(() => {
   preloadSceneImages(currentSceneId);
@@ -466,7 +467,7 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-preload: false,   // <-- PSV ngarkon fqinjët në background automatikisht
+preload: false,   // <-- Preload kontrollohet manualisht vetëm për skenat fqinje
 transitionOptions: () => ({
   showLoader: false,
   effect: "fade",
@@ -724,9 +725,9 @@ useEffect(() => {
                 .map((scene) => (
 <button
   key={scene.id}
-  onMouseEnter={() => preloadImage(scene.imageUrl, "high")}
-  onFocus={() => preloadImage(scene.imageUrl, "high")}
-  onTouchStart={() => preloadImage(scene.imageUrl, "high")}
+onMouseEnter={() => preloadSceneImageOnce(scene.imageUrl, "high")}
+onFocus={() => preloadSceneImageOnce(scene.imageUrl, "high")}
+onTouchStart={() => preloadSceneImageOnce(scene.imageUrl, "high")}
   onClick={() => handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
@@ -749,9 +750,9 @@ useEffect(() => {
   ref={(el) => {
     sceneButtonRefs.current[scene.id] = el;
   }}
-  onMouseEnter={() => preloadImage(scene.imageUrl, "high")}
-  onFocus={() => preloadImage(scene.imageUrl, "high")}
-  onTouchStart={() => preloadImage(scene.imageUrl, "high")}
+onMouseEnter={() => preloadSceneImageOnce(scene.imageUrl, "high")}
+onFocus={() => preloadSceneImageOnce(scene.imageUrl, "high")}
+onTouchStart={() => preloadSceneImageOnce(scene.imageUrl, "high")}
   onClick={() => handleSceneChange(scene.id)}
                 className={`relative shrink-0 w-24 h-14 rounded-lg overflow-hidden border-2 transition-all ${
                   currentSceneId === scene.id
@@ -760,7 +761,7 @@ useEffect(() => {
                 }`}
               >
 <img
-  src={scene.thumbnailUrl || scene.imageUrl}
+  src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
   alt={scene.title}
   crossOrigin="anonymous" // <---
   loading="lazy"
