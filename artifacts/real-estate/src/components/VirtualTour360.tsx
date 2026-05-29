@@ -1,2820 +1,818 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useLocation, useParams } from "wouter";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Edit,
-  Map as MapIcon,
-  Crosshair,
-  Star,
-  Link2,
-  Image as ImageIcon,
-  Move,
-  Check,
-  X,
-  LocateFixed,
-  ArrowLeftRight,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/lib/supabase";
-import { useToast } from "@/hooks/use-toast";
-import { Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
-import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
+  Cache,
+  Viewer,
+  EquirectangularAdapter,
+} from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
-import "@photo-sphere-viewer/markers-plugin/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-type Scene = {
-  id: number;
-  property_id: string | null;
-  virtual_tour_id?: string | null;
-  title: string;
-  image_url: string;
-  thumbnail_url: string | null;
-  is_default: boolean;
-  sort_order: number;
-  position_x: number | null;
-  position_y: number | null;
-  initial_yaw: number | null;
-  initial_pitch: number | null;
-  hotspots: Hotspot[];
-};
-
-type Hotspot = {
-  id: number;
-  scene_id: number;
-  to_scene_id: number;
-  yaw: number;
-  pitch: number;
-  target_yaw: number | null;
-  target_pitch: number | null;
-  label: string | null;
-};
-
-type Project = {
-  id: string;
-  title: string;
-  client_token?: string | null;
-  virtual_tour_status?: "draft" | "published" | "active" | "paused" | "expired";
-  virtual_tour_published_at?: string | null;
-  tour_expires_at?: string | null;
-  paused_at?: string | null;
-};
-
-type HotspotFormState = {
-  id: number;
-  scene_id: number;
-  to_scene_id: number | "";
-  label: string;
-  yaw: number;
-  pitch: number;
-  target_yaw: number | null;
-  target_pitch: number | null;
-};
-
-type PlacementDraft = {
-  to_scene_id: number | "";
-  label: string;
-  yaw: number | null;
-  pitch: number | null;
-};
-
-const NORMAL_HOTSPOT_HTML = `
-  <div style="
-    width: 42px;
-    height: 42px;
-    border-radius: 9999px;
-    background: rgba(0,0,0,0.58);
-    border: 3px solid #d4af37;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-size:12px;
-    font-weight:700;
-    box-shadow:0 10px 24px rgba(0,0,0,.38);
-    cursor:pointer;
-    user-select:none;
-  ">
-    ↗
-  </div>
-`;
-
-const EDITING_HOTSPOT_HTML = `
-  <div style="
-    position: relative;
-    width: 42px;
-    height: 42px;
-    border-radius: 9999px;
-    background: rgba(239,68,68,0.88);
-    border: 3px solid white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-size:12px;
-    font-weight:700;
-    box-shadow:
-      0 0 0 10px rgba(239,68,68,.16),
-      0 10px 24px rgba(0,0,0,.38);
-    cursor:pointer;
-    user-select:none;
-  ">
-    ↗
-    <div style="
-      position:absolute;
-      left:50%;
-      top:calc(100% + 8px);
-      transform:translateX(-50%);
-      white-space:nowrap;
-      font-size:11px;
-      font-weight:700;
-      color:white;
-      background:rgba(0,0,0,0.72);
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius:9999px;
-      padding:4px 8px;
-      box-shadow:0 6px 18px rgba(0,0,0,.28);
-    ">
-      Duke u edituar
-    </div>
-  </div>
-`;
-
-const TEMP_HOTSPOT_HTML = `
-  <div style="
-    position: relative;
-    width: 34px;
-    height: 34px;
-    border-radius: 9999px;
-    background: rgba(239,68,68,0.95);
-    border: 3px solid white;
-    box-shadow:
-      0 0 0 10px rgba(239,68,68,.16),
-      0 8px 24px rgba(0,0,0,.35);
-    user-select:none;
-  ">
-    <div style="
-      position:absolute;
-      top:50%;
-      left:50%;
-      width:2px;
-      height:34px;
-      background:white;
-      transform:translate(-50%, -50%);
-      opacity:.95;
-    "></div>
-    <div style="
-      position:absolute;
-      top:50%;
-      left:50%;
-      width:34px;
-      height:2px;
-      background:white;
-      transform:translate(-50%, -50%);
-      opacity:.95;
-    "></div>
-    <div style="
-      position:absolute;
-      left:50%;
-      top:calc(100% + 8px);
-      transform:translateX(-50%);
-      white-space:nowrap;
-      font-size:11px;
-      font-weight:700;
-      color:white;
-      background:rgba(0,0,0,0.72);
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius:9999px;
-      padding:4px 8px;
-      box-shadow:0 6px 18px rgba(0,0,0,.28);
-    ">
-      Hotspot i ri
-    </div>
-  </div>
-`;
-
-const toNumber = (value: any, fallback = 0) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-const toNullableNumber = (value: any) => {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-
-export default function AdminVirtualTour() {
-  const { isAdmin, permissions, isLoading: authLoading } = useAuth();
-  const [location, setLocation] = useLocation();
-  const { id } = useParams();
-  const recordId = id as string;
-  const { toast } = useToast();
-
-  const isClientTourEditor = location.startsWith("/admin/client-tours/");
-  const ownerColumn = isClientTourEditor ? "virtual_tour_id" : "property_id";
-
-  const [project, setProject] = useState<Project | null>(null);
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
-  const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
-  const [sceneForm, setSceneForm] = useState({
-    title: "",
-    imageUrl: "",
-    thumbnailUrl: "",
-    isDefault: false,
-    sortOrder: 0,
-  });
-
-  const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
-  const selectedScene = useMemo(() => {
-    if (selectedSceneId === null) return null;
-    return scenes.find((scene) => Number(scene.id) === Number(selectedSceneId)) || null;
-  }, [scenes, selectedSceneId]);
-  
-  const selectedSceneDisplayNumber = useMemo(() => {
-  if (!selectedScene) return null;
-
-  const sortedScenes = scenes
-    .slice()
-    .sort((a, b) => a.sort_order - b.sort_order);
-
-  const index = sortedScenes.findIndex(
-    (scene) => Number(scene.id) === Number(selectedScene.id)
-  );
-
-  return index >= 0 ? index + 1 : null;
-}, [scenes, selectedScene]);
-
-  const [viewerError, setViewerError] = useState("");
-  const [isPlacementMode, setIsPlacementMode] = useState(false);
-  const [draft, setDraft] = useState<PlacementDraft>({
-    to_scene_id: "",
-    label: "",
-    yaw: null,
-    pitch: null,
-  });
-
-  const [cameraCenter, setCameraCenter] = useState<{
-    yaw: number;
-    pitch: number;
-  } | null>(null);
-
-  const [expiresAtInput, setExpiresAtInput] = useState<string>("");
-
-  const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
-  const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(
-    null,
-  );
-  const [isEditingHotspotPlacement, setIsEditingHotspotPlacement] =
-    useState(false);
-
-const editorContainerRef = useRef<HTMLDivElement>(null);
-const previewContainerRef = useRef<HTMLDivElement>(null);
-const editorViewerRef = useRef<Viewer | null>(null);
-const previewViewerRef = useRef<Viewer | null>(null);
-const editorViewerLoadIdRef = useRef(0);
-
-  const todayInputValue = useMemo(() => {
-    return new Date().toISOString().slice(0, 10);
-  }, []);
-
-  const computedTourStatus = useMemo(() => {
-    if (
-      project?.virtual_tour_status === "active" &&
-      project?.tour_expires_at
-    ) {
-      const expiresAt = new Date(project.tour_expires_at).getTime();
-
-      if (Number.isFinite(expiresAt) && expiresAt < Date.now()) {
-        return "expired";
-      }
-    }
-
-    return project?.virtual_tour_status;
-  }, [project?.virtual_tour_status, project?.tour_expires_at]);
-
-  const getExpiresAtFromInput = useCallback(() => {
-    if (!expiresAtInput) return null;
-
-    const expiresAt = new Date(`${expiresAtInput}T23:59:59`);
-
-    if (!Number.isFinite(expiresAt.getTime())) {
-      return null;
-    }
-
-    return expiresAt.toISOString();
-  }, [expiresAtInput]);
-
-  useEffect(() => {
-    if (authLoading) return;
-
-    if (!isAdmin) {
-      setLocation("/admin/login");
-      return;
-    }
-
-    if (!permissions.canManageVirtualTours) {
-      setLocation("/admin");
-    }
-  }, [authLoading, isAdmin, permissions, setLocation]);
-
-  const resetDraft = useCallback((keepTargetAndLabel = true) => {
-    setDraft((prev) => ({
-      to_scene_id: keepTargetAndLabel ? prev.to_scene_id : "",
-      label: keepTargetAndLabel ? prev.label : "",
-      yaw: null,
-      pitch: null,
-    }));
-  }, []);
-
-  const getLiveViewerPosition = () => {
-    try {
-      const viewer = editorViewerRef.current;
-      if (!viewer) return null;
-
-      const position = viewer.getPosition();
-      if (!position) return null;
-
-      if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
-        return null;
-      }
-
-      return {
-        yaw: position.yaw,
-        pitch: position.pitch,
-      };
-    } catch (error) {
-      console.error("Live viewer position read error:", error);
-      return null;
-    }
-  };
-
-  const usedTargetSceneIds = useMemo(() => {
-    if (!selectedScene) return new Set<number>();
-
-    return new Set(
-      selectedScene.hotspots
-        .filter((hotspot) => hotspot.id !== editingHotspot?.id)
-        .map((hotspot) => Number(hotspot.to_scene_id)),
-    );
-  }, [selectedScene, editingHotspot]);
-
-  const availableTargetScenes = useMemo(() => {
-    return scenes.filter((scene) => {
-      if (!selectedScene) return false;
-      if (scene.id === selectedScene.id) return false;
-      if (usedTargetSceneIds.has(Number(scene.id))) return false;
-      return true;
-    });
-  }, [scenes, selectedScene, usedTargetSceneIds]);
-
-  const refreshTour = useCallback(async () => {
-    if (!recordId) return;
-
-    const currentSelectedSceneId = selectedSceneId;
-
-    const { data: rawRecordData, error: recordError } = isClientTourEditor
-      ? await supabase
-          .from("virtual_tours")
-          .select(
-            "id, title, status, client_token, expires_at, activated_at, paused_at",
-          )
-          .eq("id", recordId)
-          .single()
-      : await supabase
-          .from("properties")
-          .select("id, title, virtual_tour_status, virtual_tour_published_at")
-          .eq("id", recordId)
-          .single();
-
-    if (recordError || !rawRecordData) {
-      toast({
-        title: "Gabim",
-        description: isClientTourEditor
-          ? "Virtual tour nuk u gjet."
-          : "Projekti nuk u gjet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const projectData: Project = isClientTourEditor
-      ? {
-          id: rawRecordData.id,
-          title: rawRecordData.title || "Virtual Tour",
-          client_token: rawRecordData.client_token,
-          virtual_tour_status: rawRecordData.status,
-          tour_expires_at: rawRecordData.expires_at,
-          virtual_tour_published_at: rawRecordData.activated_at,
-          paused_at: rawRecordData.paused_at,
-        }
-      : {
-          id: rawRecordData.id,
-          title: rawRecordData.title || "Pronë",
-          virtual_tour_status: rawRecordData.virtual_tour_status || "draft",
-          virtual_tour_published_at: rawRecordData.virtual_tour_published_at,
-        };
-
-    const { data: scenesData, error: scenesError } = await supabase
-      .from("virtual_tour_scenes")
-      .select("*")
-      .eq(ownerColumn, recordId)
-      .order("sort_order", { ascending: true });
-
-    if (scenesError) {
-      toast({
-        title: "Gabim",
-        description: scenesError.message,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const sceneIds = (scenesData || []).map((scene) => toNumber(scene.id));
-    const hotspotsMap = new Map<number, Hotspot[]>();
-
-    if (sceneIds.length > 0) {
-      const { data: hotspotsData, error: hotspotsError } = await supabase
-        .from("virtual_tour_hotspots")
-        .select("*")
-        .in("scene_id", sceneIds);
-
-      if (hotspotsError) {
-        toast({
-          title: "Gabim",
-          description: hotspotsError.message,
-          variant: "destructive",
-        });
-      } else {
-        for (const hotspot of hotspotsData || []) {
-          const normalizedHotspot: Hotspot = {
-            id: toNumber(hotspot.id),
-            scene_id: toNumber(hotspot.scene_id),
-            to_scene_id: toNumber(hotspot.to_scene_id),
-            yaw: Number(hotspot.yaw),
-            pitch: Number(hotspot.pitch),
-            target_yaw: toNullableNumber(hotspot.target_yaw),
-            target_pitch: toNullableNumber(hotspot.target_pitch),
-            label: hotspot.label || null,
-          };
-
-          if (!hotspotsMap.has(normalizedHotspot.scene_id)) {
-            hotspotsMap.set(normalizedHotspot.scene_id, []);
-          }
-
-          hotspotsMap.get(normalizedHotspot.scene_id)!.push(normalizedHotspot);
-        }
-      }
-    }
-
-    const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
-      const normalizedId = toNumber(scene.id);
-
-      return {
-        id: normalizedId,
-        property_id: scene.property_id ?? null,
-        virtual_tour_id: scene.virtual_tour_id ?? null,
-        title: scene.title || "",
-        image_url: (scene.image_url || "").trim(),
-        thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
-        is_default: !!scene.is_default,
-        sort_order: toNumber(scene.sort_order, 0),
-        position_x: toNullableNumber(scene.position_x),
-        position_y: toNullableNumber(scene.position_y),
-        initial_yaw: toNullableNumber(scene.initial_yaw),
-        initial_pitch: toNullableNumber(scene.initial_pitch),
-        hotspots: hotspotsMap.get(normalizedId) || [],
-      };
-    });
-
-    setProject(projectData);
-    setScenes(normalizedScenes);
-
-    if (normalizedScenes.length === 0) {
-      setSelectedSceneId(null);
-      return;
-    }
-
-    if (currentSelectedSceneId !== null) {
-      const existingSelected = normalizedScenes.find(
-        (scene) => Number(scene.id) === Number(currentSelectedSceneId),
-      );
-
-      if (existingSelected) {
-        setSelectedSceneId(Number(existingSelected.id));
-        return;
-      }
-    }
-
-    const defaultScene =
-      normalizedScenes.find((scene) => scene.is_default) || normalizedScenes[0];
-
-    setSelectedSceneId(Number(defaultScene.id));
-  }, [recordId, ownerColumn, isClientTourEditor, selectedSceneId, toast]);
-
-  useEffect(() => {
-    const load = async () => {
-      if (authLoading || !isAdmin || !recordId) return;
-
-      setIsLoading(true);
-      await refreshTour();
-      setIsLoading(false);
-    };
-
-    load();
-  }, [authLoading, isAdmin, recordId, refreshTour]);
-
-  useEffect(() => {
-    setViewerError("");
-    setIsPlacementMode(false);
-    resetDraft(false);
-    setEditingHotspot(null);
-    setIsEditingHotspotPlacement(false);
-    setIsEditHotspotModalOpen(false);
-    setCameraCenter(null);
-  }, [selectedSceneId, resetDraft]);
-
-  useEffect(() => {
-    if (project?.tour_expires_at) {
-      setExpiresAtInput(project.tour_expires_at.slice(0, 10));
-    } else {
-      setExpiresAtInput("");
-    }
-  }, [project?.tour_expires_at]);
-
-  const handlePublishTour = async () => {
-    if (scenes.length === 0) {
-      toast({
-        title: "Gabim",
-        description: "Shto të paktën një skenë para aktivizimit.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const confirmMessage = isClientTourEditor
-      ? "A dëshironi ta aktivizoni këtë virtual tour privat?"
-      : "A jeni i sigurt që dëshironi ta publikoni turin virtual? Pasi të publikohet, do të shfaqet në faqen publike.";
-
-    if (!confirm(confirmMessage)) return;
-
-    const nowIso = new Date().toISOString();
-    const expiresAt = getExpiresAtFromInput();
-
-    if (isClientTourEditor && expiresAt) {
-      const expiresAtTime = new Date(expiresAt).getTime();
-
-      if (Number.isFinite(expiresAtTime) && expiresAtTime < Date.now()) {
-        toast({
-          title: "Datë e pavlefshme",
-          description: "Data e skadimit nuk mund të jetë në të kaluarën.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    try {
-      if (isClientTourEditor) {
-        const { error } = await supabase
-          .from("virtual_tours")
-          .update({
-            status: "active",
-            expires_at: expiresAt,
-            activated_at: nowIso,
-            paused_at: null,
-            updated_at: nowIso,
-          })
-          .eq("id", recordId);
-
-        if (error) throw error;
-
-        setProject((prev) =>
-          prev
-            ? {
-                ...prev,
-                virtual_tour_status: "active",
-                tour_expires_at: expiresAt,
-                virtual_tour_published_at: nowIso,
-                paused_at: null,
-              }
-            : prev,
-        );
-
-        toast({
-          title: "Virtual Tour u aktivizua",
-          description: expiresAt
-            ? `Turi është aktiv deri më ${new Date(expiresAt).toLocaleDateString("sq-AL")}.`
-            : "Turi është aktiv pa datë skadimi.",
-        });
-
-        return;
-      }
-
-      const { error } = await supabase
-        .from("properties")
-        .update({
-          virtual_tour_status: "published",
-          virtual_tour_published_at: nowIso,
-        })
-        .eq("id", recordId);
-
-      if (error) throw error;
-
-      setProject((prev) =>
-        prev
-          ? {
-              ...prev,
-              virtual_tour_status: "published",
-              virtual_tour_published_at: nowIso,
-            }
-          : prev,
-      );
-
-      toast({
-        title: "Sukses",
-        description: "Turi virtual u publikua dhe tani është live.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Publikimi i turit virtual dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleUnpublishTour = async () => {
-    const confirmMessage = isClientTourEditor
-      ? "A dëshironi ta ktheni këtë virtual tour privat në Draft?"
-      : "A jeni i sigurt që dëshironi ta ktheni turin virtual në Draft? Pasi të kthehet në Draft, nuk do të shfaqet më në faqen publike.";
-
-    if (!confirm(confirmMessage)) return;
-
-    try {
-      if (isClientTourEditor) {
-        const { error } = await supabase
-          .from("virtual_tours")
-          .update({
-            status: "draft",
-            paused_at: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", recordId);
-
-        if (error) throw error;
-
-        setProject((prev) =>
-          prev
-            ? {
-                ...prev,
-                virtual_tour_status: "draft",
-                paused_at: null,
-              }
-            : prev,
-        );
-
-        toast({
-          title: "Draft u ruajt",
-          description: "Virtual tour privat nuk është aktiv.",
-        });
-
-        return;
-      }
-
-      const { error } = await supabase
-        .from("properties")
-        .update({
-          virtual_tour_status: "draft",
-        })
-        .eq("id", recordId);
-
-      if (error) throw error;
-
-      setProject((prev) =>
-        prev ? { ...prev, virtual_tour_status: "draft" } : prev,
-      );
-
-      toast({
-        title: "Draft u ruajt",
-        description: "Turi virtual nuk është publik.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Ruajtja si draft dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handlePauseTour = async () => {
-    if (!isClientTourEditor) return;
-
-    if (!confirm("A dëshironi ta pezulloni këtë virtual tour privat?")) return;
-
-    try {
-      const pausedAt = new Date().toISOString();
-
-      const { error } = await supabase
-        .from("virtual_tours")
-        .update({
-          status: "paused",
-          paused_at: pausedAt,
-          updated_at: pausedAt,
-        })
-        .eq("id", recordId);
-
-      if (error) throw error;
-
-      setProject((prev) =>
-        prev
-          ? {
-              ...prev,
-              virtual_tour_status: "paused",
-              paused_at: pausedAt,
-            }
-          : prev,
-      );
-
-      toast({
-        title: "Virtual tour u pezullua",
-        description:
-          "Linku publik nuk do të jetë aktiv derisa ta aktivizoni përsëri.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Pezullimi dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveClientExpiry = async () => {
-    if (!isClientTourEditor) return;
-
-    const expiresAt = getExpiresAtFromInput();
-
-    if (expiresAt) {
-      const expiresAtTime = new Date(expiresAt).getTime();
-
-      if (Number.isFinite(expiresAtTime) && expiresAtTime < Date.now()) {
-        toast({
-          title: "Datë e pavlefshme",
-          description: "Data e skadimit nuk mund të jetë në të kaluarën.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    try {
-      const updatedAt = new Date().toISOString();
-
-      const { error } = await supabase
-        .from("virtual_tours")
-        .update({
-          expires_at: expiresAt,
-          updated_at: updatedAt,
-        })
-        .eq("id", recordId);
-
-      if (error) throw error;
-
-      setProject((prev) =>
-        prev
-          ? {
-              ...prev,
-              tour_expires_at: expiresAt,
-            }
-          : prev,
-      );
-
-      toast({
-        title: "Data u ruajt",
-        description: expiresAt
-          ? `Turi do të skadojë më ${new Date(expiresAt).toLocaleDateString("sq-AL")}.`
-          : "Turi nuk ka datë skadimi.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Ruajtja e datës dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const openCreateScene = () => {
-    setEditingSceneId(null);
-    setSceneForm({
-      title: "",
-      imageUrl: "",
-      thumbnailUrl: "",
-      isDefault: scenes.length === 0,
-      sortOrder: scenes.length,
-    });
-    setIsSceneModalOpen(true);
-  };
-
-  const openEditScene = (scene: Scene) => {
-    setEditingSceneId(scene.id);
-    setSceneForm({
-      title: scene.title,
-      imageUrl: scene.image_url,
-      thumbnailUrl: scene.thumbnail_url || "",
-      isDefault: scene.is_default,
-      sortOrder: scene.sort_order,
-    });
-    setIsSceneModalOpen(true);
-  };
-
-  const openEditHotspot = (hotspot: Hotspot) => {
-    setEditingHotspot({
-      id: hotspot.id,
-      scene_id: hotspot.scene_id,
-      to_scene_id: hotspot.to_scene_id,
-      label: hotspot.label || "",
-      yaw: hotspot.yaw,
-      pitch: hotspot.pitch,
-      target_yaw: hotspot.target_yaw,
-      target_pitch: hotspot.target_pitch,
-    });
-
-    setIsEditingHotspotPlacement(false);
-    setIsPlacementMode(false);
-    resetDraft(false);
-    setIsEditHotspotModalOpen(true);
-  };
-
-  const handleSaveScene = async () => {
-    try {
-      if (!sceneForm.title.trim() || !sceneForm.imageUrl.trim()) {
-        toast({
-          title: "Gabim",
-          description: "Titulli dhe URL e imazhit janë të detyrueshme.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (sceneForm.isDefault) {
-        await supabase
-          .from("virtual_tour_scenes")
-          .update({ is_default: false })
-          .eq(ownerColumn, recordId);
-      }
-
-      if (editingSceneId) {
-        const { error } = await supabase
-          .from("virtual_tour_scenes")
-          .update({
-            title: sceneForm.title.trim(),
-            image_url: sceneForm.imageUrl.trim(),
-            thumbnail_url: sceneForm.thumbnailUrl.trim() || null,
-            is_default: sceneForm.isDefault,
-            sort_order: Number(sceneForm.sortOrder) || 0,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingSceneId);
-
-        if (error) throw error;
-
-        toast({ title: "Sukses", description: "Skena u përditësua." });
-      } else {
-        const { error } = await supabase.from("virtual_tour_scenes").insert({
-          ...(isClientTourEditor
-            ? { virtual_tour_id: recordId }
-            : { property_id: recordId }),
-          title: sceneForm.title.trim(),
-          image_url: sceneForm.imageUrl.trim(),
-          thumbnail_url: sceneForm.thumbnailUrl.trim() || null,
-          is_default: sceneForm.isDefault,
-          sort_order: Number(sceneForm.sortOrder) || 0,
-        });
-
-        if (error) throw error;
-
-        toast({ title: "Sukses", description: "Skena u shtua." });
-      }
-
-      setIsSceneModalOpen(false);
-      await refreshTour();
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Ruajtja dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteScene = async (sceneId: number) => {
-    if (!confirm("A dëshironi ta fshini këtë skenë?")) return;
-
-    try {
-      await supabase.from("virtual_tour_hotspots").delete().eq("scene_id", sceneId);
-      await supabase.from("virtual_tour_hotspots").delete().eq("to_scene_id", sceneId);
-
-      const { error } = await supabase
-        .from("virtual_tour_scenes")
-        .delete()
-        .eq("id", sceneId);
-
-      if (error) throw error;
-
-      toast({ title: "Sukses", description: "Skena u fshi." });
-      await refreshTour();
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Fshirja dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveSceneStartView = async () => {
-    if (!selectedScene) return;
-
-    const livePosition = getLiveViewerPosition();
-
-    if (!livePosition) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("virtual_tour_scenes")
-        .update({
-          initial_yaw: livePosition.yaw,
-          initial_pitch: livePosition.pitch,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedScene.id);
-
-      if (error) throw error;
-
-      setScenes((prev) =>
-        prev.map((scene) =>
-          scene.id === selectedScene.id
-            ? {
-                ...scene,
-                initial_yaw: livePosition.yaw,
-                initial_pitch: livePosition.pitch,
-              }
-            : scene,
-        ),
-      );
-
-      toast({
-        title: "Sukses",
-        description: "Pamja fillestare e skenës u ruajt.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Ruajtja e pamjes fillestare dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSetDefaultScene = async (sceneId: number) => {
-    try {
-      await supabase
-        .from("virtual_tour_scenes")
-        .update({ is_default: false })
-        .eq(ownerColumn, recordId);
-
-      const { error } = await supabase
-        .from("virtual_tour_scenes")
-        .update({ is_default: true })
-        .eq("id", sceneId);
-
-      if (error) throw error;
-
-      toast({ title: "Sukses", description: "Skena fillestare u ndryshua." });
-      await refreshTour();
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Ndryshimi dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleStartPlacement = () => {
-    if (!selectedScene) {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh fillimisht një skenë.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (draft.to_scene_id === "") {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh skenën destinacion para vendosjes së hotspot-it.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setEditingHotspot(null);
-    setIsEditHotspotModalOpen(false);
-    setIsEditingHotspotPlacement(false);
-    setIsPlacementMode(true);
-    setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
-
-    toast({
-      title: "Placement mode aktiv",
-      description:
-        "Rrotullo panoramën derisa vendi i saktë të jetë në qendër, pastaj kliko “Vendose në Qendër”.",
-    });
-  };
-
-  const handleStopPlacement = () => {
-    setIsPlacementMode(false);
-    setDraft((prev) => ({ ...prev, yaw: null, pitch: null }));
-  };
-
-  const handlePlaceHotspotAtCenter = () => {
-    if (!isPlacementMode) {
-      toast({
-        title: "Gabim",
-        description: "Aktivizo placement mode fillimisht.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const livePosition = getLiveViewerPosition();
-
-    if (!livePosition) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setDraft((prev) => ({
-      ...prev,
-      yaw: livePosition.yaw,
-      pitch: livePosition.pitch,
-    }));
-
-    setCameraCenter(livePosition);
-
-    toast({
-      title: "Pozicioni u vendos",
-      description: "Hotspot-i u vendos në qendrën aktuale të pamjes.",
-    });
-  };
-
-  const nudgeDraftPosition = (yawDelta: number, pitchDelta: number) => {
-    setDraft((prev) => {
-      if (prev.yaw == null || prev.pitch == null) return prev;
-
-      return {
-        ...prev,
-        yaw: prev.yaw + yawDelta,
-        pitch: prev.pitch + pitchDelta,
-      };
-    });
-  };
-
-  const handlePlaceEditedHotspotAtCenter = () => {
-    if (!editingHotspot) return;
-
-    const livePosition = getLiveViewerPosition();
-
-    if (!livePosition) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setEditingHotspot((prev) =>
-      prev
-        ? {
-            ...prev,
-            yaw: livePosition.yaw,
-            pitch: livePosition.pitch,
-          }
-        : prev,
-    );
-
-    setCameraCenter(livePosition);
-    setIsEditingHotspotPlacement(true);
-
-    toast({
-      title: "Pozicioni u përditësua",
-      description: "Pozicioni i ri u vendos në qendrën aktuale të pamjes.",
-    });
-  };
-
-  const handleSaveHotspotTargetView = async (hotspotId: number) => {
-    const livePosition = getLiveViewerPosition();
-
-    if (!livePosition) {
-      toast({
-        title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("virtual_tour_hotspots")
-        .update({
-          target_yaw: livePosition.yaw,
-          target_pitch: livePosition.pitch,
-        })
-        .eq("id", hotspotId);
-
-      if (error) throw error;
-
-      setScenes((prev) =>
-        prev.map((scene) => ({
-          ...scene,
-          hotspots: scene.hotspots.map((hotspot) =>
-            hotspot.id === hotspotId
-              ? {
-                  ...hotspot,
-                  target_yaw: livePosition.yaw,
-                  target_pitch: livePosition.pitch,
-                }
-              : hotspot,
-          ),
-        })),
-      );
-
-      if (editingHotspot?.id === hotspotId) {
-        setEditingHotspot((prev) =>
-          prev
-            ? {
-                ...prev,
-                target_yaw: livePosition.yaw,
-                target_pitch: livePosition.pitch,
-              }
-            : prev,
-        );
-      }
-
-      toast({
-        title: "Sukses",
-        description: "Target view i hotspot-it u ruajt.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Ruajtja e target view dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
-    setEditingHotspot((prev) => {
-      if (!prev) return prev;
-
-      return {
-        ...prev,
-        yaw: prev.yaw + yawDelta,
-        pitch: prev.pitch + pitchDelta,
-      };
-    });
-  };
-
-  const handleAddHotspot = async () => {
-    if (
-      !selectedScene ||
-      draft.to_scene_id === "" ||
-      draft.yaw === null ||
-      draft.pitch === null
-    ) {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh destinacionin dhe vendose pozicionin e hotspot-it.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { data: insertedHotspot, error } = await supabase
-        .from("virtual_tour_hotspots")
-        .insert({
-          scene_id: selectedScene.id,
-          to_scene_id: Number(draft.to_scene_id),
-          yaw: draft.yaw,
-          pitch: draft.pitch,
-          target_yaw:
-            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
-              ?.initial_yaw ?? null,
-          target_pitch:
-            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
-              ?.initial_pitch ?? null,
-          label: draft.label.trim() || null,
-        })
-        .select("*")
-        .single();
-
-      if (error) throw error;
-
-      const normalizedInsertedHotspot: Hotspot = {
-        id: toNumber(insertedHotspot.id),
-        scene_id: toNumber(insertedHotspot.scene_id),
-        to_scene_id: toNumber(insertedHotspot.to_scene_id),
-        yaw: Number(insertedHotspot.yaw),
-        pitch: Number(insertedHotspot.pitch),
-        target_yaw: toNullableNumber(insertedHotspot.target_yaw),
-        target_pitch: toNullableNumber(insertedHotspot.target_pitch),
-        label: insertedHotspot.label || null,
-      };
-
-      setScenes((prev) =>
-        prev.map((scene) =>
-          scene.id === selectedScene.id
-            ? {
-                ...scene,
-                hotspots: [...scene.hotspots, normalizedInsertedHotspot],
-              }
-            : scene,
-        ),
-      );
-
-      setDraft((prev) => ({
-        ...prev,
-        yaw: null,
-        pitch: null,
-      }));
-
-      toast({
-        title: "Hotspot u ruajt",
-        description:
-          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Shtimi i hotspot-it dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveEditedHotspot = async () => {
-    if (!editingHotspot || editingHotspot.to_scene_id === "") {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh skenën destinacion.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("virtual_tour_hotspots")
-        .update({
-          to_scene_id: Number(editingHotspot.to_scene_id),
-          label: editingHotspot.label.trim() || null,
-          yaw: editingHotspot.yaw,
-          pitch: editingHotspot.pitch,
-          target_yaw: editingHotspot.target_yaw,
-          target_pitch: editingHotspot.target_pitch,
-        })
-        .eq("id", editingHotspot.id);
-
-      if (error) throw error;
-
-      setScenes((prev) =>
-        prev.map((scene) =>
-          scene.id === selectedSceneId
-            ? {
-                ...scene,
-                hotspots: scene.hotspots.map((hotspot) =>
-                  hotspot.id === editingHotspot.id
-                    ? {
-                        ...hotspot,
-                        to_scene_id: Number(editingHotspot.to_scene_id),
-                        label: editingHotspot.label.trim() || null,
-                        yaw: editingHotspot.yaw,
-                        pitch: editingHotspot.pitch,
-                        target_yaw: editingHotspot.target_yaw,
-                        target_pitch: editingHotspot.target_pitch,
-                      }
-                    : hotspot,
-                ),
-              }
-            : scene,
-        ),
-      );
-
-      setIsEditHotspotModalOpen(false);
-      setEditingHotspot(null);
-      setIsEditingHotspotPlacement(false);
-
-      toast({
-        title: "Sukses",
-        description: "Hotspot-i u përditësua.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Përditësimi i hotspot-it dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteHotspot = async (hotspotId: number) => {
-    if (!confirm("A dëshironi ta fshini këtë hotspot?")) return;
-
-    try {
-      const currentSceneId = selectedSceneId;
-
-      const { error } = await supabase
-        .from("virtual_tour_hotspots")
-        .delete()
-        .eq("id", hotspotId);
-
-      if (error) throw error;
-
-      setScenes((prev) =>
-        prev.map((scene) =>
-          scene.id === currentSceneId
-            ? {
-                ...scene,
-                hotspots: scene.hotspots.filter((hotspot) => hotspot.id !== hotspotId),
-              }
-            : scene,
-        ),
-      );
-
-      if (editingHotspot?.id === hotspotId) {
-        setEditingHotspot(null);
-        setIsEditHotspotModalOpen(false);
-        setIsEditingHotspotPlacement(false);
-      }
-
-      toast({
-        title: "Sukses",
-        description: "Hotspot-i u fshi.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Fshirja dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleUpdateScenePosition = async (sceneId: number, x: number, y: number) => {
-    try {
-      const { error } = await supabase
-        .from("virtual_tour_scenes")
-        .update({
-          position_x: x,
-          position_y: y,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", sceneId);
-
-      if (error) throw error;
-      await refreshTour();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  useEffect(() => {
-    if (
-      !selectedScene ||
-      !editorContainerRef.current ||
-      !selectedScene.image_url ||
-      String(selectedScene.image_url).trim() === ""
-    ) {
-      return;
-    }
-
-setViewerError("");
-
-editorViewerLoadIdRef.current += 1;
-const currentLoadId = editorViewerLoadIdRef.current;
-let isCurrentViewerReady = false;
-let pendingErrorTimeout: number | null = null;
-
-if (editorViewerRef.current) {
-  editorViewerRef.current.destroy();
-  editorViewerRef.current = null;
+import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
+
+interface VirtualTour360Props {
+  scenes: Array<{
+    id: number;
+    title: string;
+    imageUrl: string;
+    thumbnailUrl?: string | null;
+    isDefault: boolean;
+    sortOrder: number;
+    positionX?: number | null;
+    positionY?: number | null;
+    initialYaw?: number | null;
+    initialPitch?: number | null;
+    hotspots: Array<{
+      id: number;
+      fromSceneId: number;
+      toSceneId: number;
+      yaw: number;
+      pitch: number;
+      targetYaw?: number | null;
+      targetPitch?: number | null;
+      label?: string | null;
+    }>;
+  }>;
+  defaultSceneId?: number | null;
+  onClose?: () => void;
 }
 
-let viewer: Viewer | null = null;
-let cameraInterval: number | null = null;
-let panoramaObjectUrl: string | null = null;
-let disposed = false;
+type SceneType = VirtualTour360Props["scenes"][number];
+type Orientation = { yaw: number; pitch: number };
 
-const sourcePanoramaUrl = String(selectedScene.image_url).trim();
+const INITIAL_LOADING_FALLBACK_MS = 15000;
 
-const initializeEditorViewer = async () => {
+const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
+
+const getDeviceProfile = () => {
+  const width = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const memory = typeof navigator !== "undefined"
+    ? (navigator as any).deviceMemory || 4
+    : 4;
+  const connection = typeof navigator !== "undefined"
+    ? (navigator as any).connection
+    : null;
+
+  const saveData = !!connection?.saveData;
+  const effectiveType = connection?.effectiveType || "";
+
+  const isSlowConnection =
+    saveData || effectiveType === "slow-2g" || effectiveType === "2g";
+
+  const isLowMemory = memory <= 2;
+  const isMobile = width <= 640;
+
+  return {
+    width,
+    memory,
+    isMobile,
+    isLowMemory,
+    isSlowConnection,
+  };
+};
+
+const getViewerResolution = () => {
+  const profile = getDeviceProfile();
+
+  if (profile.isMobile || profile.isLowMemory || profile.isSlowConnection) {
+    return 64;
+  }
+
+  return 128;
+};
+
+const getCacheMaxItems = () => {
+  const profile = getDeviceProfile();
+
+  if (profile.isLowMemory || profile.isSlowConnection) {
+    return 3;
+  }
+
+  if (profile.isMobile) {
+    return 5;
+  }
+
+  return 6;
+};
+
+const getNeighborPreloadLimit = () => {
+  const profile = getDeviceProfile();
+
+  if (profile.isSlowConnection) {
+    return 0;
+  }
+
+  if (profile.isLowMemory) {
+    return 1;
+  }
+
+  // Në telefon normal preload 2 skena fqinje që kalimi te hotspot-et të ndihet më instant.
+  if (profile.isMobile) {
+    return 2;
+  }
+
+  return 2;
+};
+
+const preloadImage = (src?: string | null, priority: "high" | "low" = "low") => {
+  if (!src) return;
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.decoding = "async";
+
   try {
-    const response = await fetch(sourcePanoramaUrl, {
-      mode: "cors",
-      cache: "no-store",
-    });
+    (img as any).fetchPriority = priority;
+  } catch {
+    // fetchPriority is not supported in every browser.
+  }
 
-    if (!response.ok) {
-      throw new Error(`Panorama request failed with status ${response.status}`);
+  img.src = src;
+};
+
+const scheduleIdleTask = (callback: () => void, delay = 80) => {
+  if (typeof window === "undefined") return;
+
+  const profile = getDeviceProfile();
+
+  // Në mobile mos e vono shumë preload-in, sepse përdoruesi prek hotspot-in shpejt.
+  if (profile.isMobile) {
+    window.setTimeout(callback, delay);
+    return;
+  }
+
+  const idleCallback = (window as any).requestIdleCallback;
+
+  if (typeof idleCallback === "function") {
+    idleCallback(callback, { timeout: 600 });
+    return;
+  }
+
+  window.setTimeout(callback, delay);
+};
+
+export function VirtualTour360({
+  scenes,
+  defaultSceneId,
+  onClose,
+}: VirtualTour360Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<Viewer | null>(null);
+  const currentSceneRef = useRef<SceneType | null>(null);
+  const isNavigatingRef = useRef(false);
+  const closeTouchHandledRef = useRef(false);
+  const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+const pendingEntryOrientationRef = useRef<Orientation | null>(null);
+
+   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
+  const [showMap, setShowMap] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isViewerVisible, setIsViewerVisible] = useState(false);
+
+  const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
+const [canUseFullscreen, setCanUseFullscreen] = useState(false);
+
+  const sortedScenes = useMemo(
+    () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
+    [scenes],
+  );
+
+  const nodes = useMemo(() => {
+    return sortedScenes.map((scene) => ({
+      id: String(scene.id),
+      panorama: scene.imageUrl,
+      thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
+      name: scene.title,
+      data: {
+        initialYaw: scene.initialYaw ?? null,
+        initialPitch: scene.initialPitch ?? null,
+      },
+      links: scene.hotspots.map((hotspot) => ({
+        nodeId: String(hotspot.toSceneId),
+        position: {
+          yaw: hotspot.yaw,
+          pitch: hotspot.pitch,
+        },
+        name: hotspot.label || undefined,
+        data: {
+          hotspotId: hotspot.id,
+          fromSceneId: hotspot.fromSceneId,
+          toSceneId: hotspot.toSceneId,
+          targetYaw: hotspot.targetYaw ?? null,
+          targetPitch: hotspot.targetPitch ?? null,
+        },
+      })),
+    }));
+  }, [sortedScenes]);
+
+  const resolvedStartScene = useMemo(() => {
+    return (
+      sortedScenes.find((s) => s.id === defaultSceneId) ||
+      sortedScenes.find((s) => s.isDefault) ||
+      sortedScenes[0] ||
+      null
+    );
+  }, [sortedScenes, defaultSceneId]);
+
+  const getSceneById = useCallback(
+    (id: number) => sortedScenes.find((scene) => scene.id === id) || null,
+    [sortedScenes],
+  );
+
+  const getNodeById = useCallback(
+    (id: string) => nodes.find((node) => node.id === id) || null,
+    [nodes],
+  );
+
+  const getSceneStartOrientation = useCallback(
+    (sceneId: number): Orientation | null => {
+      const scene = getSceneById(sceneId);
+      if (!scene) return null;
+
+      if (
+        typeof scene.initialYaw === "number" &&
+        typeof scene.initialPitch === "number" &&
+        Number.isFinite(scene.initialYaw) &&
+        Number.isFinite(scene.initialPitch)
+      ) {
+        return {
+          yaw: scene.initialYaw,
+          pitch: scene.initialPitch,
+        };
+      }
+
+      return null;
+    },
+    [getSceneById],
+  );
+
+  const getHotspotEntryOrientation = useCallback(
+    (targetSceneId: number, link: any | null): Orientation | null => {
+      const targetYaw = link?.data?.targetYaw;
+      const targetPitch = link?.data?.targetPitch;
+
+      if (
+        typeof targetYaw === "number" &&
+        typeof targetPitch === "number" &&
+        Number.isFinite(targetYaw) &&
+        Number.isFinite(targetPitch)
+      ) {
+        return {
+          yaw: targetYaw,
+          pitch: targetPitch,
+        };
+      }
+
+      return getSceneStartOrientation(targetSceneId);
+    },
+    [getSceneStartOrientation],
+  );
+
+
+
+  const updateTargetNodeOrientation = useCallback(
+    (
+      vtPlugin: any,
+      targetNodeId: string,
+      orientation: Orientation | null,
+    ) => {
+      const existingNode = getNodeById(targetNodeId);
+
+      if (!existingNode) return;
+
+      vtPlugin.updateNode({
+        id: targetNodeId,
+        data: {
+          ...(existingNode.data || {}),
+          initialYaw:
+            typeof orientation?.yaw === "number" && Number.isFinite(orientation.yaw)
+              ? orientation.yaw
+              : existingNode.data?.initialYaw ?? null,
+          initialPitch:
+            typeof orientation?.pitch === "number" && Number.isFinite(orientation.pitch)
+              ? orientation.pitch
+              : existingNode.data?.initialPitch ?? null,
+        },
+      });
+    },
+    [getNodeById],
+  );
+
+
+  const applyManualSceneOrientation = useCallback((orientation: Orientation | null) => {
+  const viewer = viewerRef.current;
+  if (!viewer || !orientation) return;
+
+  if (!Number.isFinite(orientation.yaw) || !Number.isFinite(orientation.pitch)) {
+    return;
+  }
+
+  viewer.rotate({
+    yaw: orientation.yaw,
+    pitch: orientation.pitch,
+  });
+}, []);
+
+
+
+const goToScene = useCallback(
+  async (targetSceneId: number) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const targetScene = getSceneById(targetSceneId);
+    if (!targetScene) return;
+
+    if (currentSceneRef.current?.id === targetSceneId) return;
+
+    // Nëse navigim është duke ndodhur, mos blloko — thjesht kthe
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+
+    // MOS bëj fade-to-black — lejo PSV të bëjë transition direkt
+    // setIsSceneTransitioning(true) është hequr — shkakton freeze vizual
+
+    try {
+      const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+      const entryOrientation = getSceneStartOrientation(targetSceneId);
+
+      updateTargetNodeOrientation(
+        vtPlugin,
+        String(targetSceneId),
+        entryOrientation,
+      );
+
+      await vtPlugin.setCurrentNode(String(targetSceneId), {
+        showLoader: false,
+        effect: "fade",
+        speed: 90,       // transition më i shpejtë për mobile/desktop
+        rotation: false,
+      });
+
+      requestAnimationFrame(() => {
+        applyManualSceneOrientation(entryOrientation);
+      });
+    } catch (error) {
+      console.error("Scene change error:", error);
+    } finally {
+      isNavigatingRef.current = false;
+    }
+  },
+  [
+    getSceneById,
+    getSceneStartOrientation,
+    updateTargetNodeOrientation,
+    applyManualSceneOrientation,
+  ],
+);
+
+
+
+useEffect(() => {
+  Cache.enabled = true;
+  Cache.ttl = 30 * 60 * 1000;
+  Cache.maxItems = getCacheMaxItems();
+}, []);
+  
+  
+  
+  
+  
+  
+const preloadedImagesRef = useRef<Set<string>>(new Set());
+
+const preloadSceneImageOnce = useCallback(
+  (src?: string | null, priority: "high" | "low" = "low") => {
+    if (!src) return;
+
+    if (preloadedImagesRef.current.has(src)) return;
+
+    preloadedImagesRef.current.add(src);
+    preloadImage(src, priority);
+  },
+  [],
+);
+
+const prepareSceneForNavigation = useCallback(
+  (sceneId: number | null, priority: "high" | "low" = "high") => {
+    if (sceneId === null) return;
+
+    const scene = sortedScenes.find((s) => Number(s.id) === Number(sceneId));
+    if (!scene) return;
+
+    preloadSceneImageOnce(scene.imageUrl, priority);
+  },
+  [sortedScenes, preloadSceneImageOnce],
+);
+
+const preloadSceneImages = useCallback(
+  (sceneId: number | null) => {
+    if (sceneId === null) return;
+
+    const scene = sortedScenes.find((s) => s.id === sceneId);
+    if (!scene) return;
+
+    const preloadLimit = getNeighborPreloadLimit();
+    if (preloadLimit <= 0) return;
+
+    const neighborIds = scene.hotspots
+      .map((h) => h.toSceneId)
+      .filter((id, index, arr) => arr.indexOf(id) === index);
+
+    const imagesToPreload = sortedScenes
+      .filter((s) => neighborIds.includes(s.id))
+      .slice(0, preloadLimit)
+      .map((s) => s.imageUrl)
+      .filter(Boolean);
+
+    scheduleIdleTask(() => {
+      imagesToPreload.forEach((src) => {
+        preloadSceneImageOnce(src, "low");
+      });
+    }, 80);
+  },
+  [sortedScenes, preloadSceneImageOnce],
+);
+
+
+
+useEffect(() => {
+  preloadSceneImages(currentSceneId);
+}, [currentSceneId, preloadSceneImages]);
+
+
+
+
+  useEffect(() => {
+    if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
+
+    if (viewerRef.current) {
+      viewerRef.current.destroy();
+      viewerRef.current = null;
     }
 
-    const contentType = response.headers.get("content-type") || "";
+        setIsInitialLoading(true);
+    setIsViewerVisible(false);
 
-    if (!contentType.toLowerCase().startsWith("image/")) {
-      throw new Error(`Panorama response is not an image: ${contentType || "unknown"}`);
-    }
+    const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
+    let didFinishInitialLoad = false;
 
-    const panoramaBlob = await response.blob();
+const finishInitialLoad = () => {
+  if (didFinishInitialLoad) return;
+  didFinishInitialLoad = true;
 
-    if (disposed) return;
+  currentSceneRef.current = resolvedStartScene;
+  setCurrentSceneId(resolvedStartScene.id);
 
-    panoramaObjectUrl = URL.createObjectURL(panoramaBlob);
+  requestAnimationFrame(() => {
+    setIsViewerVisible(true);
+    setIsInitialLoading(false);
+  });
+};
 
-    viewer = new Viewer({
-      container: editorContainerRef.current,
-      panorama: panoramaObjectUrl,
-      navbar: ["zoom", "move", "fullscreen"],
-      adapter: EquirectangularAdapter.withConfig({
-        resolution: 128,
-        useXmpData: false,
-      }),
-      defaultYaw: selectedScene.initial_yaw ?? 0,
-      defaultPitch: selectedScene.initial_pitch ?? 0,
-      moveInertia: true,
-      mousewheelCtrlKey: false,
-      touchmoveTwoFingers: false,
-      plugins: [[MarkersPlugin, {}]],
+    const viewer = new Viewer({  // rezolucioni ne fuqin 2 bon veq, 64 / 128 / 128
+      container: containerRef.current,
+      navbar: ["zoom", "move"],
+adapter: EquirectangularAdapter.withConfig({
+  resolution: getViewerResolution(),
+}),
+      defaultYaw: initialOrientation?.yaw ?? 0,
+      defaultPitch: initialOrientation?.pitch ?? 0,
+	  
+  // Zoom / FOV tuning
+maxFov: window.innerWidth <= 640 ? 110 : 110,
+minFov: 30,
+defaultZoomLvl: window.innerWidth <= 640 ? 35 : 35,
+zoomSpeed: 1.15,
+
+  moveInertia: true,
+  mousewheelCtrlKey: false,
+  touchmoveTwoFingers: false,
+      plugins: [
+        [
+          VirtualTourPlugin,
+          {
+            positionMode: "manual",
+            renderMode: "3d",
+            startNodeId: String(resolvedStartScene.id),
+            nodes,
+preload: false,   // <-- PSV ngarkon fqinjët në background automatikisht
+transitionOptions: () => ({
+  showLoader: false,
+  effect: "fade",
+  speed: 90,     // transition shumë i shpejtë dhe smooth
+  rotation: false,
+}),
+          },
+        ],
+      ],
     });
 
-    if (disposed) {
+    viewerRef.current = viewer;
+
+    const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+	
+	    viewer.addEventListener("panorama-loaded", () => {
+      finishInitialLoad();
+    });
+
+vtPlugin.addEventListener("select-link", ({ link }: any) => {
+  const targetSceneId = Number(link?.nodeId);
+  const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
+
+  pendingEntryOrientationRef.current = entryOrientation;
+  prepareSceneForNavigation(targetSceneId, "high");
+
+  updateTargetNodeOrientation(
+    vtPlugin,
+    String(targetSceneId),
+    entryOrientation,
+  );
+});
+
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  const nextScene = getSceneById(nextId);
+
+  currentSceneRef.current = nextScene;
+  setCurrentSceneId(nextId);
+
+  // Apliko orientimin e hyrjes menjëherë pas ndërrimit të skenës
+  const pending = pendingEntryOrientationRef.current;
+  pendingEntryOrientationRef.current = null;
+
+  if (pending && Number.isFinite(pending.yaw)) {
+    // requestAnimationFrame siguron që PSV ka mbaruar render-in
+    requestAnimationFrame(() => {
+      viewer.rotate({ yaw: pending.yaw, pitch: pending.pitch });
+    });
+  }
+});
+
+    const fallbackTimer = window.setTimeout(() => {
+      console.warn("Initial panorama load is taking longer than expected.");
+    }, INITIAL_LOADING_FALLBACK_MS);
+
+    viewer.addEventListener("panorama-error", (error: any) => {
+      console.error("Initial panorama error:", error);
+      finishInitialLoad();
+    });
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
       viewer.destroy();
-      viewer = null;
+      viewerRef.current = null;
+      currentSceneRef.current = null;
+    };
+  }, [
+    resolvedStartScene,
+    nodes,
+    getSceneById,
+    getSceneStartOrientation,
+    updateTargetNodeOrientation,
+    prepareSceneForNavigation,
+  ]);
+
+  const handleSceneChange = async (id: number) => {
+    await goToScene(id);
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await containerRef.current?.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error("Fullscreen error:", error);
+    }
+  };
+  
+const handleCloseTour = useCallback(() => {
+  if (onClose) onClose();
+}, [onClose]);
+
+useEffect(() => {
+  setCanUseFullscreen(!!document.fullscreenEnabled);
+
+  const onFullscreenChange = () => {
+    setIsFullscreen(!!document.fullscreenElement);
+  };
+
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+}, []);
+
+
+
+useEffect(() => {
+  if (currentSceneId === null) return;
+
+  const activeButton = sceneButtonRefs.current[currentSceneId];
+
+  if (!activeButton) return;
+
+  activeButton.scrollIntoView({
+    behavior: "smooth",
+    inline: "center",
+    block: "nearest",
+  });
+}, [currentSceneId]);
+
+
+  if (sortedScenes.length === 0) {
+    return (
+      <div className="w-full h-full min-h-[100dvh] md:min-h-[500px] flex items-center justify-center bg-black text-white">
+        Asnjë skenë e disponueshme.
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
+      <style>{`
+        .virtual-tour-shell .psv-loader-container,
+        .virtual-tour-shell .psv-loader {
+          display: none !important;
+        }
+      `}</style>
+	  
+	  
+<button
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (closeTouchHandledRef.current) {
+      closeTouchHandledRef.current = false;
       return;
     }
 
-    editorViewerRef.current = viewer;
-    const markersPlugin = viewer.getPlugin(MarkersPlugin) as any;
+    handleCloseTour();
+  }}
+  onTouchEnd={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeTouchHandledRef.current = true;
+    handleCloseTour();
+  }}
+  className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
+  style={{
+    top: "max(12px, env(safe-area-inset-top))",
+    right: "max(12px, env(safe-area-inset-right))",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  }}
+  aria-label="Mbyll turin virtual"
+  type="button"
+>
+  <X size={22} />
+</button>
 
-    const existingMarkers = markersPlugin.getMarkers?.() || [];
-    existingMarkers.forEach((marker: any) => {
-      markersPlugin.removeMarker(marker.id);
-    });
 
-    selectedScene.hotspots.forEach((hotspot) => {
-      const target = scenes.find(
-        (scene) => Number(scene.id) === Number(hotspot.to_scene_id),
-      );
-      const isEditingThis = editingHotspot?.id === hotspot.id;
 
-      markersPlugin.addMarker({
-        id: `hs-${hotspot.id}`,
-        longitude: isEditingThis ? editingHotspot!.yaw : hotspot.yaw,
-        latitude: isEditingThis ? editingHotspot!.pitch : hotspot.pitch,
-        html: isEditingThis ? EDITING_HOTSPOT_HTML : NORMAL_HOTSPOT_HTML,
-        tooltip: hotspot.label || target?.title || "Lidhje",
-      });
-    });
+      <div className="relative w-full h-full flex-1 overflow-hidden">
+<div
+  ref={containerRef}
+  className="w-full h-full bg-black"
+  style={{
+    opacity: isViewerVisible ? 1 : 0,
+    transition: "opacity 220ms ease",  // vetëm për hapjen fillestare
+  }}
+/>
 
-    if (isPlacementMode && draft.yaw !== null && draft.pitch !== null) {
-      markersPlugin.addMarker({
-        id: "temp-new-hotspot",
-        longitude: draft.yaw,
-        latitude: draft.pitch,
-        html: TEMP_HOTSPOT_HTML,
-        tooltip: "Pozicioni i hotspot-it të ri",
-      });
-    }
+{isInitialLoading && (
+  <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
+    <div className="flex flex-col items-center gap-4 animate-pulse">
 
-    if (isEditingHotspotPlacement && editingHotspot) {
-      markersPlugin.addMarker({
-        id: "temp-edit-hotspot",
-        longitude: editingHotspot.yaw,
-        latitude: editingHotspot.pitch,
-        html: TEMP_HOTSPOT_HTML,
-        tooltip: "Pozicioni i ri i hotspot-it",
-      });
-    }
+      {/* Spinner premium */}
+      <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
 
-    const syncCameraCenter = () => {
-      try {
-        const position = viewer?.getPosition?.();
-        if (!position) return;
+      {/* Text kryesor */}
+      <p className="text-white/85 text-sm tracking-wide font-medium">
+        Duke hapur turin virtual
+      </p>
 
-        if (Number.isFinite(position.yaw) && Number.isFinite(position.pitch)) {
-          setCameraCenter({
-            yaw: position.yaw,
-            pitch: position.pitch,
-          });
-        }
-      } catch (error) {
-        console.error("Camera position read error:", error);
-      }
-    };
+      {/* Sub text */}
+      <span className="text-primary text-xs uppercase tracking-[0.2em] font-semibold">
+        Ju lutem prisni
+      </span>
 
-    syncCameraCenter();
-    cameraInterval = window.setInterval(syncCameraCenter, 150);
+    </div>
+  </div>
+)}
 
-    viewer.addEventListener("ready", () => {
-      if (editorViewerLoadIdRef.current !== currentLoadId) return;
+<div className="absolute top-6 left-6 z-40 pointer-events-none max-w-[80%]">
+  <div className="
+    px-4 py-2 rounded-2xl
+    bg-gradient-to-br from-black/50 to-black/30
+    md:backdrop-blur-xl
+    border border-white/10
+    shadow-[0_10px_40px_rgba(0,0,0,0.45)]
+  ">
+    <h2 className="text-white/95 text-xs md:text-sm font-semibold tracking-wide">
+      {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Pamja 360°"}
+    </h2>
+  </div>
+</div>
 
-      isCurrentViewerReady = true;
-      setViewerError("");
-
-      if (pendingErrorTimeout) {
-        window.clearTimeout(pendingErrorTimeout);
-        pendingErrorTimeout = null;
-      }
-    });
-
-    viewer.addEventListener("panorama-error", () => {
-      if (editorViewerLoadIdRef.current !== currentLoadId) return;
-
-      if (pendingErrorTimeout) {
-        window.clearTimeout(pendingErrorTimeout);
-      }
-
-      pendingErrorTimeout = window.setTimeout(() => {
-        if (editorViewerLoadIdRef.current !== currentLoadId) return;
-        if (isCurrentViewerReady) return;
-
-        setViewerError(
-          `Fotoja 360°${
-            selectedSceneDisplayNumber ? ` #${selectedSceneDisplayNumber}` : ""
-          }${
-            selectedScene?.title ? ` (“${selectedScene.title}”)` : ""
-          } nuk mund të ngarkohet. Kontrollo URL-në e fotos ose zëvendësoje këtë skenë.`
-        );
-      }, 900);
-    });
-  } catch (error) {
-    console.error("Viewer/editor setup error:", error);
-
-    if (disposed) return;
-
-    setViewerError(
-      `Fotoja 360°${
-        selectedSceneDisplayNumber ? ` #${selectedSceneDisplayNumber}` : ""
-      }${
-        selectedScene?.title ? ` (“${selectedScene.title}”)` : ""
-      } nuk mund të ngarkohet. Kontrollo URL-në e fotos ose zëvendësoje këtë skenë.`
-    );
-  }
-};
-
-initializeEditorViewer();
-
-return () => {
-  disposed = true;
-
-  if (pendingErrorTimeout) {
-    window.clearTimeout(pendingErrorTimeout);
-  }
-
-  if (cameraInterval) {
-    window.clearInterval(cameraInterval);
-  }
-
-  if (viewer) {
-    viewer.destroy();
-  }
-
-  if (panoramaObjectUrl) {
-    URL.revokeObjectURL(panoramaObjectUrl);
-  }
-
-  editorViewerRef.current = null;
-};
-}, [
-  selectedScene,
-  selectedSceneDisplayNumber,
-  scenes,
-  draft,
-  isPlacementMode,
-  editingHotspot,
-  isEditingHotspotPlacement,
-]);
-
-  const virtualTourNodes = useMemo(() => {
-    const validScenes = scenes.filter(
-      (scene) => scene.image_url && String(scene.image_url).trim() !== "",
-    );
-
-    const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
-
-    return validScenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.image_url,
-      name: scene.title,
-      thumbnail: scene.thumbnail_url || scene.image_url,
-      data: {
-        initialYaw: scene.initial_yaw ?? null,
-        initialPitch: scene.initial_pitch ?? null,
-      },
-      links: scene.hotspots
-        .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
-        .map((hotspot) => ({
-          nodeId: String(hotspot.to_scene_id),
-          position: {
-            yaw: hotspot.yaw,
-            pitch: hotspot.pitch,
-          },
-          name:
-            hotspot.label ||
-            validScenes.find(
-              (target) => Number(target.id) === Number(hotspot.to_scene_id),
-            )?.title ||
-            "Lidhje",
-          data: {
-            targetYaw: hotspot.target_yaw ?? null,
-            targetPitch: hotspot.target_pitch ?? null,
-          },
-        })),
-    }));
-  }, [scenes]);
-
-  useEffect(() => {
-    if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
-
-    if (previewViewerRef.current) {
-      previewViewerRef.current.destroy();
-      previewViewerRef.current = null;
-    }
-
-    const validNodeIds = new Set(virtualTourNodes.map((node) => node.id));
-
-    const defaultScene =
-      scenes.find(
-        (scene) =>
-          scene.is_default &&
-          scene.image_url &&
-          String(scene.image_url).trim() !== "" &&
-          validNodeIds.has(String(scene.id)),
-      ) ||
-      scenes.find(
-        (scene) =>
-          scene.image_url &&
-          String(scene.image_url).trim() !== "" &&
-          validNodeIds.has(String(scene.id)),
-      );
-
-    if (!defaultScene) return;
-
-    let viewer: Viewer | null = null;
-
-    try {
-      viewer = new Viewer({
-        container: previewContainerRef.current,
-        navbar: ["zoom", "move", "fullscreen"],
-        plugins: [
-          [
-            VirtualTourPlugin,
-            {
-              positionMode: "manual",
-              renderMode: "3d",
-              startNodeId: String(defaultScene.id),
-              nodes: virtualTourNodes,
-            },
-          ],
-        ],
-      });
-
-      previewViewerRef.current = viewer;
-    } catch (error) {
-      console.error("Preview viewer init error:", error);
-    }
-
-    return () => {
-      if (viewer) {
-        viewer.destroy();
-      }
-
-      previewViewerRef.current = null;
-    };
-  }, [virtualTourNodes, scenes]);
-
-  if (authLoading) {
-    return <div className="min-h-screen bg-background" />;
-  }
-
-  if (!isAdmin) return null;
-
-  const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
-
-  const publicTourUrl = project
-    ? isClientTourEditor
-      ? `${appOrigin}/client-tour/${project.client_token}`
-      : `${appOrigin}/tour/${project.id}`
-    : "";
-
-  const embedTourCode = project
-    ? isClientTourEditor
-      ? `<iframe src="${appOrigin}/embed/client-tour/${project.client_token}" width="100%" height="600" style="border:none;" allowfullscreen loading="lazy"></iframe>`
-      : `<iframe src="${appOrigin}/embed/tour/${project.id}" width="100%" height="600" style="border:none;" allowfullscreen loading="lazy"></iframe>`
-    : "";
-
-  const copyText = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-
-      toast({
-        title: "U kopjua",
-        description: `${label} u kopjua me sukses.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Gabim",
-        description: "Kopjimi dështoi. Kopjoje manualisht.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
-        <div className="flex items-center gap-4 flex-wrap w-full">
-          <button
-            onClick={() =>
-              setLocation(isClientTourEditor ? "/admin/client-tours" : "/admin")
-            }
-            className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground transition-colors"
-          >
-            <ArrowLeft size={20} />
-          </button>
-
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-bold text-foreground leading-none">
-              Menaxho Turin Virtual
-            </h1>
-            <p className="text-muted-foreground text-xs uppercase tracking-widest mt-1 truncate">
-              {project?.title || "Duke ngarkuar..."}
-            </p>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2 flex-wrap">
-            <span
-              className={`px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border ${
-                computedTourStatus === "published" ||
-                computedTourStatus === "active"
-                  ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
-                  : computedTourStatus === "paused"
-                    ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
-                    : computedTourStatus === "expired"
-                      ? "bg-red-500/10 text-red-400 border-red-500/30"
-                      : "bg-muted text-muted-foreground border-border"
+        <div className="absolute bottom-24 right-6 z-40 flex flex-col gap-3">
+          {hasMap && (
+            <button
+              onClick={() => setShowMap(!showMap)}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg ${
+                showMap ? "bg-primary text-black" : "bg-black/50 text-white hover:bg-black/70"
               }`}
+              title="Plani i Katit"
             >
-              {isClientTourEditor
-                ? computedTourStatus === "active"
-                  ? "Active"
-                  : computedTourStatus === "paused"
-                    ? "Paused"
-                    : computedTourStatus === "expired"
-                      ? "Expired"
-                      : "Draft"
-                : computedTourStatus === "published"
-                  ? "Published"
-                  : "Draft"}
-            </span>
+              <MapIcon size={20} />
+            </button>
+          )}
 
-            {isClientTourEditor && project?.tour_expires_at && (
-              <span className="text-xs text-muted-foreground border border-border px-3 py-2 rounded-xl">
-                Skadon:{" "}
-                {new Date(project.tour_expires_at).toLocaleDateString("sq-AL")}
-              </span>
-            )}
+{canUseFullscreen && window.innerWidth >= 1024 && (
+  <button
+    onClick={toggleFullscreen}
+    className="w-12 h-12 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg"
+  >
+    {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+  </button>
+)}
+        </div>
 
-            {isClientTourEditor && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  min={todayInputValue}
-                  value={expiresAtInput}
-                  onChange={(e) => setExpiresAtInput(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:border-primary"
-                />
+        {hasMap && (
+          <div
+            className={`absolute bottom-24 right-20 z-40 w-64 h-48 bg-black/80 md:backdrop-blur-xl border border-white/10 rounded-2xl p-4 transition-all duration-300 transform origin-bottom-right ${
+              showMap ? "scale-100 opacity-100" : "scale-90 opacity-0 pointer-events-none"
+            }`}
+          >
+            <div
+              className="w-full h-full relative border border-white/5 rounded-xl overflow-hidden bg-white/5"
+              style={{
+                backgroundImage: "radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)",
+                backgroundSize: "10px 10px",
+              }}
+            >
+              {sortedScenes
+                .filter((s) => s.positionX != null && s.positionY != null)
+                .map((scene) => (
+<button
+  key={scene.id}
+onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
+onFocus={() => prepareSceneForNavigation(scene.id, "high")}
+onTouchStart={() => prepareSceneForNavigation(scene.id, "high")}
+  onClick={() => handleSceneChange(scene.id)}
+                    className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
+                      currentSceneId === scene.id
+                        ? "bg-primary border-white scale-125 z-10"
+                        : "bg-white border-transparent hover:scale-110"
+                    }`}
+                    style={{ left: `${scene.positionX}%`, top: `${scene.positionY}%` }}
+                    title={scene.title}
+                  />
+                ))}
+            </div>
+          </div>
+        )}
 
-                <button
-                  onClick={handleSaveClientExpiry}
-                  className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
-                >
-                  Ruaj Datën
-                </button>
-              </div>
-            )}
-
-            {isClientTourEditor ? (
-              <>
-                {computedTourStatus !== "active" && (
-                  <button
-                    onClick={handlePublishTour}
-                    disabled={scenes.length === 0}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Aktivizo Turin
-                  </button>
-                )}
-
-                {computedTourStatus === "active" && (
-                  <button
-                    onClick={handlePauseTour}
-                    className="px-4 py-2 rounded-xl bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 font-semibold text-sm"
-                  >
-                    Pezullo
-                  </button>
-                )}
-
-                {computedTourStatus !== "draft" && (
-                  <button
-                    onClick={handleUnpublishTour}
-                    className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
-                  >
-                    Kthe në Draft
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                {computedTourStatus === "published" ? (
-                  <button
-                    onClick={handleUnpublishTour}
-                    className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold text-sm"
-                  >
-                    Kthe në Draft
-                  </button>
-                ) : (
-                  <button
-                    onClick={handlePublishTour}
-                    disabled={scenes.length === 0}
-                    className="px-4 py-2 rounded-xl bg-primary text-black hover:bg-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Publiko Turin
-                  </button>
-                )}
-              </>
-            )}
+        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
+          <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
+            {sortedScenes.map((scene) => (
+<button
+  key={scene.id}
+  ref={(el) => {
+    sceneButtonRefs.current[scene.id] = el;
+  }}
+onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
+onFocus={() => prepareSceneForNavigation(scene.id, "high")}
+onTouchStart={() => prepareSceneForNavigation(scene.id, "high")}
+  onClick={() => handleSceneChange(scene.id)}
+                className={`relative shrink-0 w-24 h-14 rounded-lg overflow-hidden border-2 transition-all ${
+                  currentSceneId === scene.id
+                    ? "border-primary"
+                    : "border-transparent opacity-70 hover:opacity-100"
+                }`}
+              >
+<img
+  src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
+  alt={scene.title}
+  crossOrigin="anonymous" // <---
+  loading="lazy"
+  decoding="async"
+  fetchPriority={currentSceneId === scene.id ? "high" : "low"}
+  className="w-full h-full object-cover"
+/>
+                <div className="absolute inset-0 bg-black/20 flex items-end p-1">
+                  <span className="text-[10px] text-white font-medium truncate drop-shadow-md">
+                    {scene.title}
+                  </span>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </div>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 space-y-8">
-        {((!isClientTourEditor && computedTourStatus === "published") ||
-          (isClientTourEditor && computedTourStatus === "active")) && (
-          <div className="glass-panel p-6 rounded-2xl border border-primary/20">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 border-b border-border pb-4 mb-5">
-              <div>
-                <h2 className="font-display text-xl text-primary font-bold">
-                  Share Virtual Tour
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Dërgoja klientit si link ose vendose në website-in e tij me embed code.
-                </p>
-              </div>
-
-              <span className="px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
-                Live
-              </span>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                  Public Link
-                </label>
-
-                <div className="flex flex-col md:flex-row gap-2">
-                  <input
-                    readOnly
-                    value={publicTourUrl}
-                    className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => copyText(publicTourUrl, "Linku")}
-                    className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors"
-                  >
-                    Copy Link
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                  Embed Code
-                </label>
-
-                <div className="flex flex-col md:flex-row gap-2">
-                  <textarea
-                    readOnly
-                    value={embedTourCode}
-                    className="flex-1 min-h-[96px] bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono resize-none focus:outline-none"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => copyText(embedTourCode, "Embed code")}
-                    className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-white transition-colors md:self-start"
-                  >
-                    Copy Embed
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
-            <div>
-              <h2 className="font-display text-xl text-primary font-bold">
-                1. Skenat 360°
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Shto panoramat, renditjen dhe skenën fillestare.
-              </p>
-            </div>
-
-            <button
-              onClick={openCreateScene}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-xs rounded-xl hover:bg-white hover:text-foreground transition-colors"
-            >
-              <Plus size={14} /> Shto Skenë
-            </button>
-          </div>
-
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground">
-              Duke ngarkuar...
-            </div>
-          ) : scenes.length === 0 ? (
-            <div className="text-center py-14 text-muted-foreground">
-              <p>Nuk ka skena ende për këtë projekt.</p>
-              <button onClick={openCreateScene} className="mt-3 text-primary underline">
-                Shto skenën e parë
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {scenes
-                .slice()
-                .sort((a, b) => a.sort_order - b.sort_order)
-                .map((scene) => (
-                  <div
-                    key={String(scene.id)}
-                    className={`rounded-2xl overflow-hidden border bg-card ${
-                      selectedSceneId === scene.id
-                        ? "border-primary ring-2 ring-primary/20"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className="aspect-[2/1] bg-black relative">
-                      <img
-                        src={scene.thumbnail_url || scene.image_url}
-                        alt={scene.title}
-                        className="w-full h-full object-cover opacity-90"
-                      />
-                      {scene.is_default && (
-                        <span className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-primary text-black text-[10px] font-bold uppercase">
-                          Default
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="p-4 space-y-3">
-                      <div>
-                        <h3 className="text-foreground font-medium truncate">
-                          {scene.title}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Renditja: {scene.sort_order}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Hotspot-e: {scene.hotspots.length}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => setSelectedSceneId(Number(scene.id))}
-                        className={`w-full py-2 rounded-xl text-sm flex items-center justify-center gap-2 ${
-                          selectedSceneId === scene.id
-                            ? "bg-primary/15 text-primary"
-                            : "bg-muted text-foreground hover:bg-muted/80"
-                        }`}
-                      >
-                        <Crosshair size={14} /> Edito Hotspot-et
-                      </button>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => openEditScene(scene)}
-                          className="py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground flex items-center justify-center"
-                          title="Edito skenën"
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleSetDefaultScene(scene.id)}
-                          className="py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary flex justify-center"
-                          title="Vendos si default"
-                        >
-                          <Star size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteScene(scene.id)}
-                          className="py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 flex justify-center"
-                          title="Fshi skenën"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          )}
-        </div>
-
-        {selectedScene && (
-          <div className="glass-panel p-6 rounded-2xl">
-            <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
-              <div>
-                <h2 className="font-display text-xl text-primary font-bold">
-                  2. Editor Profesional i Hotspot-eve
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin,
-                  aktivizo placement mode, rrotullo panoramën dhe vendose hotspot-in në
-                  qendrën e pamjes.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              <button
-                onClick={handleSaveSceneStartView}
-                className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-              >
-                Ruaj këndin fillestar të kësaj skene
-              </button>
-
-              {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
-                <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
-                  Start view: {selectedScene.initial_yaw.toFixed(3)} /{" "}
-                  {selectedScene.initial_pitch.toFixed(3)}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-4">
-                {viewerError && (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
-                    {viewerError}
-                  </div>
-                )}
-
-                <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-border bg-black relative">
-                  <div ref={editorContainerRef} className="w-full h-full" />
-
-                  {(isPlacementMode || isEditingHotspotPlacement) && (
-                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-20">
-                      <div className="relative w-10 h-10">
-                        <div className="absolute left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
-                        <div className="absolute top-1/2 left-0 right-0 h-[2px] -translate-y-1/2 bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
-                        <div className="absolute left-1/2 top-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-black/40 shadow-[0_0_16px_rgba(212,175,55,0.35)]" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
-                    {isEditingHotspotPlacement
-                      ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
-                      : isPlacementMode
-                        ? draft.yaw !== null && draft.pitch !== null
-                          ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
-                          : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
-                        : "Zgjidh target-in dhe aktivizo placement mode"}
-                  </div>
-
-                  <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
-                    Qendra aktuale:{" "}
-                    {cameraCenter
-                      ? `${cameraCenter.yaw.toFixed(3)} / ${cameraCenter.pitch.toFixed(3)}`
-                      : "Duke lexuar..."}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-                  <h3 className="text-foreground font-medium flex items-center gap-2">
-                    <Link2 size={16} /> Shto hotspot të ri
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                        Skena destinacion
-                      </label>
-                      <select
-                        className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
-                        value={draft.to_scene_id}
-                        onChange={(e) =>
-                          setDraft((prev) => ({
-                            ...prev,
-                            to_scene_id: e.target.value ? Number(e.target.value) : "",
-                          }))
-                        }
-                      >
-                        <option value="">Zgjidh skenën</option>
-                        {availableTargetScenes.map((scene) => (
-                          <option key={String(scene.id)} value={scene.id}>
-                            {scene.title}
-                          </option>
-                        ))}
-                      </select>
-
-                      {availableTargetScenes.length === 0 && (
-                        <p className="mt-2 text-xs text-amber-300">
-                          Të gjitha skenat e tjera janë përdorur tashmë si destinacion
-                          për këtë panoramë. Nëse dëshiron një target tjetër, fshi ose
-                          edito një hotspot ekzistues.
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                        Etiketa
-                      </label>
-                      <input
-                        className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
-                        value={draft.label}
-                        onChange={(e) =>
-                          setDraft((prev) => ({ ...prev, label: e.target.value }))
-                        }
-                        placeholder="P.sh. Shko në korridor"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <span>
-                        <strong className="text-foreground">Status:</strong>{" "}
-                        {isPlacementMode
-                          ? draft.yaw !== null && draft.pitch !== null
-                            ? "Gati për ruajtje"
-                            : "Rrotullo panoramën dhe vendose në qendër"
-                          : "Joaktiv"}
-                      </span>
-                      <span>
-                        <strong className="text-foreground">Yaw/Pitch:</strong>{" "}
-                        {draft.yaw !== null && draft.pitch !== null
-                          ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
-                          : "Pa zgjedhur"}
-                      </span>
-                      <span>
-                        <strong className="text-foreground">Target:</strong>{" "}
-                        {draft.to_scene_id === ""
-                          ? "Pa zgjedhur"
-                          : scenes.find(
-                              (scene) => scene.id === Number(draft.to_scene_id),
-                            )?.title || "Pa zgjedhur"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {!isPlacementMode ? (
-                      <button
-                        onClick={handleStartPlacement}
-                        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold"
-                      >
-                        Aktivizo Placement Mode
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={handlePlaceHotspotAtCenter}
-                          className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
-                        >
-                          <LocateFixed size={16} />
-                          Vendose në Qendër
-                        </button>
-
-                        <button
-                          onClick={handleAddHotspot}
-                          disabled={draft.yaw === null || draft.pitch === null}
-                          className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
-                            draft.yaw !== null && draft.pitch !== null
-                              ? "bg-primary text-black"
-                              : "bg-muted text-muted-foreground cursor-not-allowed"
-                          }`}
-                        >
-                          <Check size={16} />
-                          Ruaj Hotspot
-                        </button>
-
-                        <button
-                          onClick={() => resetDraft(true)}
-                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
-                        >
-                          <X size={16} />
-                          Pastro Pozicionin
-                        </button>
-
-                        <button
-                          onClick={handleStopPlacement}
-                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                        >
-                          Dil nga Placement Mode
-                        </button>
-                      </>
-                    )}
-                  </div>
-
-                  {isPlacementMode && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                      <button
-                        type="button"
-                        onClick={() => nudgeDraftPosition(-0.02, 0)}
-                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
-                      >
-                        <ArrowLeftRight size={14} />
-                        Majtas
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => nudgeDraftPosition(0.02, 0)}
-                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                      >
-                        Djathtas
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => nudgeDraftPosition(0, -0.02)}
-                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
-                      >
-                        <ArrowUp size={14} />
-                        Lart
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => nudgeDraftPosition(0, 0.02)}
-                        className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
-                      >
-                        <ArrowDown size={14} />
-                        Poshtë
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-card p-4">
-                <h3 className="text-foreground font-medium mb-4">
-                  Hotspot-et ekzistuese
-                </h3>
-
-                {selectedScene.hotspots.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">
-                    Nuk ka hotspot-e për këtë skenë.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {[...selectedScene.hotspots]
-                      .sort((a, b) => b.id - a.id)
-                      .map((hotspot) => {
-                        const target = scenes.find(
-                          (scene) => scene.id === hotspot.to_scene_id,
-                        );
-
-                        return (
-                          <div
-                            key={String(hotspot.id)}
-                            className="rounded-xl border border-border bg-muted/40 p-3 flex items-center justify-between gap-3"
-                          >
-                            <div className="min-w-0">
-                              <div className="text-sm text-foreground font-medium truncate">
-                                {target?.title || "Skenë e panjohur"}
-                              </div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {hotspot.label || "Pa etiketë"}
-                              </div>
-                              <div className="text-[11px] text-muted-foreground mt-1">
-                                yaw {hotspot.yaw.toFixed(3)} / pitch{" "}
-                                {hotspot.pitch.toFixed(3)}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => openEditHotspot(hotspot)}
-                                className="p-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary"
-                                title="Edito hotspot-in"
-                              >
-                                <Edit size={14} />
-                              </button>
-
-                              <button
-                                onClick={() => handleSaveHotspotTargetView(hotspot.id)}
-                                className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground"
-                                title="Ruaj drejtimin e hyrjes"
-                              >
-                                <LocateFixed size={14} />
-                              </button>
-
-                              <button
-                                onClick={() => handleDeleteHotspot(hotspot.id)}
-                                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
-                                title="Fshi hotspot-in"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
-            <div>
-              <h2 className="font-display text-xl text-primary font-bold">
-                3. Preview i Turit
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Kjo është eksperienca finale e navigimit ndërmjet skenave.
-              </p>
-            </div>
-          </div>
-
-          {scenes.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Shto së pari të paktën një skenë.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="aspect-[16/9] rounded-2xl overflow-hidden border border-border bg-black">
-                <div ref={previewContainerRef} className="w-full h-full" />
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {scenes
-                  .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((scene) => (
-                    <div
-                      key={String(scene.id)}
-                      className="rounded-xl overflow-hidden border border-border bg-card"
-                    >
-                      <div className="aspect-[4/3] bg-black">
-                        <img
-                          src={scene.thumbnail_url || scene.image_url}
-                          alt={scene.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs text-foreground truncate">
-                          {scene.title}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {scene.hotspots.length} hotspot-e
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
-            <div>
-              <h2 className="font-display text-xl text-primary font-bold">
-                4. Plani i Katit (Opsionale)
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Zvarrit pikat për të vendosur skenat në hartë.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-8">
-            <div
-              className="flex-1 max-w-[700px] aspect-[4/3] bg-muted/40 border-2 border-border rounded-2xl relative overflow-hidden"
-              style={{
-                backgroundImage:
-                  "radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)",
-                backgroundSize: "20px 20px",
-              }}
-            >
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/20 pointer-events-none select-none">
-                <MapIcon size={70} />
-              </div>
-
-              {scenes.map((scene) => {
-                const x = scene.position_x ?? 50;
-                const y = scene.position_y ?? 50;
-                const isSet = scene.position_x != null && scene.position_y != null;
-
-                return (
-                  <div
-                    key={String(scene.id)}
-                    draggable
-                    title={scene.title}
-                    className={`absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-move shadow-lg z-10 ${
-                      isSet
-                        ? "bg-primary text-black"
-                        : "bg-white/50 text-black border-2 border-dashed border-white"
-                    }`}
-                    style={{ left: `${x}%`, top: `${y}%` }}
-                    onDragEnd={(e) => {
-                      const rect = (
-                        e.currentTarget.parentElement as HTMLElement
-                      )?.getBoundingClientRect();
-                      if (!rect) return;
-
-                      const nx = Math.max(
-                        0,
-                        Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
-                      );
-                      const ny = Math.max(
-                        0,
-                        Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
-                      );
-
-                      handleUpdateScenePosition(scene.id, nx, ny);
-                    }}
-                  >
-                    {scene.sort_order + 1}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="w-full md:w-72 rounded-2xl border border-border bg-white/5 p-4">
-              <h3 className="text-foreground font-medium mb-4">Skenat</h3>
-              <div className="space-y-3">
-                {scenes
-                  .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((scene) => (
-                    <div
-                      key={String(scene.id)}
-                      className="flex items-center gap-3 rounded-xl bg-muted/40 p-2.5 border border-border"
-                    >
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
-                        {scene.thumbnail_url || scene.image_url ? (
-                          <img
-                            src={scene.thumbnail_url || scene.image_url}
-                            alt={scene.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30">
-                            <ImageIcon size={14} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground truncate">
-                          {scene.title}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <Move size={11} />{" "}
-                          {scene.position_x != null && scene.position_y != null
-                            ? "Pozicionuar"
-                            : "Pa pozicion"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <Dialog open={isSceneModalOpen} onOpenChange={setIsSceneModalOpen}>
-        <DialogContent className="bg-card border-border text-foreground">
-          <DialogHeader>
-            <DialogTitle>
-              {editingSceneId ? "Edito Skenën" : "Shto Skenë të Re"}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Titulli *
-              </label>
-              <input
-                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                value={sceneForm.title}
-                onChange={(e) =>
-                  setSceneForm((prev) => ({ ...prev, title: e.target.value }))
-                }
-                placeholder="P.sh. Salla e ndenjes"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                URL e panoramës 360° *
-              </label>
-              <input
-                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                value={sceneForm.imageUrl}
-                onChange={(e) =>
-                  setSceneForm((prev) => ({ ...prev, imageUrl: e.target.value }))
-                }
-                placeholder="https://..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Thumbnail URL
-              </label>
-              <input
-                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                value={sceneForm.thumbnailUrl}
-                onChange={(e) =>
-                  setSceneForm((prev) => ({ ...prev, thumbnailUrl: e.target.value }))
-                }
-                placeholder="https://..."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Renditja
-                </label>
-                <input
-                  type="number"
-                  className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                  value={sceneForm.sortOrder}
-                  onChange={(e) =>
-                    setSceneForm((prev) => ({
-                      ...prev,
-                      sortOrder: Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-8">
-                <input
-                  id="scene-default"
-                  type="checkbox"
-                  checked={sceneForm.isDefault}
-                  onChange={(e) =>
-                    setSceneForm((prev) => ({
-                      ...prev,
-                      isDefault: e.target.checked,
-                    }))
-                  }
-                  className="accent-primary"
-                />
-                <label htmlFor="scene-default" className="text-sm">
-                  Skena fillestare
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <button
-              onClick={() => setIsSceneModalOpen(false)}
-              className="px-4 py-2 text-sm hover:bg-muted rounded-lg"
-            >
-              Anulo
-            </button>
-            <button
-              onClick={handleSaveScene}
-              className="px-4 py-2 bg-primary text-black font-bold text-sm rounded-lg"
-            >
-              Ruaj Skenën
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={isEditHotspotModalOpen}
-        onOpenChange={(open) => {
-          setIsEditHotspotModalOpen(open);
-          if (!open) {
-            setEditingHotspot(null);
-            setIsEditingHotspotPlacement(false);
-          }
-        }}
-      >
-        <DialogContent className="bg-card border-border text-foreground">
-          <DialogHeader>
-            <DialogTitle>Edito Hotspot-in</DialogTitle>
-          </DialogHeader>
-
-          {editingHotspot && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Skena destinacion
-                </label>
-                <select
-                  className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
-                  value={editingHotspot.to_scene_id}
-                  onChange={(e) =>
-                    setEditingHotspot((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            to_scene_id: e.target.value
-                              ? Number(e.target.value)
-                              : "",
-                          }
-                        : prev,
-                    )
-                  }
-                >
-                  {scenes
-                    .filter((scene) => {
-                      if (scene.id === selectedSceneId) return false;
-
-                      const isCurrentTarget =
-                        Number(scene.id) === Number(editingHotspot?.to_scene_id);
-
-                      if (isCurrentTarget) return true;
-
-                      return !usedTargetSceneIds.has(Number(scene.id));
-                    })
-                    .map((scene) => (
-                      <option key={String(scene.id)} value={scene.id}>
-                        {scene.title}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Etiketa
-                </label>
-                <input
-                  className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
-                  value={editingHotspot.label}
-                  onChange={(e) =>
-                    setEditingHotspot((prev) =>
-                      prev ? { ...prev, label: e.target.value } : prev,
-                    )
-                  }
-                  placeholder="P.sh. Shko në korridor"
-                />
-              </div>
-
-              <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <span>
-                    <strong className="text-foreground">Pozicioni:</strong>{" "}
-                    {editingHotspot.yaw.toFixed(3)} /{" "}
-                    {editingHotspot.pitch.toFixed(3)}
-                  </span>
-                  <span>
-                    <strong className="text-foreground">Statusi:</strong>{" "}
-                    {isEditingHotspotPlacement
-                      ? "Pozicioni po rregullohet"
-                      : "Gati për ruajtje"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={handlePlaceEditedHotspotAtCenter}
-                  className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
-                >
-                  <LocateFixed size={16} />
-                  Vendose në Qendër
-                </button>
-
-                <button
-                  onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
-                  className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                >
-                  Ruaj drejtimin e hyrjes për këtë hotspot
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => nudgeEditingHotspotPosition(-0.02, 0)}
-                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                >
-                  Majtas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => nudgeEditingHotspotPosition(0.02, 0)}
-                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                >
-                  Djathtas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => nudgeEditingHotspotPosition(0, -0.02)}
-                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                >
-                  Lart
-                </button>
-                <button
-                  type="button"
-                  onClick={() => nudgeEditingHotspotPosition(0, 0.02)}
-                  className="px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                >
-                  Poshtë
-                </button>
-
-                <button
-                  onClick={() => handleDeleteHotspot(editingHotspot.id)}
-                  className="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                >
-                  Fshi Hotspot-in
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <button
-              onClick={() => {
-                setIsEditHotspotModalOpen(false);
-                setEditingHotspot(null);
-                setIsEditingHotspotPlacement(false);
-              }}
-              className="px-4 py-2 text-sm hover:bg-muted rounded-lg"
-            >
-              Anulo
-            </button>
-            <button
-              onClick={handleSaveEditedHotspot}
-              className="px-4 py-2 bg-primary text-black font-bold text-sm rounded-lg"
-            >
-              Ruaj Ndryshimet
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
+export default VirtualTour360;
