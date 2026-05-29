@@ -33,50 +33,80 @@ if (propertyError || propertyData?.virtual_tour_status !== "published") {
   return;
 }
 
-      const { data: sceneData, error: sceneError } = await supabase
-        .from("virtual_tour_scenes")
-        .select("*")
-        .eq("property_id", propertyId)
-        .order("sort_order", { ascending: true });
 
-      if (sceneError) {
-        console.error("Scene load error:", sceneError);
-        setScenes([]);
-        setLoading(false);
-        return;
-      }
 
-      if (!sceneData || sceneData.length === 0) {
-        setScenes([]);
-        setLoading(false);
-        return;
-      }
 
-      const sceneIds = sceneData.map((s) => s.id);
+const { data: sceneData, error: sceneError } = await supabase
+  .from("virtual_tour_scenes")
+  .select(`
+    id,
+    title,
+    image_url,
+    thumbnail_url,
+    is_default,
+    sort_order,
+    position_x,
+    position_y,
+    initial_yaw,
+    initial_pitch
+  `)
+  .eq("property_id", propertyId)
+  .not("image_url", "is", null)
+  .neq("image_url", "")
+  .order("sort_order", { ascending: true });
 
-      const { data: hotspots, error: hotspotError } = await supabase
-        .from("virtual_tour_hotspots")
-        .select("*")
-        .in("scene_id", sceneIds);
+if (sceneError) {
+  console.error("Scene load error:", sceneError);
+  setScenes([]);
+  setLoading(false);
+  return;
+}
 
-      if (hotspotError) {
-        console.error("Hotspot load error:", hotspotError);
-      }
+if (!sceneData || sceneData.length === 0) {
+  setScenes([]);
+  setLoading(false);
+  return;
+}
+
+const sceneIds = sceneData.map((s) => s.id);
+const validSceneIds = new Set(sceneData.map((scene) => Number(scene.id)));
+
+const { data: hotspots, error: hotspotError } = await supabase
+  .from("virtual_tour_hotspots")
+  .select(`
+    id,
+    scene_id,
+    to_scene_id,
+    yaw,
+    pitch,
+    target_yaw,
+    target_pitch,
+    label
+  `)
+  .in("scene_id", sceneIds);
+
+if (hotspotError) {
+  console.error("Hotspot load error:", hotspotError);
+}
 
 const normalized = sceneData.map((scene) => ({
   id: scene.id,
   title: scene.title,
-  imageUrl: scene.image_url,
-  thumbnailUrl: scene.thumbnail_url,
-  isDefault: scene.is_default,
-  sortOrder: scene.sort_order,
+  imageUrl: String(scene.image_url || "").trim(),
+  thumbnailUrl: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
+  isDefault: !!scene.is_default,
+  sortOrder: Number(scene.sort_order) || 0,
   positionX: scene.position_x,
   positionY: scene.position_y,
   initialYaw: scene.initial_yaw,
   initialPitch: scene.initial_pitch,
   hotspots:
     hotspots
-      ?.filter((h) => h.scene_id === scene.id)
+      ?.filter(
+        (h) =>
+          Number(h.scene_id) === Number(scene.id) &&
+          validSceneIds.has(Number(h.to_scene_id)),
+      )
       .map((h) => ({
         id: h.id,
         fromSceneId: h.scene_id,

@@ -41,6 +41,104 @@ type Orientation = { yaw: number; pitch: number };
 
 const INITIAL_LOADING_FALLBACK_MS = 15000;
 
+const getDeviceProfile = () => {
+  const width = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const memory = typeof navigator !== "undefined"
+    ? (navigator as any).deviceMemory || 4
+    : 4;
+  const connection = typeof navigator !== "undefined"
+    ? (navigator as any).connection
+    : null;
+
+  const saveData = !!connection?.saveData;
+  const effectiveType = connection?.effectiveType || "";
+
+  const isSlowConnection =
+    saveData || effectiveType === "slow-2g" || effectiveType === "2g";
+
+  const isLowMemory = memory <= 2;
+  const isMobile = width <= 640;
+
+  return {
+    width,
+    memory,
+    isMobile,
+    isLowMemory,
+    isSlowConnection,
+  };
+};
+
+const getViewerResolution = () => {
+  const profile = getDeviceProfile();
+
+  if (profile.isMobile || profile.isLowMemory || profile.isSlowConnection) {
+    return 64;
+  }
+
+  if (profile.width <= 1024) {
+    return 128;
+  }
+
+  return 256;
+};
+
+const getCacheMaxItems = () => {
+  const profile = getDeviceProfile();
+
+  if (profile.isMobile || profile.isLowMemory || profile.isSlowConnection) {
+    return 4;
+  }
+
+  if (profile.width <= 1024) {
+    return 6;
+  }
+
+  return 8;
+};
+
+const getNeighborPreloadLimit = () => {
+  const profile = getDeviceProfile();
+
+  if (profile.isSlowConnection) {
+    return 0;
+  }
+
+  if (profile.isMobile || profile.isLowMemory) {
+    return 1;
+  }
+
+  return 3;
+};
+
+const preloadImage = (src?: string | null, priority: "high" | "low" = "low") => {
+  if (!src) return;
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.decoding = "async";
+
+  try {
+    (img as any).fetchPriority = priority;
+  } catch {
+    // fetchPriority is not supported in every browser.
+  }
+
+  img.src = src;
+};
+
+const scheduleIdleTask = (callback: () => void) => {
+  if (typeof window === "undefined") return;
+
+  const idleCallback = (window as any).requestIdleCallback;
+
+  if (typeof idleCallback === "function") {
+    idleCallback(callback, { timeout: 1200 });
+    return;
+  }
+
+  window.setTimeout(callback, 250);
+};
+
 export function VirtualTour360({
   scenes,
   defaultSceneId,
@@ -261,8 +359,8 @@ const goToScene = useCallback(
 
 useEffect(() => {
   Cache.enabled = true;
-  Cache.ttl = 30 * 60 * 1000; // 30 min — mban më gjatë në memorie
-  Cache.maxItems = 12;         // e kemi ulur ne 12 te mos ngarkohen Tel
+  Cache.ttl = 30 * 60 * 1000;
+  Cache.maxItems = getCacheMaxItems();
 }, []);
   
   
@@ -279,24 +377,26 @@ const preloadSceneImages = useCallback(
     const scene = sortedScenes.find((s) => s.id === sceneId);
     if (!scene) return;
 
-    const neighborIds = scene.hotspots.map((h) => h.toSceneId);
+    const preloadLimit = getNeighborPreloadLimit();
+    if (preloadLimit <= 0) return;
 
-    const imagesToPreload = [
-      scene.imageUrl,
-      ...sortedScenes
-        .filter((s) => neighborIds.includes(s.id))
-        .map((s) => s.imageUrl),
-    ].filter(Boolean);
+    const neighborIds = scene.hotspots
+      .map((h) => h.toSceneId)
+      .filter((id, index, arr) => arr.indexOf(id) === index);
 
-imagesToPreload.forEach((src) => {
-      if (preloadedImagesRef.current.has(src)) return;
+    const imagesToPreload = sortedScenes
+      .filter((s) => neighborIds.includes(s.id))
+      .slice(0, preloadLimit)
+      .map((s) => s.imageUrl)
+      .filter(Boolean);
 
-      preloadedImagesRef.current.add(src);
+    scheduleIdleTask(() => {
+      imagesToPreload.forEach((src) => {
+        if (preloadedImagesRef.current.has(src)) return;
 
-      const img = new Image();
-      img.crossOrigin = "anonymous"; // <--- 
-      img.decoding = "async";
-      img.src = src;
+        preloadedImagesRef.current.add(src);
+        preloadImage(src, "low");
+      });
     });
   },
   [sortedScenes],
@@ -344,12 +444,7 @@ const finishInitialLoad = () => {
       container: containerRef.current,
       navbar: ["zoom", "move"],
 adapter: EquirectangularAdapter.withConfig({
-  resolution:
-    window.innerWidth <= 640
-      ? 64
-      : window.innerWidth <= 1024
-        ? 128
-        : 256,
+  resolution: getViewerResolution(),
 }),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
@@ -371,7 +466,7 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-preload: true,   // <-- PSV ngarkon fqinjët në background automatikisht
+preload: false,   // <-- PSV ngarkon fqinjët në background automatikisht
 transitionOptions: () => ({
   showLoader: false,
   effect: "fade",
@@ -627,9 +722,12 @@ useEffect(() => {
               {sortedScenes
                 .filter((s) => s.positionX != null && s.positionY != null)
                 .map((scene) => (
-                  <button
-                    key={scene.id}
-                    onClick={() => handleSceneChange(scene.id)}
+<button
+  key={scene.id}
+  onMouseEnter={() => preloadImage(scene.imageUrl, "high")}
+  onFocus={() => preloadImage(scene.imageUrl, "high")}
+  onTouchStart={() => preloadImage(scene.imageUrl, "high")}
+  onClick={() => handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
                         ? "bg-primary border-white scale-125 z-10"
@@ -651,6 +749,9 @@ useEffect(() => {
   ref={(el) => {
     sceneButtonRefs.current[scene.id] = el;
   }}
+  onMouseEnter={() => preloadImage(scene.imageUrl, "high")}
+  onFocus={() => preloadImage(scene.imageUrl, "high")}
+  onTouchStart={() => preloadImage(scene.imageUrl, "high")}
   onClick={() => handleSceneChange(scene.id)}
                 className={`relative shrink-0 w-24 h-14 rounded-lg overflow-hidden border-2 transition-all ${
                   currentSceneId === scene.id
