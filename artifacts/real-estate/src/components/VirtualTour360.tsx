@@ -14,6 +14,8 @@ interface VirtualTour360Props {
     id: number;
     title: string;
     imageUrl: string;
+    mobileImageUrl?: string | null;
+    tabletImageUrl?: string | null;
     thumbnailUrl?: string | null;
     isDefault: boolean;
     sortOrder: number;
@@ -42,6 +44,25 @@ type Orientation = { yaw: number; pitch: number };
 const INITIAL_LOADING_FALLBACK_MS = 15000;
 
 const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
+
+const getOptimizedPanoramaUrl = (scene: SceneType) => {
+  const profile = getDeviceProfile();
+  const mobileImageUrl = (scene as any).mobileImageUrl || (scene as any).mobile_image_url;
+  const tabletImageUrl = (scene as any).tabletImageUrl || (scene as any).tablet_image_url;
+
+  if (
+    (profile.isMobile || profile.isLowMemory || profile.isSlowConnection) &&
+    mobileImageUrl
+  ) {
+    return String(mobileImageUrl).trim();
+  }
+
+  if (profile.width <= 1024 && tabletImageUrl) {
+    return String(tabletImageUrl).trim();
+  }
+
+  return String(scene.imageUrl || "").trim();
+};
 
 const getDeviceProfile = () => {
   const width = typeof window !== "undefined" ? window.innerWidth : 1200;
@@ -84,7 +105,7 @@ const getCacheMaxItems = () => {
   const profile = getDeviceProfile();
 
   if (profile.isMobile || profile.isLowMemory || profile.isSlowConnection) {
-    return 4;
+    return 3;
   }
 
   return 6;
@@ -163,7 +184,7 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
   const nodes = useMemo(() => {
     return sortedScenes.map((scene) => ({
       id: String(scene.id),
-      panorama: scene.imageUrl,
+      panorama: getOptimizedPanoramaUrl(scene),
       thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
       name: scene.title,
       data: {
@@ -308,6 +329,7 @@ const goToScene = useCallback(
 
     if (currentSceneRef.current?.id === targetSceneId) return;
 
+
     // Nëse navigim është duke ndodhur, mos blloko — thjesht kthe
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
@@ -328,7 +350,7 @@ const goToScene = useCallback(
       await vtPlugin.setCurrentNode(String(targetSceneId), {
         showLoader: false,
         effect: "fade",
-        speed: 180,      // konsistent me konfigurimin e sipërm
+        speed: 120,      // transition më i shpejtë për mobile/PC
         rotation: false,
       });
 
@@ -376,6 +398,13 @@ const preloadSceneImageOnce = useCallback(
   [],
 );
 
+const prepareSceneForNavigation = useCallback(
+  (scene: SceneType) => {
+    preloadSceneImageOnce(getOptimizedPanoramaUrl(scene), "high");
+  },
+  [preloadSceneImageOnce],
+);
+
 const preloadSceneImages = useCallback(
   (sceneId: number | null) => {
     if (sceneId === null) return;
@@ -393,7 +422,7 @@ const preloadSceneImages = useCallback(
     const imagesToPreload = sortedScenes
       .filter((s) => neighborIds.includes(s.id))
       .slice(0, preloadLimit)
-      .map((s) => s.imageUrl)
+      .map((s) => getOptimizedPanoramaUrl(s))
       .filter(Boolean);
 
     scheduleIdleTask(() => {
@@ -467,11 +496,11 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-preload: false,   // <-- Preload kontrollohet manualisht vetëm për skenat fqinje
+preload: false,   // Preload kontrollohet manualisht vetëm për skenat fqinje.
 transitionOptions: () => ({
   showLoader: false,
   effect: "fade",
-  speed: 180,    // <-- pak më shpejt (260 → 180ms)
+  speed: 120,    // transition i shkurtër dhe smooth
   rotation: false,
 }),
           },
@@ -725,9 +754,9 @@ useEffect(() => {
                 .map((scene) => (
 <button
   key={scene.id}
-onMouseEnter={() => preloadSceneImageOnce(scene.imageUrl, "high")}
-onFocus={() => preloadSceneImageOnce(scene.imageUrl, "high")}
-onTouchStart={() => preloadSceneImageOnce(scene.imageUrl, "high")}
+onMouseEnter={() => prepareSceneForNavigation(scene)}
+onFocus={() => prepareSceneForNavigation(scene)}
+onTouchStart={() => prepareSceneForNavigation(scene)}
   onClick={() => handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
@@ -750,9 +779,9 @@ onTouchStart={() => preloadSceneImageOnce(scene.imageUrl, "high")}
   ref={(el) => {
     sceneButtonRefs.current[scene.id] = el;
   }}
-onMouseEnter={() => preloadSceneImageOnce(scene.imageUrl, "high")}
-onFocus={() => preloadSceneImageOnce(scene.imageUrl, "high")}
-onTouchStart={() => preloadSceneImageOnce(scene.imageUrl, "high")}
+onMouseEnter={() => prepareSceneForNavigation(scene)}
+onFocus={() => prepareSceneForNavigation(scene)}
+onTouchStart={() => prepareSceneForNavigation(scene)}
   onClick={() => handleSceneChange(scene.id)}
                 className={`relative shrink-0 w-24 h-14 rounded-lg overflow-hidden border-2 transition-all ${
                   currentSceneId === scene.id
