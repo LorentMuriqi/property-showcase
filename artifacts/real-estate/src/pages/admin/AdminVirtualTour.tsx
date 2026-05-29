@@ -873,6 +873,9 @@ const editorViewerLoadIdRef = useRef(0);
         return;
       }
 
+      const imageUrl = sceneForm.imageUrl.trim();
+      const thumbnailUrl = sceneForm.thumbnailUrl.trim();
+
       if (sceneForm.isDefault) {
         await supabase
           .from("virtual_tour_scenes")
@@ -885,8 +888,8 @@ const editorViewerLoadIdRef = useRef(0);
           .from("virtual_tour_scenes")
           .update({
             title: sceneForm.title.trim(),
-            image_url: sceneForm.imageUrl.trim(),
-            thumbnail_url: sceneForm.thumbnailUrl.trim() || null,
+            image_url: imageUrl,
+            thumbnail_url: thumbnailUrl || null,
             is_default: sceneForm.isDefault,
             sort_order: Number(sceneForm.sortOrder) || 0,
             updated_at: new Date().toISOString(),
@@ -902,8 +905,8 @@ const editorViewerLoadIdRef = useRef(0);
             ? { virtual_tour_id: recordId }
             : { property_id: recordId }),
           title: sceneForm.title.trim(),
-          image_url: sceneForm.imageUrl.trim(),
-          thumbnail_url: sceneForm.thumbnailUrl.trim() || null,
+          image_url: imageUrl,
+          thumbnail_url: thumbnailUrl || null,
           is_default: sceneForm.isDefault,
           sort_order: Number(sceneForm.sortOrder) || 0,
         });
