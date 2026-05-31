@@ -1701,12 +1701,7 @@ let cameraInterval: number | null = null;
     try {
 viewer = new Viewer({
   container: editorContainerRef.current,
-  panorama: {
-    source: selectedScene.image_url,
-    options: {
-      crossOrigin: "anonymous",
-    },
-  },
+  panorama: selectedScene.image_url,
   navbar: ["zoom", "move", "fullscreen"],
   adapter: EquirectangularAdapter.withConfig({
     resolution: 128,
@@ -1881,15 +1876,10 @@ return () => {
 
     const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
 
-  return validScenes.map((scene) => ({
-    id: String(scene.id),
-    panorama: {
-      source: scene.image_url,
-      options: {
-        crossOrigin: "anonymous",
-      },
-    },
-    name: scene.title,
+return validScenes.map((scene) => ({
+  id: String(scene.id),
+  panorama: scene.image_url,
+  name: scene.title,
       thumbnail: scene.thumbnail_url || scene.image_url,
       data: {
         initialYaw: scene.initial_yaw ?? null,
@@ -2396,7 +2386,7 @@ return () => {
                         ? draft.yaw !== null && draft.pitch !== null
                           ? "Pozicioni u vendos. Rafinoje me butonat ←→ ose kliko mbi panoramë për pozicion të ri"
                           : "Kliko direkt mbi panoramën ku dëshiron të vendosësh hotspot-in (ose rrotullohu dhe kliko “Vendose në Qendër”)"
-                        : "Zgjidh target-in, kliko “Aktivizo Placement Mode” dhe pastaj kliko direkt mbi panoramë"}
+                        : "Zgjidh destinacionin dhe kliko “Ruaj Hotspot Automatik”. Placement Mode përdoret vetëm për vendosje manuale."}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
@@ -2486,54 +2476,54 @@ return () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {!isPlacementMode ? (
-                      <button
-                        onClick={handleStartPlacement}
-                        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold"
-                      >
-                        Aktivizo Placement Mode
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={handlePlaceHotspotAtCenter}
-                          className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
-                        >
-                          <LocateFixed size={16} />
-                          Vendose në Qendër
-                        </button>
+<div className="flex flex-wrap gap-2">
+  <button
+    onClick={handleAddHotspot}
+    disabled={draft.to_scene_id === ""}
+    className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
+      draft.to_scene_id !== ""
+        ? "bg-primary text-black hover:bg-white"
+        : "bg-muted text-muted-foreground cursor-not-allowed"
+    }`}
+  >
+    <Check size={16} />
+    Ruaj Hotspot Automatik
+  </button>
 
-                        <button
-                          onClick={handleAddHotspot}
-                          disabled={draft.yaw === null || draft.pitch === null}
-                          className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
-                            draft.yaw !== null && draft.pitch !== null
-                              ? "bg-primary text-black"
-                              : "bg-muted text-muted-foreground cursor-not-allowed"
-                          }`}
-                        >
-                          <Check size={16} />
-                          Ruaj Hotspot
-                        </button>
+  {!isPlacementMode ? (
+    <button
+      onClick={handleStartPlacement}
+      className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold"
+    >
+      Vendos Manualisht
+    </button>
+  ) : (
+    <>
+      <button
+        onClick={handlePlaceHotspotAtCenter}
+        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
+      >
+        <LocateFixed size={16} />
+        Vendose në Qendër
+      </button>
 
-                        <button
-                          onClick={() => resetDraft(true)}
-                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
-                        >
-                          <X size={16} />
-                          Pastro Pozicionin
-                        </button>
+      <button
+        onClick={() => resetDraft(true)}
+        className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
+      >
+        <X size={16} />
+        Pastro Pozicionin
+      </button>
 
-                        <button
-                          onClick={handleStopPlacement}
-                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                        >
-                          Dil nga Placement Mode
-                        </button>
-                      </>
-                    )}
-                  </div>
+      <button
+        onClick={handleStopPlacement}
+        className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
+      >
+        Dil nga Placement Mode
+      </button>
+    </>
+  )}
+</div>
 
                   {isPlacementMode && (
                     <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
