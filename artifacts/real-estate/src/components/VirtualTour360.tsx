@@ -7,7 +7,7 @@ import {
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
-import { Maximize, Minimize, Map as MapIcon, X, List, Compass } from "lucide-react";
+import { Maximize, Minimize, Map as MapIcon, X, Compass } from "lucide-react";
 
 interface VirtualTour360Props {
   scenes: Array<{
@@ -186,13 +186,10 @@ export function VirtualTour360({
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
-  const [showSceneList, setShowSceneList] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
   const [isOverlayVisible, setIsOverlayVisible] = useState(true);
-  const [sceneTransitionName, setSceneTransitionName] = useState<string | null>(null);
-  const [showSceneNameFlash, setShowSceneNameFlash] = useState(false);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
   const [canUseFullscreen, setCanUseFullscreen] = useState(false);
@@ -633,12 +630,6 @@ export function VirtualTour360({
       currentSceneRef.current = nextScene;
       setCurrentSceneId(nextId);
 
-      if (nextScene) {
-        setSceneTransitionName(nextScene.title);
-        setShowSceneNameFlash(true);
-        setTimeout(() => setShowSceneNameFlash(false), 2200);
-      }
-
       const pending = pendingEntryOrientationRef.current;
       pendingEntryOrientationRef.current = null;
 
@@ -792,81 +783,79 @@ export function VirtualTour360({
           pointer-events: none !important;
         }
 
-        /* ── Matterport-identical navigation dots ── */
+        /* ── 3-D glass directional arrow (professional) ── */
         .virtual-tour-shell .psv-virtual-tour-arrow {
           position: relative !important;
-          width: 52px !important;
-          height: 52px !important;
+          width: 58px !important;
+          height: 58px !important;
           border-radius: 9999px !important;
-          /* 3-D sphere: bright highlight top-left, shadow bottom-right */
           background:
-            radial-gradient(circle at 36% 34%, #ffffff 0%, #eaeaea 42%, #c2c2c2 100%) !important;
-          border: none !important;
+            radial-gradient(circle at 38% 32%,
+              rgba(255,255,255,0.22) 0%,
+              rgba(30,30,30,0.82) 60%,
+              rgba(0,0,0,0.92) 100%) !important;
+          border: 1.5px solid rgba(255,255,255,0.32) !important;
           box-shadow:
-            0 6px 20px rgba(0,0,0,0.55),
-            0 2px 6px  rgba(0,0,0,0.35),
-            inset 0 -4px 8px rgba(0,0,0,0.18) !important;
-          animation: vt-mp-pulse 2.4s ease-out infinite !important;
-          transition: transform 0.15s ease !important;
+            0 8px 28px rgba(0,0,0,0.65),
+            0 2px 8px  rgba(0,0,0,0.45),
+            inset 0 1px 0 rgba(255,255,255,0.18),
+            inset 0 -1px 0 rgba(0,0,0,0.4),
+            0 0 0 0 rgba(255,255,255,0.28) !important;
+          animation: vt-arrow-pulse 2.6s ease-out infinite !important;
+          transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), border-color 0.18s ease !important;
           overflow: visible !important;
         }
-        /* elliptical floor shadow */
+        /* floor shadow ellipse */
         .virtual-tour-shell .psv-virtual-tour-arrow::after {
           content: '' !important;
           position: absolute !important;
-          bottom: -10px !important;
+          bottom: -12px !important;
           left: 50% !important;
           transform: translateX(-50%) !important;
-          width: 68% !important;
+          width: 60% !important;
           height: 10px !important;
-          background: radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, transparent 72%) !important;
+          background: radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, transparent 70%) !important;
           border-radius: 50% !important;
           pointer-events: none !important;
         }
         .virtual-tour-shell .psv-virtual-tour-arrow:hover {
-          transform: scale(1.18) translateY(-2px) !important;
+          transform: scale(1.2) translateY(-4px) !important;
+          border-color: rgba(255,255,255,0.65) !important;
           box-shadow:
-            0 10px 28px rgba(0,0,0,0.6),
-            0 4px 10px  rgba(0,0,0,0.4),
-            inset 0 -4px 8px rgba(0,0,0,0.18) !important;
+            0 14px 36px rgba(0,0,0,0.7),
+            0 4px 12px  rgba(0,0,0,0.5),
+            inset 0 1px 0 rgba(255,255,255,0.25),
+            inset 0 -1px 0 rgba(0,0,0,0.4),
+            0 0 0 0 rgba(255,255,255,0) !important;
         }
-        /* upward chevron arrow — dark, centered */
+        /* white upward arrow inside */
         .virtual-tour-shell .psv-virtual-tour-arrow svg {
           display: block !important;
-          width: 22px !important;
-          height: 22px !important;
-          fill: #333333 !important;
-          filter: none !important;
-          opacity: 0.8 !important;
+          width: 26px !important;
+          height: 26px !important;
+          fill: rgba(255,255,255,0.95) !important;
+          filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)) !important;
+          opacity: 1 !important;
         }
-        /* pulse ring */
-        @keyframes vt-mp-pulse {
-          0%   { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35),
-                             inset 0 -4px 8px rgba(0,0,0,0.18),
-                             0 0 0 0   rgba(255,255,255,0.5); }
-          55%  { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35),
-                             inset 0 -4px 8px rgba(0,0,0,0.18),
-                             0 0 0 16px rgba(255,255,255,0); }
-          100% { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35),
-                             inset 0 -4px 8px rgba(0,0,0,0.18),
-                             0 0 0 0   rgba(255,255,255,0); }
+        /* pulsing outer ring */
+        @keyframes vt-arrow-pulse {
+          0% {
+            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.45),
+                        inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.4),
+                        0 0 0 0   rgba(255,255,255,0.28);
+          }
+          55% {
+            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.45),
+                        inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.4),
+                        0 0 0 20px rgba(255,255,255,0);
+          }
+          100% {
+            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.45),
+                        inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.4),
+                        0 0 0 0   rgba(255,255,255,0);
+          }
         }
 
-        /* Scene name flash animation */
-        @keyframes scene-name-in {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes scene-name-out {
-          from { opacity: 1; transform: translateY(0); }
-          to { opacity: 0; transform: translateY(-4px); }
-        }
-        .scene-name-flash-enter {
-          animation: scene-name-in 0.3s ease forwards;
-        }
-        .scene-name-flash-exit {
-          animation: scene-name-out 0.4s ease 1.5s forwards;
-        }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
@@ -938,21 +927,6 @@ export function VirtualTour360({
           </div>
         )}
 
-        {/* Scene name flash on scene change */}
-        {showSceneNameFlash && sceneTransitionName && !isInitialLoading && (
-          <div
-            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none ${
-              showSceneNameFlash ? "scene-name-flash-enter scene-name-flash-exit" : ""
-            }`}
-          >
-            <div className="px-6 py-3 rounded-2xl bg-black/60 backdrop-blur-xl border border-white/10 shadow-2xl">
-              <p className="text-white text-lg font-semibold tracking-wide text-center">
-                {sceneTransitionName}
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Top-left: Scene title */}
         <div
           className={`absolute top-5 left-5 z-40 pointer-events-none max-w-[60%] transition-all duration-300 ${
@@ -992,26 +966,9 @@ export function VirtualTour360({
             isOverlayVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"
           }`}
         >
-          {/* Scene list toggle */}
-          <button
-            onClick={() => {
-              setShowSceneList(!showSceneList);
-              setShowMap(false);
-            }}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg ${
-              showSceneList ? "bg-primary text-black" : "bg-black/50 text-white hover:bg-black/70"
-            }`}
-            title="Skenat"
-          >
-            <List size={18} />
-          </button>
-
           {hasMap && (
             <button
-              onClick={() => {
-                setShowMap(!showMap);
-                setShowSceneList(false);
-              }}
+              onClick={() => setShowMap(!showMap)}
               className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg ${
                 showMap ? "bg-primary text-black" : "bg-black/50 text-white hover:bg-black/70"
               }`}
@@ -1068,70 +1025,11 @@ export function VirtualTour360({
           </div>
         )}
 
-        {/* Scene list panel (side) */}
-        <div
-          className={`absolute top-0 right-0 bottom-0 z-40 w-72 bg-black/90 md:backdrop-blur-2xl border-l border-white/10 shadow-2xl transition-all duration-300 flex flex-col ${
-            showSceneList ? "translate-x-0" : "translate-x-full"
-          }`}
-        >
-          <div className="flex items-center justify-between p-4 border-b border-white/10">
-            <div>
-              <h3 className="text-white font-semibold text-sm">Skenat</h3>
-              <p className="text-white/40 text-xs mt-0.5">{sortedScenes.length} pamje</p>
-            </div>
-            <button
-              onClick={() => setShowSceneList(false)}
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 hide-scrollbar">
-            {sortedScenes.map((scene, idx) => (
-              <button
-                key={scene.id}
-                onClick={() => {
-                  handleSceneChange(scene.id);
-                  setShowSceneList(false);
-                }}
-                onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
-                className={`w-full flex items-center gap-3 p-2 rounded-xl text-left transition-all ${
-                  currentSceneId === scene.id
-                    ? "bg-primary/20 border border-primary/40"
-                    : "hover:bg-white/10 border border-transparent"
-                }`}
-              >
-                <div className="relative shrink-0 w-14 h-10 rounded-lg overflow-hidden bg-white/5">
-                  <img
-                    src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
-                    alt={scene.title}
-                    crossOrigin="anonymous"
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-full object-cover"
-                  />
-                  {currentSceneId === scene.id && (
-                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-xs font-medium truncate ${currentSceneId === scene.id ? "text-primary" : "text-white/90"}`}>
-                    {scene.title}
-                  </p>
-                  <p className="text-[10px] text-white/35 mt-0.5">{idx + 1} / {sortedScenes.length}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Scene strip at bottom */}
         <div
           className={`absolute bottom-0 left-0 right-0 z-40 transition-all duration-300 ${
             isOverlayVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-          } ${showSceneList ? "pr-72" : ""}`}
+          }`}
         >
           <div className="h-20 bg-gradient-to-t from-black/95 to-transparent flex items-end justify-center pb-3 px-4">
             <div ref={sceneStripScrollRef} className="flex gap-2 overflow-x-auto max-w-full pb-1 hide-scrollbar">
