@@ -336,18 +336,7 @@ const calculateLinkOrientation = (fromScene: Scene, toScene: Scene) => {
   };
 };
 
-const FLOOR_HOTSPOT_PITCH = -0.92;
-const MIN_PITCH = -Math.PI / 2 + 0.08;
-const MAX_PITCH = Math.PI / 2 - 0.08;
 
-const clampPitch = (pitch: number) => {
-  return Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
-};
-
-const getFloorHotspotPosition = (yaw: number) => ({
-  yaw,
-  pitch: clampPitch(FLOOR_HOTSPOT_PITCH),
-});
 
 export default function AdminVirtualTour() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
