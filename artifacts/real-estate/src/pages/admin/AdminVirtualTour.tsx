@@ -1699,13 +1699,18 @@ let viewer: Viewer | null = null;
 let cameraInterval: number | null = null;
 
     try {
-      viewer = new Viewer({
-        container: editorContainerRef.current,
-        panorama: selectedScene.image_url,
-        navbar: ["zoom", "move", "fullscreen"],
-        adapter: EquirectangularAdapter.withConfig({
-          resolution: 128,
-        }),
+viewer = new Viewer({
+  container: editorContainerRef.current,
+  panorama: {
+    source: selectedScene.image_url,
+    options: {
+      crossOrigin: "anonymous",
+    },
+  },
+  navbar: ["zoom", "move", "fullscreen"],
+  adapter: EquirectangularAdapter.withConfig({
+    resolution: 128,
+  }),
         defaultYaw: selectedScene.initial_yaw ?? 0,
         defaultPitch: selectedScene.initial_pitch ?? 0,
         moveInertia: true,
@@ -1876,10 +1881,15 @@ return () => {
 
     const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
 
-    return validScenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.image_url,
-      name: scene.title,
+  return validScenes.map((scene) => ({
+    id: String(scene.id),
+    panorama: {
+      source: scene.image_url,
+      options: {
+        crossOrigin: "anonymous",
+      },
+    },
+    name: scene.title,
       thumbnail: scene.thumbnail_url || scene.image_url,
       data: {
         initialYaw: scene.initial_yaw ?? null,
@@ -2315,13 +2325,15 @@ return () => {
           <div className="glass-panel p-6 rounded-2xl">
             <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
               <div>
-                <h2 className="font-display text-xl text-primary font-bold">
-                  2. Editor Profesional i Hotspot-eve
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-Vendos pikat e skenave në Planin e Katit, zgjidh destinacionin dhe ruaj lidhjen.
-Sistemi kalkulon automatikisht pozicionin e hotspot-it dhe drejtimin e hyrjes.
-                </p>
+                
+				<h2 className="font-display text-xl text-primary font-bold">
+  2. Editor Profesional i Hotspot-eve
+</h2>
+<p className="text-sm text-muted-foreground mt-1">
+  Vendos pikat e skenave në Planin e Katit, zgjidh destinacionin dhe ruaj lidhjen.
+  Sistemi kalkulon automatikisht pozicionin e hotspot-it dhe drejtimin e hyrjes.
+</p>
+				
               </div>
             </div>
 
