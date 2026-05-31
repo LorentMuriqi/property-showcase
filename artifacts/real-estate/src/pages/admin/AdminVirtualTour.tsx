@@ -1053,7 +1053,7 @@ const editorViewerLoadIdRef = useRef(0);
     toast({
       title: "Placement mode aktiv",
       description:
-        "Rrotullo panoramën derisa vendi i saktë të jetë në qendër, pastaj kliko “Vendose në Qendër”.",
+        "Klikoni direkt mbi panoramën ku dëshironi të vendosni hotspot-in, ose rrotullojeni dhe klikoni “Vendose në Qendër”.",
     });
   };
 
@@ -1504,6 +1504,24 @@ let cameraInterval: number | null = null;
           tooltip: "Pozicioni i ri i hotspot-it",
         });
       }
+
+      // Click-to-place: clicking the panorama directly sets the hotspot position
+      viewer.addEventListener("click", ({ data }: any) => {
+        const clickedYaw = data?.longitude;
+        const clickedPitch = data?.latitude;
+
+        if (!Number.isFinite(clickedYaw) || !Number.isFinite(clickedPitch)) return;
+
+        if (isPlacementMode) {
+          setDraft((prev) => ({ ...prev, yaw: clickedYaw, pitch: clickedPitch }));
+          setCameraCenter({ yaw: clickedYaw, pitch: clickedPitch });
+        } else if (isEditingHotspotPlacement) {
+          setEditingHotspot((prev) =>
+            prev ? { ...prev, yaw: clickedYaw, pitch: clickedPitch } : prev,
+          );
+          setCameraCenter({ yaw: clickedYaw, pitch: clickedPitch });
+        }
+      });
 
       const syncCameraCenter = () => {
         try {
@@ -2095,12 +2113,12 @@ return () => {
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                     {isEditingHotspotPlacement
-                      ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
+                      ? "Klikoni direkt mbi panoramën për pozicionin e ri, ose rrotullojeni dhe klikoni “Vendose në Qendër”"
                       : isPlacementMode
                         ? draft.yaw !== null && draft.pitch !== null
-                          ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
-                          : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
-                        : "Zgjidh target-in dhe aktivizo placement mode"}
+                          ? "Pozicioni u vendos. Rafinoje me butonat ←→ ose kliko mbi panoramë për pozicion të ri"
+                          : "Kliko direkt mbi panoramën ku dëshiron të vendosësh hotspot-in (ose rrotullohu dhe kliko “Vendose në Qendër”)"
+                        : "Zgjidh target-in, kliko “Aktivizo Placement Mode” dhe pastaj kliko direkt mbi panoramë"}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
