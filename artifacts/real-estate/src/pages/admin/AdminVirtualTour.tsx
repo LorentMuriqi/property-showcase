@@ -5,12 +5,9 @@ import {
   Plus,
   Trash2,
   Edit,
-  Map as MapIcon,
   Crosshair,
   Star,
   Link2,
-  Image as ImageIcon,
-  Move,
   Check,
   X,
   LocateFixed,
@@ -47,7 +44,6 @@ type Scene = {
   position_y: number | null;
   initial_yaw: number | null;
   initial_pitch: number | null;
-  yaw_offset: number | null;
   hotspots: Hotspot[];
 };
 
@@ -284,55 +280,38 @@ const toNullableNumber = (value: any) => {
   return Number.isFinite(n) ? n : null;
 };
 
-const FLOOR_HOTSPOT_PITCH = -0.82;
-const ENTRY_PITCH = 0;
+const DEFAULT_TARGET_PITCH = 0;
 
-const normalizeYaw = (yaw: number) => {
-  const twoPi = Math.PI * 2;
-  return ((yaw + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
-};
-
-const getPlanAngle = (
-  from: { position_x: number | null; position_y: number | null },
-  to: { position_x: number | null; position_y: number | null },
+const getReciprocalHotspot = (
+  targetScene: Scene | undefined,
+  currentSceneId: number,
+  excludeHotspotId?: number,
 ) => {
-  if (
-    from.position_x == null ||
-    from.position_y == null ||
-    to.position_x == null ||
-    to.position_y == null
-  ) {
-    return null;
-  }
-
-  const dx = Number(to.position_x) - Number(from.position_x);
-  const dy = Number(to.position_y) - Number(from.position_y);
-
-  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
-  if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) return null;
-
-  return Math.atan2(dx, -dy);
+  return (
+    targetScene?.hotspots.find(
+      (hotspot) =>
+        Number(hotspot.to_scene_id) === Number(currentSceneId) &&
+        Number(hotspot.id) !== Number(excludeHotspotId),
+    ) || null
+  );
 };
 
-const getSceneYawOffset = (scene: { yaw_offset?: number | null }) => {
-  return Number(scene.yaw_offset ?? 0);
-};
-
-const calculateLinkOrientation = (fromScene: Scene, toScene: Scene) => {
-  const planAngle = getPlanAngle(fromScene, toScene);
-
-  if (planAngle == null) {
-    return null;
-  }
-
-  const hotspotYaw = normalizeYaw(planAngle - getSceneYawOffset(fromScene));
-  const entryYaw = normalizeYaw(planAngle + Math.PI - getSceneYawOffset(toScene));
+const getArrivalViewFromReciprocal = (
+  targetScene: Scene | undefined,
+  currentSceneId: number,
+  fallbackYaw: number | null,
+  fallbackPitch: number | null,
+  excludeHotspotId?: number,
+) => {
+  const reciprocal = getReciprocalHotspot(
+    targetScene,
+    currentSceneId,
+    excludeHotspotId,
+  );
 
   return {
-    yaw: hotspotYaw,
-    pitch: FLOOR_HOTSPOT_PITCH,
-    targetYaw: entryYaw,
-    targetPitch: ENTRY_PITCH,
+    targetYaw: reciprocal ? Number(reciprocal.yaw) : fallbackYaw,
+    targetPitch: fallbackPitch ?? DEFAULT_TARGET_PITCH,
   };
 };
 
@@ -620,7 +599,6 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     position_y: toNullableNumber(scene.position_y),
     initial_yaw: toNullableNumber(scene.initial_yaw),
     initial_pitch: toNullableNumber(scene.initial_pitch),
-    yaw_offset: toNullableNumber(scene.yaw_offset),
     hotspots: hotspotsMap.get(normalizedId) || [],
   };
 });
@@ -1124,81 +1102,6 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     }
   };
   
-  const handleCalibrateSceneYawOffset = async () => {
-  if (!selectedScene || draft.to_scene_id === "") {
-    toast({
-      title: "Gabim",
-      description:
-        "Zgjidh një skenë destinacion për kalibrim, pastaj drejto kamerën kah ajo pikë.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  const targetScene = scenes.find(
-    (scene) => Number(scene.id) === Number(draft.to_scene_id),
-  );
-
-  if (!targetScene) {
-    toast({
-      title: "Gabim",
-      description: "Skena destinacion nuk u gjet.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  const livePosition = getLiveViewerPosition();
-  const planAngle = getPlanAngle(selectedScene, targetScene);
-
-  if (!livePosition || planAngle == null) {
-    toast({
-      title: "Nuk mund të kalibrohet",
-      description:
-        "Vendos pozicionin X/Y për skenën aktuale dhe destinacionin në Planin e Katit.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  const yawOffset = normalizeYaw(planAngle - livePosition.yaw);
-
-  try {
-    const { error } = await supabase
-      .from("virtual_tour_scenes")
-      .update({
-        yaw_offset: yawOffset,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", selectedScene.id);
-
-    if (error) throw error;
-
-    setScenes((prev) =>
-      prev.map((scene) =>
-        scene.id === selectedScene.id
-          ? {
-              ...scene,
-              yaw_offset: yawOffset,
-            }
-          : scene,
-      ),
-    );
-
-    toast({
-      title: "Kalibrimi u ruajt",
-      description:
-        "Orientimi teknik i kësaj skene u kalibrua me pikën destinacion.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Kalibrimi dështoi.",
-      variant: "destructive",
-    });
-  }
-};
-  
 
   const handleSetDefaultScene = async (sceneId: number) => {
     try {
@@ -1253,7 +1156,7 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     toast({
       title: "Placement mode aktiv",
       description:
-        "Modalitet manual aktiv. Për logjikën automatike mjafton të zgjedhësh destinacionin dhe të klikosh Ruaj Hotspot.",
+        "Kliko saktësisht në dysheme aty ku duhet të shfaqet hotspoti.",
     });
   };
 
@@ -1418,161 +1321,204 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
   };
 
   const handleAddHotspot = async () => {
-  if (!selectedScene || draft.to_scene_id === "") {
-    toast({
-      title: "Gabim",
-      description: "Zgjidh skenën destinacion.",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (
+      !selectedScene ||
+      draft.to_scene_id === "" ||
+      draft.yaw === null ||
+      draft.pitch === null
+    ) {
+      toast({
+        title: "Gabim",
+        description:
+          "Zgjidh destinacionin dhe vendos pikën e hotspot-it në dysheme.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const targetScene = scenes.find(
-    (scene) => Number(scene.id) === Number(draft.to_scene_id),
-  );
-
-  if (!targetScene) {
-    toast({
-      title: "Gabim",
-      description: "Skena destinacion nuk u gjet.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  const autoOrientation = calculateLinkOrientation(selectedScene, targetScene);
-
-  const finalYaw = autoOrientation?.yaw ?? draft.yaw;
-  const finalPitch = autoOrientation?.pitch ?? draft.pitch;
-  const finalTargetYaw = autoOrientation?.targetYaw ?? targetScene.initial_yaw ?? null;
-  const finalTargetPitch =
-    autoOrientation?.targetPitch ?? targetScene.initial_pitch ?? null;
-
-  if (finalYaw === null || finalPitch === null) {
-    toast({
-      title: "Mungon pozicioni i pikave",
-      description:
-        "Vendos pozicionin X/Y të skenës aktuale dhe skenës destinacion në Planin e Katit, ose vendose hotspot-in manualisht.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  try {
-    const { data: insertedHotspot, error } = await supabase
-      .from("virtual_tour_hotspots")
-      .insert({
-        scene_id: selectedScene.id,
-        to_scene_id: Number(draft.to_scene_id),
-        yaw: finalYaw,
-        pitch: finalPitch,
-        target_yaw: finalTargetYaw,
-        target_pitch: finalTargetPitch,
-        label: draft.label.trim() || null,
-      })
-      .select("*")
-      .single();
-
-    if (error) throw error;
-
-    const normalizedInsertedHotspot: Hotspot = {
-      id: toNumber(insertedHotspot.id),
-      scene_id: toNumber(insertedHotspot.scene_id),
-      to_scene_id: toNumber(insertedHotspot.to_scene_id),
-      yaw: Number(insertedHotspot.yaw),
-      pitch: Number(insertedHotspot.pitch),
-      target_yaw: toNullableNumber(insertedHotspot.target_yaw),
-      target_pitch: toNullableNumber(insertedHotspot.target_pitch),
-      label: insertedHotspot.label || null,
-    };
-
-    setScenes((prev) =>
-      prev.map((scene) =>
-        scene.id === selectedScene.id
-          ? {
-              ...scene,
-              hotspots: [...scene.hotspots, normalizedInsertedHotspot],
-            }
-          : scene,
-      ),
+    const targetScene = scenes.find(
+      (scene) => Number(scene.id) === Number(draft.to_scene_id),
     );
 
-    setDraft((prev) => ({
-      ...prev,
-      yaw: null,
-      pitch: null,
-    }));
+    if (!targetScene) {
+      toast({
+        title: "Gabim",
+        description: "Skena destinacion nuk u gjet.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    toast({
-      title: "Hotspot u ruajt",
-      description:
-        autoOrientation
-          ? "Hotspot-i u kalkulua automatikisht nga pozicionet e pikave në plan."
-          : "Hotspot-i u ruajt me pozicion manual.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Shtimi i hotspot-it dështoi.",
-      variant: "destructive",
-    });
-  }
-};
+    const arrivalView = getArrivalViewFromReciprocal(
+      targetScene,
+      selectedScene.id,
+      targetScene.initial_yaw,
+      targetScene.initial_pitch,
+    );
+
+    try {
+      const { data: insertedHotspot, error } = await supabase
+        .from("virtual_tour_hotspots")
+        .insert({
+          scene_id: selectedScene.id,
+          to_scene_id: Number(draft.to_scene_id),
+          yaw: draft.yaw,
+          pitch: draft.pitch,
+          target_yaw: arrivalView.targetYaw,
+          target_pitch: arrivalView.targetPitch,
+          label: draft.label.trim() || null,
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      const normalizedInsertedHotspot: Hotspot = {
+        id: toNumber(insertedHotspot.id),
+        scene_id: toNumber(insertedHotspot.scene_id),
+        to_scene_id: toNumber(insertedHotspot.to_scene_id),
+        yaw: Number(insertedHotspot.yaw),
+        pitch: Number(insertedHotspot.pitch),
+        target_yaw: toNullableNumber(insertedHotspot.target_yaw),
+        target_pitch: toNullableNumber(insertedHotspot.target_pitch),
+        label: insertedHotspot.label || null,
+      };
+
+      const reciprocal = getReciprocalHotspot(targetScene, selectedScene.id);
+
+      if (reciprocal) {
+        const { error: reciprocalError } = await supabase
+          .from("virtual_tour_hotspots")
+          .update({
+            target_yaw: normalizedInsertedHotspot.yaw,
+            target_pitch: selectedScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+          })
+          .eq("id", reciprocal.id);
+
+        if (reciprocalError) throw reciprocalError;
+      }
+
+      setScenes((prev) =>
+        prev.map((scene) => {
+          if (scene.id === selectedScene.id) {
+            return {
+              ...scene,
+              hotspots: [...scene.hotspots, normalizedInsertedHotspot],
+            };
+          }
+
+          if (reciprocal && scene.id === targetScene.id) {
+            return {
+              ...scene,
+              hotspots: scene.hotspots.map((hotspot) =>
+                hotspot.id === reciprocal.id
+                  ? {
+                      ...hotspot,
+                      target_yaw: normalizedInsertedHotspot.yaw,
+                      target_pitch:
+                        selectedScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+                    }
+                  : hotspot,
+              ),
+            };
+          }
+
+          return scene;
+        }),
+      );
+
+      setDraft((prev) => ({
+        ...prev,
+        yaw: null,
+        pitch: null,
+      }));
+
+      toast({
+        title: "Hotspot u ruajt",
+        description:
+          "Pika u ruajt në pozicionin manual të dyshemesë. Drejtimi i hyrjes u sinkronizua nëse ekziston lidhja kthimi.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Shtimi i hotspot-it dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSaveEditedHotspot = async () => {
-  if (!editingHotspot || editingHotspot.to_scene_id === "") {
-    toast({
-      title: "Gabim",
-      description: "Zgjidh skenën destinacion.",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (!editingHotspot || editingHotspot.to_scene_id === "") {
+      toast({
+        title: "Gabim",
+        description: "Zgjidh skenën destinacion.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const currentScene = scenes.find(
-    (scene) => Number(scene.id) === Number(selectedSceneId),
-  );
+    const currentScene = scenes.find(
+      (scene) => Number(scene.id) === Number(selectedSceneId),
+    );
 
-  const targetScene = scenes.find(
-    (scene) => Number(scene.id) === Number(editingHotspot.to_scene_id),
-  );
+    const targetScene = scenes.find(
+      (scene) => Number(scene.id) === Number(editingHotspot.to_scene_id),
+    );
 
-  if (!currentScene || !targetScene) {
-    toast({
-      title: "Gabim",
-      description: "Skena aktuale ose destinacioni nuk u gjet.",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (!currentScene || !targetScene) {
+      toast({
+        title: "Gabim",
+        description: "Skena aktuale ose destinacioni nuk u gjet.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const autoOrientation = calculateLinkOrientation(currentScene, targetScene);
+    const arrivalView = getArrivalViewFromReciprocal(
+      targetScene,
+      currentScene.id,
+      targetScene.initial_yaw,
+      targetScene.initial_pitch,
+      editingHotspot.id,
+    );
 
-  const finalYaw = autoOrientation?.yaw ?? editingHotspot.yaw;
-  const finalPitch = autoOrientation?.pitch ?? editingHotspot.pitch;
-  const finalTargetYaw = autoOrientation?.targetYaw ?? editingHotspot.target_yaw;
-  const finalTargetPitch =
-    autoOrientation?.targetPitch ?? editingHotspot.target_pitch;
+    try {
+      const { error } = await supabase
+        .from("virtual_tour_hotspots")
+        .update({
+          to_scene_id: Number(editingHotspot.to_scene_id),
+          label: editingHotspot.label.trim() || null,
+          yaw: editingHotspot.yaw,
+          pitch: editingHotspot.pitch,
+          target_yaw: arrivalView.targetYaw,
+          target_pitch: arrivalView.targetPitch,
+        })
+        .eq("id", editingHotspot.id);
 
-  try {
-    const { error } = await supabase
-      .from("virtual_tour_hotspots")
-      .update({
-        to_scene_id: Number(editingHotspot.to_scene_id),
-        label: editingHotspot.label.trim() || null,
-        yaw: finalYaw,
-        pitch: finalPitch,
-        target_yaw: finalTargetYaw,
-        target_pitch: finalTargetPitch,
-      })
-      .eq("id", editingHotspot.id);
+      if (error) throw error;
 
-    if (error) throw error;
+      const reciprocal = getReciprocalHotspot(
+        targetScene,
+        currentScene.id,
+        editingHotspot.id,
+      );
 
-    setScenes((prev) =>
-      prev.map((scene) =>
-        scene.id === selectedSceneId
-          ? {
+      if (reciprocal) {
+        const { error: reciprocalError } = await supabase
+          .from("virtual_tour_hotspots")
+          .update({
+            target_yaw: editingHotspot.yaw,
+            target_pitch: currentScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+          })
+          .eq("id", reciprocal.id);
+
+        if (reciprocalError) throw reciprocalError;
+      }
+
+      setScenes((prev) =>
+        prev.map((scene) => {
+          if (scene.id === selectedSceneId) {
+            return {
               ...scene,
               hotspots: scene.hotspots.map((hotspot) =>
                 hotspot.id === editingHotspot.id
@@ -1580,37 +1526,53 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
                       ...hotspot,
                       to_scene_id: Number(editingHotspot.to_scene_id),
                       label: editingHotspot.label.trim() || null,
-                      yaw: finalYaw,
-                      pitch: finalPitch,
-                      target_yaw: finalTargetYaw,
-                      target_pitch: finalTargetPitch,
+                      yaw: editingHotspot.yaw,
+                      pitch: editingHotspot.pitch,
+                      target_yaw: arrivalView.targetYaw,
+                      target_pitch: arrivalView.targetPitch,
                     }
                   : hotspot,
               ),
-            }
-          : scene,
-      ),
-    );
+            };
+          }
 
-    setIsEditHotspotModalOpen(false);
-    setEditingHotspot(null);
-    setIsEditingHotspotPlacement(false);
+          if (reciprocal && scene.id === targetScene.id) {
+            return {
+              ...scene,
+              hotspots: scene.hotspots.map((hotspot) =>
+                hotspot.id === reciprocal.id
+                  ? {
+                      ...hotspot,
+                      target_yaw: editingHotspot.yaw,
+                      target_pitch:
+                        currentScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+                    }
+                  : hotspot,
+              ),
+            };
+          }
 
-    toast({
-      title: "Sukses",
-      description:
-        autoOrientation
-          ? "Hotspot-i u përditësua automatikisht nga pozicionet e pikave."
-          : "Hotspot-i u përditësua.",
-    });
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Përditësimi i hotspot-it dështoi.",
-      variant: "destructive",
-    });
-  }
-};
+          return scene;
+        }),
+      );
+
+      setIsEditHotspotModalOpen(false);
+      setEditingHotspot(null);
+      setIsEditingHotspotPlacement(false);
+
+      toast({
+        title: "Sukses",
+        description:
+          "Hotspot-i u përditësua dhe drejtimi i lidhjes kthim u sinkronizua nëse ekziston.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description: error.message || "Përditësimi i hotspot-it dështoi.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDeleteHotspot = async (hotspotId: number) => {
     if (!confirm("A dëshironi ta fshini këtë hotspot?")) return;
@@ -1655,23 +1617,6 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     }
   };
 
-  const handleUpdateScenePosition = async (sceneId: number, x: number, y: number) => {
-    try {
-      const { error } = await supabase
-        .from("virtual_tour_scenes")
-        .update({
-          position_x: x,
-          position_y: y,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", sceneId);
-
-      if (error) throw error;
-      await refreshTour();
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   useEffect(() => {
     if (
@@ -2320,8 +2265,8 @@ return validScenes.map((scene) => ({
   2. Editor Profesional i Hotspot-eve
 </h2>
 <p className="text-sm text-muted-foreground mt-1">
-  Vendos pikat e skenave në Planin e Katit, zgjidh destinacionin dhe ruaj lidhjen.
-  Sistemi kalkulon automatikisht pozicionin e hotspot-it dhe drejtimin e hyrjes.
+  Zgjidh destinacionin, vendos pikën manualisht në dysheme dhe ruaj hotspot-in.
+  Nëse ekziston lidhja kthim, drejtimi i hyrjes sinkronizohet automatikisht.
 </p>
 				
               </div>
@@ -2334,18 +2279,6 @@ return validScenes.map((scene) => ({
               >
                 Ruaj këndin fillestar të kësaj skene
               </button>
-			  
-			  <button
-  onClick={handleCalibrateSceneYawOffset}
-  disabled={draft.to_scene_id === ""}
-  className={`px-4 py-2 rounded-xl font-semibold ${
-    draft.to_scene_id !== ""
-      ? "bg-primary text-black hover:bg-white"
-      : "bg-muted text-muted-foreground cursor-not-allowed"
-  }`}
->
-  Kalibro drejtimin me destinacionin
-</button>
 
               {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
                 <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
@@ -2353,9 +2286,6 @@ return validScenes.map((scene) => ({
                   {selectedScene.initial_pitch.toFixed(3)}
                 </div>
 			)}
-			<div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
-  Yaw offset: {(selectedScene.yaw_offset ?? 0).toFixed(3)}
-</div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2381,12 +2311,12 @@ return validScenes.map((scene) => ({
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                     {isEditingHotspotPlacement
-                      ? "Klikoni direkt mbi panoramën për pozicionin e ri, ose rrotullojeni dhe klikoni “Vendose në Qendër”"
+                      ? "Kliko në dysheme për pozicionin e ri, ose rrotulloje pamjen dhe kliko “Vendose në qendër të pamjes”."
                       : isPlacementMode
                         ? draft.yaw !== null && draft.pitch !== null
-                          ? "Pozicioni u vendos. Rafinoje me butonat ←→ ose kliko mbi panoramë për pozicion të ri"
-                          : "Kliko direkt mbi panoramën ku dëshiron të vendosësh hotspot-in (ose rrotullohu dhe kliko “Vendose në Qendër”)"
-                        : "Zgjidh destinacionin dhe kliko “Ruaj Hotspot Automatik”. Placement Mode përdoret vetëm për vendosje manuale."}
+                          ? "Pozicioni u vendos. Rafinoje me butonat ose kliko përsëri në dysheme për pozicion të ri."
+                          : "Kliko saktësisht në dysheme aty ku duhet të shfaqet hotspoti."
+                        : "Zgjidh destinacionin dhe kliko “Aktivizo vendosjen në dysheme”."}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
@@ -2452,78 +2382,79 @@ return validScenes.map((scene) => ({
                   <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <span>
-                        <strong className="text-foreground">Status:</strong>{" "}
-                        {isPlacementMode
-                          ? draft.yaw !== null && draft.pitch !== null
-                            ? "Gati për ruajtje"
-                            : "Rrotullo panoramën dhe vendose në qendër"
-                          : "Joaktiv"}
+                        <strong className="text-foreground">Modaliteti:</strong>{" "}
+                        Vendosje manuale në dysheme
                       </span>
                       <span>
-                        <strong className="text-foreground">Yaw/Pitch:</strong>{" "}
-                        {draft.yaw !== null && draft.pitch !== null
-                          ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
-                          : "Pa zgjedhur"}
-                      </span>
-                      <span>
-                        <strong className="text-foreground">Target:</strong>{" "}
+                        <strong className="text-foreground">Destinacioni:</strong>{" "}
                         {draft.to_scene_id === ""
                           ? "Pa zgjedhur"
                           : scenes.find(
                               (scene) => scene.id === Number(draft.to_scene_id),
                             )?.title || "Pa zgjedhur"}
                       </span>
+                      <span>
+                        <strong className="text-foreground">Pozicioni:</strong>{" "}
+                        {draft.yaw !== null && draft.pitch !== null
+                          ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
+                          : "Kliko në dysheme për ta vendosur"}
+                      </span>
                     </div>
                   </div>
 
 <div className="flex flex-wrap gap-2">
-  <button
-    onClick={handleAddHotspot}
-    disabled={draft.to_scene_id === ""}
-    className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
-      draft.to_scene_id !== ""
-        ? "bg-primary text-black hover:bg-white"
-        : "bg-muted text-muted-foreground cursor-not-allowed"
-    }`}
-  >
-    <Check size={16} />
-    Ruaj Hotspot Automatik
-  </button>
+                    {!isPlacementMode ? (
+                      <button
+                        onClick={handleStartPlacement}
+                        disabled={draft.to_scene_id === ""}
+                        className={`px-4 py-2 rounded-xl font-semibold ${
+                          draft.to_scene_id !== ""
+                            ? "bg-primary text-black hover:bg-white"
+                            : "bg-muted text-muted-foreground cursor-not-allowed"
+                        }`}
+                      >
+                        Aktivizo vendosjen në dysheme
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={handlePlaceHotspotAtCenter}
+                          className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
+                        >
+                          <LocateFixed size={16} />
+                          Vendose në qendër të pamjes
+                        </button>
 
-  {!isPlacementMode ? (
-    <button
-      onClick={handleStartPlacement}
-      className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 font-semibold"
-    >
-      Vendos Manualisht
-    </button>
-  ) : (
-    <>
-      <button
-        onClick={handlePlaceHotspotAtCenter}
-        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
-      >
-        <LocateFixed size={16} />
-        Vendose në Qendër
-      </button>
+                        <button
+                          onClick={handleAddHotspot}
+                          disabled={draft.yaw === null || draft.pitch === null}
+                          className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
+                            draft.yaw !== null && draft.pitch !== null
+                              ? "bg-primary text-black hover:bg-white"
+                              : "bg-muted text-muted-foreground cursor-not-allowed"
+                          }`}
+                        >
+                          <Check size={16} />
+                          Ruaj Hotspot
+                        </button>
 
-      <button
-        onClick={() => resetDraft(true)}
-        className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
-      >
-        <X size={16} />
-        Pastro Pozicionin
-      </button>
+                        <button
+                          onClick={() => resetDraft(true)}
+                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80 inline-flex items-center gap-2"
+                        >
+                          <X size={16} />
+                          Pastro Pozicionin
+                        </button>
 
-      <button
-        onClick={handleStopPlacement}
-        className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-      >
-        Dil nga Placement Mode
-      </button>
-    </>
-  )}
-</div>
+                        <button
+                          onClick={handleStopPlacement}
+                          className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
+                        >
+                          Dil nga vendosja manuale
+                        </button>
+                      </>
+                    )}
+                  </div>
 
                   {isPlacementMode && (
                     <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
@@ -2688,113 +2619,7 @@ return validScenes.map((scene) => ({
           )}
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
-            <div>
-              <h2 className="font-display text-xl text-primary font-bold">
-                4. Plani i Katit (Opsionale)
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Zvarrit pikat për të vendosur skenat në hartë.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex flex-col md:flex-row gap-8">
-            <div
-              className="flex-1 max-w-[700px] aspect-[4/3] bg-muted/40 border-2 border-border rounded-2xl relative overflow-hidden"
-              style={{
-                backgroundImage:
-                  "radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)",
-                backgroundSize: "20px 20px",
-              }}
-            >
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/20 pointer-events-none select-none">
-                <MapIcon size={70} />
-              </div>
-
-              {scenes.map((scene) => {
-                const x = scene.position_x ?? 50;
-                const y = scene.position_y ?? 50;
-                const isSet = scene.position_x != null && scene.position_y != null;
-
-                return (
-                  <div
-                    key={String(scene.id)}
-                    draggable
-                    title={scene.title}
-                    className={`absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-move shadow-lg z-10 ${
-                      isSet
-                        ? "bg-primary text-black"
-                        : "bg-white/50 text-black border-2 border-dashed border-white"
-                    }`}
-                    style={{ left: `${x}%`, top: `${y}%` }}
-                    onDragEnd={(e) => {
-                      const rect = (
-                        e.currentTarget.parentElement as HTMLElement
-                      )?.getBoundingClientRect();
-                      if (!rect) return;
-
-                      const nx = Math.max(
-                        0,
-                        Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
-                      );
-                      const ny = Math.max(
-                        0,
-                        Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
-                      );
-
-                      handleUpdateScenePosition(scene.id, nx, ny);
-                    }}
-                  >
-                    {scene.sort_order + 1}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="w-full md:w-72 rounded-2xl border border-border bg-white/5 p-4">
-              <h3 className="text-foreground font-medium mb-4">Skenat</h3>
-              <div className="space-y-3">
-                {scenes
-                  .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((scene) => (
-                    <div
-                      key={String(scene.id)}
-                      className="flex items-center gap-3 rounded-xl bg-muted/40 p-2.5 border border-border"
-                    >
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
-                        {scene.thumbnail_url || scene.image_url ? (
-                          <img
-                            src={scene.thumbnail_url || scene.image_url}
-                            alt={scene.title}
-							crossOrigin="anonymous" // <---
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30">
-                            <ImageIcon size={14} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground truncate">
-                          {scene.title}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <Move size={11} />{" "}
-                          {scene.position_x != null && scene.position_y != null
-                            ? "Pozicionuar"
-                            : "Pa pozicion"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-        </div>
       </main>
 
       <Dialog open={isSceneModalOpen} onOpenChange={setIsSceneModalOpen}>
@@ -2997,7 +2822,7 @@ return validScenes.map((scene) => ({
                   className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
                 >
                   <LocateFixed size={16} />
-                  Vendose në Qendër
+                  Vendose në qendër të pamjes
                 </button>
 
                 <button

@@ -48,8 +48,7 @@ const { data: sceneData, error: sceneError } = await supabase
   position_x,
   position_y,
   initial_yaw,
-  initial_pitch,
-  yaw_offset
+  initial_pitch
 `)
   .eq("property_id", propertyId)
   .not("image_url", "is", null)
@@ -101,7 +100,6 @@ const normalized = sceneData.map((scene) => ({
   positionY: scene.position_y,
   initialYaw: scene.initial_yaw,
   initialPitch: scene.initial_pitch,
-  yawOffset: scene.yaw_offset,
   hotspots:
     hotspots
       ?.filter(
