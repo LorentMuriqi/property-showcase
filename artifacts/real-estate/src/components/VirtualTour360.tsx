@@ -784,77 +784,149 @@ export function VirtualTour360({
         }
 
         /* ── 3-D glass directional arrow (professional) ── */
-        .virtual-tour-shell .psv-virtual-tour-arrow {
-          position: relative !important;
-          width: 58px !important;
-          height: 58px !important;
-          border-radius: 9999px !important;
-          background:
-            radial-gradient(circle at 38% 32%,
-              rgba(255,255,255,0.22) 0%,
-              rgba(30,30,30,0.82) 60%,
-              rgba(0,0,0,0.92) 100%) !important;
-          border: 1.5px solid rgba(255,255,255,0.32) !important;
-          box-shadow:
-            0 8px 28px rgba(0,0,0,0.65),
-            0 2px 8px  rgba(0,0,0,0.45),
-            inset 0 1px 0 rgba(255,255,255,0.18),
-            inset 0 -1px 0 rgba(0,0,0,0.4),
-            0 0 0 0 rgba(255,255,255,0.28) !important;
-          animation: vt-arrow-pulse 2.6s ease-out infinite !important;
-          transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), border-color 0.18s ease !important;
-          overflow: visible !important;
-        }
-        /* floor shadow ellipse */
-        .virtual-tour-shell .psv-virtual-tour-arrow::after {
-          content: '' !important;
-          position: absolute !important;
-          bottom: -12px !important;
-          left: 50% !important;
-          transform: translateX(-50%) !important;
-          width: 60% !important;
-          height: 10px !important;
-          background: radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, transparent 70%) !important;
-          border-radius: 50% !important;
-          pointer-events: none !important;
-        }
-        .virtual-tour-shell .psv-virtual-tour-arrow:hover {
-          transform: scale(1.2) translateY(-4px) !important;
-          border-color: rgba(255,255,255,0.65) !important;
-          box-shadow:
-            0 14px 36px rgba(0,0,0,0.7),
-            0 4px 12px  rgba(0,0,0,0.5),
-            inset 0 1px 0 rgba(255,255,255,0.25),
-            inset 0 -1px 0 rgba(0,0,0,0.4),
-            0 0 0 0 rgba(255,255,255,0) !important;
-        }
-        /* white upward arrow inside */
-        .virtual-tour-shell .psv-virtual-tour-arrow svg {
-          display: block !important;
-          width: 26px !important;
-          height: 26px !important;
-          fill: rgba(255,255,255,0.95) !important;
-          filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)) !important;
-          opacity: 1 !important;
-        }
-        /* pulsing outer ring */
-        @keyframes vt-arrow-pulse {
-          0% {
-            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.45),
-                        inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.4),
-                        0 0 0 0   rgba(255,255,255,0.28);
-          }
-          55% {
-            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.45),
-                        inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.4),
-                        0 0 0 20px rgba(255,255,255,0);
-          }
-          100% {
-            box-shadow: 0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.45),
-                        inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.4),
-                        0 0 0 0   rgba(255,255,255,0);
-          }
-        }
+        /* ── Matterport-style floor navigation point ── */
+.virtual-tour-shell .psv-virtual-tour-arrow {
+  position: relative !important;
+  width: 58px !important;
+  height: 58px !important;
+  border-radius: 9999px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  transition: opacity 160ms ease !important;
+}
+
+/* outer floor glow */
+.virtual-tour-shell .psv-virtual-tour-arrow::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 9999px !important;
+  transform: translate(-50%, -50%) rotateX(64deg) !important;
+  transform-origin: center !important;
+  background:
+    radial-gradient(circle at 50% 48%,
+      rgba(255,255,255,0.95) 0%,
+      rgba(255,255,255,0.58) 22%,
+      rgba(255,255,255,0.20) 44%,
+      rgba(255,255,255,0.04) 70%,
+      rgba(255,255,255,0) 100%) !important;
+  border: 1px solid rgba(255,255,255,0.72) !important;
+  box-shadow:
+    0 0 18px rgba(255,255,255,0.35),
+    0 10px 30px rgba(0,0,0,0.35) !important;
+  opacity: 0.82 !important;
+  transition:
+    opacity 160ms ease,
+    width 160ms ease,
+    height 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease !important;
+}
+
+/* inner solid point */
+.virtual-tour-shell .psv-virtual-tour-arrow::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 9999px !important;
+  transform: translate(-50%, -50%) rotateX(64deg) !important;
+  background:
+    radial-gradient(circle at 42% 35%,
+      rgba(255,255,255,1) 0%,
+      rgba(245,245,245,0.95) 42%,
+      rgba(185,185,185,0.86) 100%) !important;
+  border: 1px solid rgba(255,255,255,0.95) !important;
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,0.9),
+    inset 0 -2px 5px rgba(0,0,0,0.24),
+    0 6px 16px rgba(0,0,0,0.34) !important;
+  transition:
+    width 160ms ease,
+    height 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease !important;
+}
+
+/* keep the built-in arrow usable on desktop, but make it subtle */
+.virtual-tour-shell .psv-virtual-tour-arrow svg {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 18px !important;
+  height: 18px !important;
+  transform: translate(-50%, -62%) !important;
+  fill: rgba(20,20,20,0.72) !important;
+  filter: drop-shadow(0 1px 1px rgba(255,255,255,0.35)) !important;
+  opacity: 0.9 !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+}
+
+/* desktop hover: point lights up like Matterport */
+@media (hover: hover) and (pointer: fine) {
+  .virtual-tour-shell .psv-virtual-tour-arrow:hover::before {
+    width: 68px !important;
+    height: 68px !important;
+    opacity: 1 !important;
+    border-color: rgba(255,255,255,0.95) !important;
+    box-shadow:
+      0 0 28px rgba(255,255,255,0.62),
+      0 0 56px rgba(255,255,255,0.24),
+      0 14px 34px rgba(0,0,0,0.42) !important;
+  }
+
+  .virtual-tour-shell .psv-virtual-tour-arrow:hover::after {
+    width: 28px !important;
+    height: 28px !important;
+    background:
+      radial-gradient(circle at 42% 35%,
+        rgba(255,255,255,1) 0%,
+        rgba(255,255,255,0.98) 48%,
+        rgba(230,230,230,0.95) 100%) !important;
+    box-shadow:
+      inset 0 1px 2px rgba(255,255,255,1),
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      0 0 22px rgba(255,255,255,0.72),
+      0 8px 20px rgba(0,0,0,0.38) !important;
+  }
+
+  .virtual-tour-shell .psv-virtual-tour-arrow:hover svg {
+    opacity: 1 !important;
+  }
+}
+
+/* mobile: no extra arrow/label, only the tappable point */
+@media (hover: none), (pointer: coarse), (max-width: 640px) {
+  .virtual-tour-shell .psv-virtual-tour-arrow {
+    width: 54px !important;
+    height: 54px !important;
+  }
+
+  .virtual-tour-shell .psv-virtual-tour-arrow::before {
+    width: 52px !important;
+    height: 52px !important;
+    opacity: 0.9 !important;
+  }
+
+  .virtual-tour-shell .psv-virtual-tour-arrow::after {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .virtual-tour-shell .psv-virtual-tour-arrow svg {
+    display: none !important;
+  }
+}
 
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

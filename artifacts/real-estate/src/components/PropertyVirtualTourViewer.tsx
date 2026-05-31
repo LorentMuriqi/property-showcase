@@ -38,18 +38,19 @@ if (propertyError || propertyData?.virtual_tour_status !== "published") {
 
 const { data: sceneData, error: sceneError } = await supabase
   .from("virtual_tour_scenes")
-  .select(`
-    id,
-    title,
-    image_url,
-    thumbnail_url,
-    is_default,
-    sort_order,
-    position_x,
-    position_y,
-    initial_yaw,
-    initial_pitch
-  `)
+.select(`
+  id,
+  title,
+  image_url,
+  thumbnail_url,
+  is_default,
+  sort_order,
+  position_x,
+  position_y,
+  initial_yaw,
+  initial_pitch,
+  yaw_offset
+`)
   .eq("property_id", propertyId)
   .not("image_url", "is", null)
   .neq("image_url", "")
@@ -100,6 +101,7 @@ const normalized = sceneData.map((scene) => ({
   positionY: scene.position_y,
   initialYaw: scene.initial_yaw,
   initialPitch: scene.initial_pitch,
+  yawOffset: scene.yaw_offset,
   hotspots:
     hotspots
       ?.filter(

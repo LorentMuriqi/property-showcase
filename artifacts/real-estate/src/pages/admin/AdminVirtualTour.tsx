@@ -47,6 +47,7 @@ type Scene = {
   position_y: number | null;
   initial_yaw: number | null;
   initial_pitch: number | null;
+  yaw_offset: number | null;
   hotspots: Hotspot[];
 };
 
@@ -91,46 +92,101 @@ type PlacementDraft = {
 
 const NORMAL_HOTSPOT_HTML = `
   <div style="
-    width: 42px;
-    height: 42px;
+    position: relative;
+    width: 58px;
+    height: 58px;
     border-radius: 9999px;
-    background: rgba(0,0,0,0.58);
-    border: 3px solid #d4af37;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-size:12px;
-    font-weight:700;
-    box-shadow:0 10px 24px rgba(0,0,0,.38);
-    cursor:pointer;
-    user-select:none;
+    cursor: pointer;
+    user-select: none;
   ">
-    ↗
+    <div style="
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:56px;
+      height:56px;
+      border-radius:9999px;
+      transform:translate(-50%, -50%) rotateX(64deg);
+      background:radial-gradient(circle at 50% 48%,
+        rgba(255,255,255,0.95) 0%,
+        rgba(255,255,255,0.58) 22%,
+        rgba(255,255,255,0.20) 44%,
+        rgba(255,255,255,0.04) 70%,
+        rgba(255,255,255,0) 100%);
+      border:1px solid rgba(255,255,255,0.72);
+      box-shadow:
+        0 0 18px rgba(255,255,255,0.35),
+        0 10px 30px rgba(0,0,0,0.35);
+    "></div>
+
+    <div style="
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:22px;
+      height:22px;
+      border-radius:9999px;
+      transform:translate(-50%, -50%) rotateX(64deg);
+      background:radial-gradient(circle at 42% 35%,
+        rgba(255,255,255,1) 0%,
+        rgba(245,245,245,0.95) 42%,
+        rgba(185,185,185,0.86) 100%);
+      border:1px solid rgba(255,255,255,0.95);
+      box-shadow:
+        inset 0 1px 2px rgba(255,255,255,0.9),
+        inset 0 -2px 5px rgba(0,0,0,0.24),
+        0 6px 16px rgba(0,0,0,0.34);
+    "></div>
   </div>
 `;
 
 const EDITING_HOTSPOT_HTML = `
   <div style="
     position: relative;
-    width: 42px;
-    height: 42px;
+    width: 64px;
+    height: 64px;
     border-radius: 9999px;
-    background: rgba(239,68,68,0.88);
-    border: 3px solid white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-size:12px;
-    font-weight:700;
-    box-shadow:
-      0 0 0 10px rgba(239,68,68,.16),
-      0 10px 24px rgba(0,0,0,.38);
-    cursor:pointer;
-    user-select:none;
+    cursor: pointer;
+    user-select: none;
   ">
-    ↗
+    <div style="
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:64px;
+      height:64px;
+      border-radius:9999px;
+      transform:translate(-50%, -50%) rotateX(64deg);
+      background:radial-gradient(circle at 50% 48%,
+        rgba(255,255,255,0.98) 0%,
+        rgba(212,175,55,0.55) 24%,
+        rgba(212,175,55,0.18) 52%,
+        rgba(212,175,55,0) 100%);
+      border:2px solid rgba(212,175,55,0.95);
+      box-shadow:
+        0 0 26px rgba(212,175,55,0.75),
+        0 12px 32px rgba(0,0,0,0.42);
+    "></div>
+
+    <div style="
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:26px;
+      height:26px;
+      border-radius:9999px;
+      transform:translate(-50%, -50%) rotateX(64deg);
+      background:radial-gradient(circle at 42% 35%,
+        rgba(255,255,255,1) 0%,
+        rgba(255,244,190,0.98) 45%,
+        rgba(212,175,55,0.9) 100%);
+      border:1px solid rgba(255,255,255,1);
+      box-shadow:
+        inset 0 1px 2px rgba(255,255,255,1),
+        inset 0 -2px 5px rgba(0,0,0,0.2),
+        0 0 18px rgba(212,175,55,0.65);
+    "></div>
+
     <div style="
       position:absolute;
       left:50%;
@@ -144,7 +200,7 @@ const EDITING_HOTSPOT_HTML = `
       border:1px solid rgba(255,255,255,0.12);
       border-radius:9999px;
       padding:4px 8px;
-      box-shadow:0 6px 18px rgba(0,0,0,.28);
+      box-shadow:0 6px 18px rgba(0,0,0,0.28);
     ">
       Duke u edituar
     </div>
@@ -154,36 +210,49 @@ const EDITING_HOTSPOT_HTML = `
 const TEMP_HOTSPOT_HTML = `
   <div style="
     position: relative;
-    width: 34px;
-    height: 34px;
+    width: 64px;
+    height: 64px;
     border-radius: 9999px;
-    background: rgba(239,68,68,0.95);
-    border: 3px solid white;
-    box-shadow:
-      0 0 0 10px rgba(239,68,68,.16),
-      0 8px 24px rgba(0,0,0,.35);
-    user-select:none;
+    user-select: none;
   ">
     <div style="
       position:absolute;
-      top:50%;
       left:50%;
-      width:2px;
-      height:34px;
-      background:white;
-      transform:translate(-50%, -50%);
-      opacity:.95;
+      top:50%;
+      width:64px;
+      height:64px;
+      border-radius:9999px;
+      transform:translate(-50%, -50%) rotateX(64deg);
+      background:radial-gradient(circle at 50% 48%,
+        rgba(255,255,255,0.98) 0%,
+        rgba(239,68,68,0.52) 24%,
+        rgba(239,68,68,0.18) 52%,
+        rgba(239,68,68,0) 100%);
+      border:2px solid rgba(239,68,68,0.95);
+      box-shadow:
+        0 0 26px rgba(239,68,68,0.65),
+        0 12px 32px rgba(0,0,0,0.42);
     "></div>
+
     <div style="
       position:absolute;
-      top:50%;
       left:50%;
-      width:34px;
-      height:2px;
-      background:white;
-      transform:translate(-50%, -50%);
-      opacity:.95;
+      top:50%;
+      width:26px;
+      height:26px;
+      border-radius:9999px;
+      transform:translate(-50%, -50%) rotateX(64deg);
+      background:radial-gradient(circle at 42% 35%,
+        rgba(255,255,255,1) 0%,
+        rgba(255,210,210,0.98) 45%,
+        rgba(239,68,68,0.92) 100%);
+      border:1px solid rgba(255,255,255,1);
+      box-shadow:
+        inset 0 1px 2px rgba(255,255,255,1),
+        inset 0 -2px 5px rgba(0,0,0,0.2),
+        0 0 18px rgba(239,68,68,0.62);
     "></div>
+
     <div style="
       position:absolute;
       left:50%;
@@ -197,7 +266,7 @@ const TEMP_HOTSPOT_HTML = `
       border:1px solid rgba(255,255,255,0.12);
       border-radius:9999px;
       padding:4px 8px;
-      box-shadow:0 6px 18px rgba(0,0,0,.28);
+      box-shadow:0 6px 18px rgba(0,0,0,0.28);
     ">
       Hotspot i ri
     </div>
@@ -214,6 +283,71 @@ const toNullableNumber = (value: any) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
+
+const FLOOR_HOTSPOT_PITCH = -0.82;
+const ENTRY_PITCH = 0;
+
+const normalizeYaw = (yaw: number) => {
+  const twoPi = Math.PI * 2;
+  return ((yaw + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
+};
+
+const getPlanAngle = (
+  from: { position_x: number | null; position_y: number | null },
+  to: { position_x: number | null; position_y: number | null },
+) => {
+  if (
+    from.position_x == null ||
+    from.position_y == null ||
+    to.position_x == null ||
+    to.position_y == null
+  ) {
+    return null;
+  }
+
+  const dx = Number(to.position_x) - Number(from.position_x);
+  const dy = Number(to.position_y) - Number(from.position_y);
+
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+  if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) return null;
+
+  return Math.atan2(dx, -dy);
+};
+
+const getSceneYawOffset = (scene: { yaw_offset?: number | null }) => {
+  return Number(scene.yaw_offset ?? 0);
+};
+
+const calculateLinkOrientation = (fromScene: Scene, toScene: Scene) => {
+  const planAngle = getPlanAngle(fromScene, toScene);
+
+  if (planAngle == null) {
+    return null;
+  }
+
+  const hotspotYaw = normalizeYaw(planAngle - getSceneYawOffset(fromScene));
+  const entryYaw = normalizeYaw(planAngle + Math.PI - getSceneYawOffset(toScene));
+
+  return {
+    yaw: hotspotYaw,
+    pitch: FLOOR_HOTSPOT_PITCH,
+    targetYaw: entryYaw,
+    targetPitch: ENTRY_PITCH,
+  };
+};
+
+const FLOOR_HOTSPOT_PITCH = -0.92;
+const MIN_PITCH = -Math.PI / 2 + 0.08;
+const MAX_PITCH = Math.PI / 2 - 0.08;
+
+const clampPitch = (pitch: number) => {
+  return Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
+};
+
+const getFloorHotspotPosition = (yaw: number) => ({
+  yaw,
+  pitch: clampPitch(FLOOR_HOTSPOT_PITCH),
+});
 
 export default function AdminVirtualTour() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
@@ -481,25 +615,26 @@ const editorViewerLoadIdRef = useRef(0);
       }
     }
 
-    const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
-      const normalizedId = toNumber(scene.id);
+const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
+  const normalizedId = toNumber(scene.id);
 
-      return {
-        id: normalizedId,
-        property_id: scene.property_id ?? null,
-        virtual_tour_id: scene.virtual_tour_id ?? null,
-        title: scene.title || "",
-        image_url: (scene.image_url || "").trim(),
-        thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
-        is_default: !!scene.is_default,
-        sort_order: toNumber(scene.sort_order, 0),
-        position_x: toNullableNumber(scene.position_x),
-        position_y: toNullableNumber(scene.position_y),
-        initial_yaw: toNullableNumber(scene.initial_yaw),
-        initial_pitch: toNullableNumber(scene.initial_pitch),
-        hotspots: hotspotsMap.get(normalizedId) || [],
-      };
-    });
+  return {
+    id: normalizedId,
+    property_id: scene.property_id ?? null,
+    virtual_tour_id: scene.virtual_tour_id ?? null,
+    title: scene.title || "",
+    image_url: (scene.image_url || "").trim(),
+    thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
+    is_default: !!scene.is_default,
+    sort_order: toNumber(scene.sort_order, 0),
+    position_x: toNullableNumber(scene.position_x),
+    position_y: toNullableNumber(scene.position_y),
+    initial_yaw: toNullableNumber(scene.initial_yaw),
+    initial_pitch: toNullableNumber(scene.initial_pitch),
+    yaw_offset: toNullableNumber(scene.yaw_offset),
+    hotspots: hotspotsMap.get(normalizedId) || [],
+  };
+});
 
     setProject(projectData);
     setScenes(normalizedScenes);
@@ -999,6 +1134,82 @@ const editorViewerLoadIdRef = useRef(0);
       });
     }
   };
+  
+  const handleCalibrateSceneYawOffset = async () => {
+  if (!selectedScene || draft.to_scene_id === "") {
+    toast({
+      title: "Gabim",
+      description:
+        "Zgjidh një skenë destinacion për kalibrim, pastaj drejto kamerën kah ajo pikë.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const targetScene = scenes.find(
+    (scene) => Number(scene.id) === Number(draft.to_scene_id),
+  );
+
+  if (!targetScene) {
+    toast({
+      title: "Gabim",
+      description: "Skena destinacion nuk u gjet.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const livePosition = getLiveViewerPosition();
+  const planAngle = getPlanAngle(selectedScene, targetScene);
+
+  if (!livePosition || planAngle == null) {
+    toast({
+      title: "Nuk mund të kalibrohet",
+      description:
+        "Vendos pozicionin X/Y për skenën aktuale dhe destinacionin në Planin e Katit.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const yawOffset = normalizeYaw(planAngle - livePosition.yaw);
+
+  try {
+    const { error } = await supabase
+      .from("virtual_tour_scenes")
+      .update({
+        yaw_offset: yawOffset,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedScene.id);
+
+    if (error) throw error;
+
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.id === selectedScene.id
+          ? {
+              ...scene,
+              yaw_offset: yawOffset,
+            }
+          : scene,
+      ),
+    );
+
+    toast({
+      title: "Kalibrimi u ruajt",
+      description:
+        "Orientimi teknik i kësaj skene u kalibrua me pikën destinacion.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Kalibrimi dështoi.",
+      variant: "destructive",
+    });
+  }
+};
+  
 
   const handleSetDefaultScene = async (sceneId: number) => {
     try {
@@ -1053,7 +1264,7 @@ const editorViewerLoadIdRef = useRef(0);
     toast({
       title: "Placement mode aktiv",
       description:
-        "Klikoni direkt mbi panoramën ku dëshironi të vendosni hotspot-in, ose rrotullojeni dhe klikoni “Vendose në Qendër”.",
+        "Modalitet manual aktiv. Për logjikën automatike mjafton të zgjedhësh destinacionin dhe të klikosh Ruaj Hotspot.",
     });
   };
 
@@ -1218,147 +1429,199 @@ const editorViewerLoadIdRef = useRef(0);
   };
 
   const handleAddHotspot = async () => {
-    if (
-      !selectedScene ||
-      draft.to_scene_id === "" ||
-      draft.yaw === null ||
-      draft.pitch === null
-    ) {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh destinacionin dhe vendose pozicionin e hotspot-it.",
-        variant: "destructive",
-      });
-      return;
-    }
+  if (!selectedScene || draft.to_scene_id === "") {
+    toast({
+      title: "Gabim",
+      description: "Zgjidh skenën destinacion.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    try {
-      const { data: insertedHotspot, error } = await supabase
-        .from("virtual_tour_hotspots")
-        .insert({
-          scene_id: selectedScene.id,
-          to_scene_id: Number(draft.to_scene_id),
-          yaw: draft.yaw,
-          pitch: draft.pitch,
-          target_yaw:
-            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
-              ?.initial_yaw ?? null,
-          target_pitch:
-            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
-              ?.initial_pitch ?? null,
-          label: draft.label.trim() || null,
-        })
-        .select("*")
-        .single();
+  const targetScene = scenes.find(
+    (scene) => Number(scene.id) === Number(draft.to_scene_id),
+  );
 
-      if (error) throw error;
+  if (!targetScene) {
+    toast({
+      title: "Gabim",
+      description: "Skena destinacion nuk u gjet.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-      const normalizedInsertedHotspot: Hotspot = {
-        id: toNumber(insertedHotspot.id),
-        scene_id: toNumber(insertedHotspot.scene_id),
-        to_scene_id: toNumber(insertedHotspot.to_scene_id),
-        yaw: Number(insertedHotspot.yaw),
-        pitch: Number(insertedHotspot.pitch),
-        target_yaw: toNullableNumber(insertedHotspot.target_yaw),
-        target_pitch: toNullableNumber(insertedHotspot.target_pitch),
-        label: insertedHotspot.label || null,
-      };
+  const autoOrientation = calculateLinkOrientation(selectedScene, targetScene);
 
-      setScenes((prev) =>
-        prev.map((scene) =>
-          scene.id === selectedScene.id
-            ? {
-                ...scene,
-                hotspots: [...scene.hotspots, normalizedInsertedHotspot],
-              }
-            : scene,
-        ),
-      );
+  const finalYaw = autoOrientation?.yaw ?? draft.yaw;
+  const finalPitch = autoOrientation?.pitch ?? draft.pitch;
+  const finalTargetYaw = autoOrientation?.targetYaw ?? targetScene.initial_yaw ?? null;
+  const finalTargetPitch =
+    autoOrientation?.targetPitch ?? targetScene.initial_pitch ?? null;
 
-      setDraft((prev) => ({
-        ...prev,
-        yaw: null,
-        pitch: null,
-      }));
+  if (finalYaw === null || finalPitch === null) {
+    toast({
+      title: "Mungon pozicioni i pikave",
+      description:
+        "Vendos pozicionin X/Y të skenës aktuale dhe skenës destinacion në Planin e Katit, ose vendose hotspot-in manualisht.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-      toast({
-        title: "Hotspot u ruajt",
-        description:
-          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Shtimi i hotspot-it dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
+  try {
+    const { data: insertedHotspot, error } = await supabase
+      .from("virtual_tour_hotspots")
+      .insert({
+        scene_id: selectedScene.id,
+        to_scene_id: Number(draft.to_scene_id),
+        yaw: finalYaw,
+        pitch: finalPitch,
+        target_yaw: finalTargetYaw,
+        target_pitch: finalTargetPitch,
+        label: draft.label.trim() || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    const normalizedInsertedHotspot: Hotspot = {
+      id: toNumber(insertedHotspot.id),
+      scene_id: toNumber(insertedHotspot.scene_id),
+      to_scene_id: toNumber(insertedHotspot.to_scene_id),
+      yaw: Number(insertedHotspot.yaw),
+      pitch: Number(insertedHotspot.pitch),
+      target_yaw: toNullableNumber(insertedHotspot.target_yaw),
+      target_pitch: toNullableNumber(insertedHotspot.target_pitch),
+      label: insertedHotspot.label || null,
+    };
+
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.id === selectedScene.id
+          ? {
+              ...scene,
+              hotspots: [...scene.hotspots, normalizedInsertedHotspot],
+            }
+          : scene,
+      ),
+    );
+
+    setDraft((prev) => ({
+      ...prev,
+      yaw: null,
+      pitch: null,
+    }));
+
+    toast({
+      title: "Hotspot u ruajt",
+      description:
+        autoOrientation
+          ? "Hotspot-i u kalkulua automatikisht nga pozicionet e pikave në plan."
+          : "Hotspot-i u ruajt me pozicion manual.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Shtimi i hotspot-it dështoi.",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleSaveEditedHotspot = async () => {
-    if (!editingHotspot || editingHotspot.to_scene_id === "") {
-      toast({
-        title: "Gabim",
-        description: "Zgjidh skenën destinacion.",
-        variant: "destructive",
-      });
-      return;
-    }
+  if (!editingHotspot || editingHotspot.to_scene_id === "") {
+    toast({
+      title: "Gabim",
+      description: "Zgjidh skenën destinacion.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    try {
-      const { error } = await supabase
-        .from("virtual_tour_hotspots")
-        .update({
-          to_scene_id: Number(editingHotspot.to_scene_id),
-          label: editingHotspot.label.trim() || null,
-          yaw: editingHotspot.yaw,
-          pitch: editingHotspot.pitch,
-          target_yaw: editingHotspot.target_yaw,
-          target_pitch: editingHotspot.target_pitch,
-        })
-        .eq("id", editingHotspot.id);
+  const currentScene = scenes.find(
+    (scene) => Number(scene.id) === Number(selectedSceneId),
+  );
 
-      if (error) throw error;
+  const targetScene = scenes.find(
+    (scene) => Number(scene.id) === Number(editingHotspot.to_scene_id),
+  );
 
-      setScenes((prev) =>
-        prev.map((scene) =>
-          scene.id === selectedSceneId
-            ? {
-                ...scene,
-                hotspots: scene.hotspots.map((hotspot) =>
-                  hotspot.id === editingHotspot.id
-                    ? {
-                        ...hotspot,
-                        to_scene_id: Number(editingHotspot.to_scene_id),
-                        label: editingHotspot.label.trim() || null,
-                        yaw: editingHotspot.yaw,
-                        pitch: editingHotspot.pitch,
-                        target_yaw: editingHotspot.target_yaw,
-                        target_pitch: editingHotspot.target_pitch,
-                      }
-                    : hotspot,
-                ),
-              }
-            : scene,
-        ),
-      );
+  if (!currentScene || !targetScene) {
+    toast({
+      title: "Gabim",
+      description: "Skena aktuale ose destinacioni nuk u gjet.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-      setIsEditHotspotModalOpen(false);
-      setEditingHotspot(null);
-      setIsEditingHotspotPlacement(false);
+  const autoOrientation = calculateLinkOrientation(currentScene, targetScene);
 
-      toast({
-        title: "Sukses",
-        description: "Hotspot-i u përditësua.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Gabim",
-        description: error.message || "Përditësimi i hotspot-it dështoi.",
-        variant: "destructive",
-      });
-    }
-  };
+  const finalYaw = autoOrientation?.yaw ?? editingHotspot.yaw;
+  const finalPitch = autoOrientation?.pitch ?? editingHotspot.pitch;
+  const finalTargetYaw = autoOrientation?.targetYaw ?? editingHotspot.target_yaw;
+  const finalTargetPitch =
+    autoOrientation?.targetPitch ?? editingHotspot.target_pitch;
+
+  try {
+    const { error } = await supabase
+      .from("virtual_tour_hotspots")
+      .update({
+        to_scene_id: Number(editingHotspot.to_scene_id),
+        label: editingHotspot.label.trim() || null,
+        yaw: finalYaw,
+        pitch: finalPitch,
+        target_yaw: finalTargetYaw,
+        target_pitch: finalTargetPitch,
+      })
+      .eq("id", editingHotspot.id);
+
+    if (error) throw error;
+
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.id === selectedSceneId
+          ? {
+              ...scene,
+              hotspots: scene.hotspots.map((hotspot) =>
+                hotspot.id === editingHotspot.id
+                  ? {
+                      ...hotspot,
+                      to_scene_id: Number(editingHotspot.to_scene_id),
+                      label: editingHotspot.label.trim() || null,
+                      yaw: finalYaw,
+                      pitch: finalPitch,
+                      target_yaw: finalTargetYaw,
+                      target_pitch: finalTargetPitch,
+                    }
+                  : hotspot,
+              ),
+            }
+          : scene,
+      ),
+    );
+
+    setIsEditHotspotModalOpen(false);
+    setEditingHotspot(null);
+    setIsEditingHotspotPlacement(false);
+
+    toast({
+      title: "Sukses",
+      description:
+        autoOrientation
+          ? "Hotspot-i u përditësua automatikisht nga pozicionet e pikave."
+          : "Hotspot-i u përditësua.",
+    });
+  } catch (error: any) {
+    toast({
+      title: "Gabim",
+      description: error.message || "Përditësimi i hotspot-it dështoi.",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleDeleteHotspot = async (hotspotId: number) => {
     if (!confirm("A dëshironi ta fshini këtë hotspot?")) return;
@@ -2067,9 +2330,8 @@ return () => {
                   2. Editor Profesional i Hotspot-eve
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin,
-                  aktivizo placement mode, rrotullo panoramën dhe vendose hotspot-in në
-                  qendrën e pamjes.
+Vendos pikat e skenave në Planin e Katit, zgjidh destinacionin dhe ruaj lidhjen.
+Sistemi kalkulon automatikisht pozicionin e hotspot-it dhe drejtimin e hyrjes.
                 </p>
               </div>
             </div>
@@ -2081,13 +2343,28 @@ return () => {
               >
                 Ruaj këndin fillestar të kësaj skene
               </button>
+			  
+			  <button
+  onClick={handleCalibrateSceneYawOffset}
+  disabled={draft.to_scene_id === ""}
+  className={`px-4 py-2 rounded-xl font-semibold ${
+    draft.to_scene_id !== ""
+      ? "bg-primary text-black hover:bg-white"
+      : "bg-muted text-muted-foreground cursor-not-allowed"
+  }`}
+>
+  Kalibro drejtimin me destinacionin
+</button>
 
               {selectedScene.initial_yaw != null && selectedScene.initial_pitch != null && (
                 <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
                   Start view: {selectedScene.initial_yaw.toFixed(3)} /{" "}
                   {selectedScene.initial_pitch.toFixed(3)}
                 </div>
-              )}
+			)}
+			<div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
+  Yaw offset: {(selectedScene.yaw_offset ?? 0).toFixed(3)}
+</div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
