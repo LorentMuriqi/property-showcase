@@ -88,10 +88,10 @@ const getCacheMaxItems = () => {
   }
 
   if (profile.isMobile) {
-    return 5;
+    return 4;
   }
 
-  return 6;
+  return 10;
 };
 
 const getNeighborPreloadLimit = () => {
@@ -105,28 +105,49 @@ const getNeighborPreloadLimit = () => {
     return 1;
   }
 
-  // Në telefon normal preload 2 skena fqinje që kalimi te hotspot-et të ndihet më instant.
   if (profile.isMobile) {
     return 2;
   }
 
-  return 2;
+  // Desktop: preload më agresiv për Matterport-like feel.
+  return 5;
 };
 
-const preloadImage = (src?: string | null, priority: "high" | "low" = "low") => {
-  if (!src) return;
+const preloadImage = (
+  src?: string | null,
+  priority: "high" | "low" = "low",
+): Promise<void> => {
+  if (!src) return Promise.resolve();
 
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.decoding = "async";
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
 
-  try {
-    (img as any).fetchPriority = priority;
-  } catch {
-    // fetchPriority is not supported in every browser.
-  }
+    try {
+      (img as any).fetchPriority = priority;
+    } catch {
+      // fetchPriority is not supported in every browser.
+    }
 
-  img.src = src;
+    img.onload = async () => {
+      try {
+        if (typeof img.decode === "function") {
+          await img.decode();
+        }
+      } catch {
+        // Edhe nëse decode dështon, imazhi mund të jetë i përdorshëm.
+      }
+
+      resolve();
+    };
+
+    img.onerror = () => {
+      resolve();
+    };
+
+    img.src = src;
+  });
 };
 
 const scheduleIdleTask = (callback: () => void, delay = 80) => {
@@ -315,56 +336,6 @@ const [canUseFullscreen, setCanUseFullscreen] = useState(false);
 
 
 
-const goToScene = useCallback(
-  async (targetSceneId: number) => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-
-    const targetScene = getSceneById(targetSceneId);
-    if (!targetScene) return;
-
-    if (currentSceneRef.current?.id === targetSceneId) return;
-
-    // Nëse navigim është duke ndodhur, mos blloko — thjesht kthe
-    if (isNavigatingRef.current) return;
-    isNavigatingRef.current = true;
-
-    // MOS bëj fade-to-black — lejo PSV të bëjë transition direkt
-    // setIsSceneTransitioning(true) është hequr — shkakton freeze vizual
-
-    try {
-      const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
-      const entryOrientation = getSceneStartOrientation(targetSceneId);
-
-      updateTargetNodeOrientation(
-        vtPlugin,
-        String(targetSceneId),
-        entryOrientation,
-      );
-
-      await vtPlugin.setCurrentNode(String(targetSceneId), {
-        showLoader: false,
-        effect: "fade",
-        speed: 90,       // transition më i shpejtë për mobile/desktop
-        rotation: false,
-      });
-
-      requestAnimationFrame(() => {
-        applyManualSceneOrientation(entryOrientation);
-      });
-    } catch (error) {
-      console.error("Scene change error:", error);
-    } finally {
-      isNavigatingRef.current = false;
-    }
-  },
-  [
-    getSceneById,
-    getSceneStartOrientation,
-    updateTargetNodeOrientation,
-    applyManualSceneOrientation,
-  ],
-);
 
 
 
@@ -380,27 +351,45 @@ useEffect(() => {
   
   
 const preloadedImagesRef = useRef<Set<string>>(new Set());
+const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
+const readySceneIdsRef = useRef<Set<number>>(new Set());
 
 const preloadSceneImageOnce = useCallback(
-  (src?: string | null, priority: "high" | "low" = "low") => {
-    if (!src) return;
+  (
+    src?: string | null,
+    priority: "high" | "low" = "low",
+    sceneId?: number,
+  ): Promise<void> => {
+    if (!src) return Promise.resolve();
 
-    if (preloadedImagesRef.current.has(src)) return;
+    const existingPromise = preloadPromisesRef.current.get(src);
+    if (existingPromise) return existingPromise;
 
     preloadedImagesRef.current.add(src);
-    preloadImage(src, priority);
+
+    const promise = preloadImage(src, priority).then(() => {
+      if (sceneId !== undefined && sceneId !== null) {
+        readySceneIdsRef.current.add(Number(sceneId));
+      }
+    });
+
+    preloadPromisesRef.current.set(src, promise);
+    return promise;
   },
   [],
 );
 
 const prepareSceneForNavigation = useCallback(
-  (sceneId: number | null, priority: "high" | "low" = "high") => {
-    if (sceneId === null) return;
+  (
+    sceneId: number | null,
+    priority: "high" | "low" = "high",
+  ): Promise<void> => {
+    if (sceneId === null) return Promise.resolve();
 
     const scene = sortedScenes.find((s) => Number(s.id) === Number(sceneId));
-    if (!scene) return;
+    if (!scene) return Promise.resolve();
 
-    preloadSceneImageOnce(scene.imageUrl, priority);
+    return preloadSceneImageOnce(scene.imageUrl, priority, Number(scene.id));
   },
   [sortedScenes, preloadSceneImageOnce],
 );
@@ -419,28 +408,139 @@ const preloadSceneImages = useCallback(
       .map((h) => h.toSceneId)
       .filter((id, index, arr) => arr.indexOf(id) === index);
 
-    const imagesToPreload = sortedScenes
-      .filter((s) => neighborIds.includes(s.id))
-      .slice(0, preloadLimit)
-      .map((s) => s.imageUrl)
-      .filter(Boolean);
+const scenesToPreload = sortedScenes
+  .filter((s) => neighborIds.includes(s.id))
+  .slice(0, preloadLimit);
 
-    scheduleIdleTask(() => {
-      imagesToPreload.forEach((src) => {
-        preloadSceneImageOnce(src, "low");
-      });
-    }, 80);
+scheduleIdleTask(() => {
+  scenesToPreload.forEach((targetScene) => {
+    preloadSceneImageOnce(
+      targetScene.imageUrl,
+      "low",
+      Number(targetScene.id),
+    );
+  });
+}, 40);
   },
   [sortedScenes, preloadSceneImageOnce],
 );
 
+
+const goToScene = useCallback(
+  async (targetSceneId: number) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const targetScene = getSceneById(targetSceneId);
+    if (!targetScene) return;
+
+    if (currentSceneRef.current?.id === targetSceneId) return;
+
+    // Mos blloko kalimin. Vetëm sigurohu që preload është nisur në background.
+    preloadSceneImageOnce(
+      targetScene.imageUrl,
+      "high",
+      Number(targetScene.id),
+    );
+
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+
+    try {
+      const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+      const entryOrientation = getSceneStartOrientation(targetSceneId);
+
+      updateTargetNodeOrientation(
+        vtPlugin,
+        String(targetSceneId),
+        entryOrientation,
+      );
+
+      await vtPlugin.setCurrentNode(String(targetSceneId), {
+        showLoader: false,
+        effect: "fade",
+        speed: 180,
+        rotation: false,
+      });
+
+      requestAnimationFrame(() => {
+        applyManualSceneOrientation(entryOrientation);
+      });
+    } catch (error) {
+      console.error("Scene change error:", error);
+    } finally {
+      isNavigatingRef.current = false;
+    }
+  },
+  [
+    getSceneById,
+    getSceneStartOrientation,
+    updateTargetNodeOrientation,
+    applyManualSceneOrientation,
+    preloadSceneImageOnce,
+  ],
+);
 
 
 useEffect(() => {
   preloadSceneImages(currentSceneId);
 }, [currentSceneId, preloadSceneImages]);
 
+useEffect(() => {
+  if (!resolvedStartScene) return;
 
+  preloadSceneImageOnce(
+    resolvedStartScene.imageUrl,
+    "high",
+    Number(resolvedStartScene.id),
+  );
+}, [resolvedStartScene, preloadSceneImageOnce]);
+
+useEffect(() => {
+  if (currentSceneId === null) return;
+
+  const currentScene = sortedScenes.find(
+    (scene) => Number(scene.id) === Number(currentSceneId),
+  );
+
+  if (!currentScene) return;
+
+  const directTargetIds = currentScene.hotspots
+    .map((hotspot) => Number(hotspot.toSceneId))
+    .filter((id, index, arr) => arr.indexOf(id) === index);
+
+  const directTargetScenes = sortedScenes.filter((scene) =>
+    directTargetIds.includes(Number(scene.id)),
+  );
+
+  // Preload direkt i të gjitha daljeve nga dhoma aktuale.
+  directTargetScenes.forEach((targetScene) => {
+    preloadSceneImageOnce(
+      targetScene.imageUrl,
+      "high",
+      Number(targetScene.id),
+    );
+  });
+
+  // Preload i nivelit të dytë vetëm në desktop, për ndjesi më Matterport.
+  const profile = getDeviceProfile();
+
+  if (!profile.isMobile && !profile.isLowMemory && !profile.isSlowConnection) {
+    scheduleIdleTask(() => {
+      const secondLevelIds = directTargetScenes
+        .flatMap((scene) => scene.hotspots.map((hotspot) => Number(hotspot.toSceneId)))
+        .filter((id) => id !== Number(currentSceneId))
+        .filter((id, index, arr) => arr.indexOf(id) === index);
+
+      sortedScenes
+        .filter((scene) => secondLevelIds.includes(Number(scene.id)))
+        .slice(0, 4)
+        .forEach((scene) => {
+          preloadSceneImageOnce(scene.imageUrl, "low", Number(scene.id));
+        });
+    }, 900);
+  }
+}, [currentSceneId, sortedScenes, preloadSceneImageOnce]);
 
 
   useEffect(() => {
@@ -496,11 +596,11 @@ zoomSpeed: 1.15,
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-preload: false,   // <-- PSV ngarkon fqinjët në background automatikisht
+preload: false,   // <-- Preload-in e kontrollojmë vetë me preloadSceneImageOnce.
 transitionOptions: () => ({
   showLoader: false,
   effect: "fade",
-  speed: 90,     // transition shumë i shpejtë dhe smooth
+  speed: 180,
   rotation: false,
 }),
           },
@@ -521,6 +621,9 @@ vtPlugin.addEventListener("select-link", ({ link }: any) => {
   const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
 
   pendingEntryOrientationRef.current = entryOrientation;
+
+  // E nisim menjëherë me high priority. Në shumicën e rasteve do jetë gati
+  // sepse e kemi preloaded sapo hyjmë në skenën aktuale.
   prepareSceneForNavigation(targetSceneId, "high");
 
   updateTargetNodeOrientation(
@@ -702,6 +805,7 @@ useEffect(() => {
     </div>
   </div>
 )}
+
 
 <div className="absolute top-6 left-6 z-40 pointer-events-none max-w-[80%]">
   <div className="
