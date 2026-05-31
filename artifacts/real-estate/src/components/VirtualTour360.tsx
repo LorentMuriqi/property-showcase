@@ -7,7 +7,7 @@ import {
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
-import { Maximize, Minimize, Map as MapIcon, X, ChevronLeft, ChevronRight, List, Compass } from "lucide-react";
+import { Maximize, Minimize, Map as MapIcon, X, List, Compass } from "lucide-react";
 
 interface VirtualTour360Props {
   scenes: Array<{
@@ -438,6 +438,11 @@ export function VirtualTour360({
       if (isNavigatingRef.current) return;
       isNavigatingRef.current = true;
 
+      // Safety valve: always release the lock within 3s even if something goes wrong
+      const safetyTimer = window.setTimeout(() => {
+        isNavigatingRef.current = false;
+      }, 3000);
+
       try {
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
         const entryOrientation = getSceneStartOrientation(targetSceneId);
@@ -463,6 +468,7 @@ export function VirtualTour360({
       } catch (error) {
         console.error("Scene change error:", error);
       } finally {
+        window.clearTimeout(safetyTimer);
         isNavigatingRef.current = false;
       }
     },
@@ -777,43 +783,33 @@ export function VirtualTour360({
           display: none !important;
         }
 
-        /* Professional hotspot arrow styling */
+        /* Matterport-style floor hotspot dots */
         .virtual-tour-shell .psv-virtual-tour-arrow {
-          width: 46px !important;
-          height: 46px !important;
+          width: 32px !important;
+          height: 32px !important;
           border-radius: 9999px !important;
-          background: rgba(0, 0, 0, 0.55) !important;
-          border: 2.5px solid rgba(212, 175, 55, 0.85) !important;
-          box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.5), 0 8px 24px rgba(0,0,0,0.4) !important;
-          animation: vt-pulse 2.4s ease-in-out infinite !important;
-          transition: transform 0.18s ease, background 0.18s ease !important;
+          background: rgba(255, 255, 255, 0.92) !important;
+          border: 2px solid rgba(255, 255, 255, 0.5) !important;
+          box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55), 0 2px 10px rgba(0,0,0,0.45) !important;
+          animation: vt-matterport-pulse 2.2s ease-out infinite !important;
+          transition: transform 0.15s ease, background 0.15s ease !important;
         }
         .virtual-tour-shell .psv-virtual-tour-arrow:hover {
-          background: rgba(212, 175, 55, 0.22) !important;
-          transform: scale(1.18) !important;
-          box-shadow: 0 0 0 10px rgba(212, 175, 55, 0.12), 0 8px 24px rgba(0,0,0,0.4) !important;
+          background: rgba(255, 255, 255, 1) !important;
+          transform: scale(1.25) !important;
+          box-shadow: 0 0 0 0 rgba(255,255,255,0), 0 4px 16px rgba(0,0,0,0.5) !important;
         }
-        .virtual-tour-shell .psv-virtual-tour-arrow svg {
-          width: 20px !important;
-          height: 20px !important;
-          fill: rgba(212, 175, 55, 0.9) !important;
-          filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)) !important;
+        .virtual-tour-shell .psv-virtual-tour-arrow svg,
+        .virtual-tour-shell .psv-virtual-tour-arrow img {
+          display: none !important;
         }
         .virtual-tour-shell .psv-virtual-tour-link-tooltip {
-          background: rgba(0,0,0,0.75) !important;
-          color: white !important;
-          border: 1px solid rgba(255,255,255,0.12) !important;
-          border-radius: 8px !important;
-          font-size: 12px !important;
-          font-weight: 600 !important;
-          letter-spacing: 0.04em !important;
-          padding: 5px 10px !important;
-          backdrop-filter: blur(8px) !important;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.35) !important;
+          display: none !important;
         }
-        @keyframes vt-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.45), 0 8px 24px rgba(0,0,0,0.4); }
-          50% { box-shadow: 0 0 0 9px rgba(212, 175, 55, 0.0), 0 8px 24px rgba(0,0,0,0.4); }
+        @keyframes vt-matterport-pulse {
+          0%   { box-shadow: 0 0 0 0   rgba(255, 255, 255, 0.55), 0 2px 10px rgba(0,0,0,0.45); }
+          60%  { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0),   0 2px 10px rgba(0,0,0,0.45); }
+          100% { box-shadow: 0 0 0 0   rgba(255, 255, 255, 0),   0 2px 10px rgba(0,0,0,0.45); }
         }
 
         /* Scene name flash animation */
@@ -949,31 +945,6 @@ export function VirtualTour360({
           </div>
         </div>
 
-        {/* Left/Right scene navigation arrows (only if >1 scene) */}
-        {sortedScenes.length > 1 && (
-          <>
-            <button
-              onClick={handlePrevScene}
-              className={`absolute left-4 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/50 text-white hover:bg-black/80 flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg transition-all duration-300 ${
-                isOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-              aria-label="Skena e mëparshme"
-              type="button"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={handleNextScene}
-              className={`absolute right-4 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/50 text-white hover:bg-black/80 flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg transition-all duration-300 ${
-                isOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-              aria-label="Skena tjetër"
-              type="button"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </>
-        )}
 
         {/* Bottom-right controls */}
         <div
@@ -1163,20 +1134,6 @@ export function VirtualTour360({
           </div>
         </div>
 
-        {/* Keyboard hint (bottom-left, shows once) */}
-        {isViewerVisible && !isInitialLoading && (
-          <div
-            className={`absolute bottom-24 left-5 z-40 pointer-events-none transition-all duration-300 ${
-              isOverlayVisible ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/8 md:backdrop-blur-md">
-              <p className="text-white/35 text-[10px] font-medium tracking-wide">
-                ← → Navigim · F Fullscreen · ESC Mbyll
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
