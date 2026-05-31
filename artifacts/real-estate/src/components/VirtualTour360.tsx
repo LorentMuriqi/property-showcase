@@ -180,6 +180,7 @@ export function VirtualTour360({
   const isNavigatingRef = useRef(false);
   const closeTouchHandledRef = useRef(false);
   const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const sceneStripScrollRef = useRef<HTMLDivElement>(null);
   const pendingEntryOrientationRef = useRef<Orientation | null>(null);
   const overlayTimerRef = useRef<number | null>(null);
 
@@ -748,16 +749,11 @@ export function VirtualTour360({
 
   useEffect(() => {
     if (currentSceneId === null) return;
-
     const activeButton = sceneButtonRefs.current[currentSceneId];
-
-    if (!activeButton) return;
-
-    activeButton.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+    const strip = sceneStripScrollRef.current;
+    if (!activeButton || !strip) return;
+    const target = activeButton.offsetLeft - strip.offsetWidth / 2 + activeButton.offsetWidth / 2;
+    strip.scrollTo({ left: target, behavior: "smooth" });
   }, [currentSceneId]);
 
   if (sortedScenes.length === 0) {
@@ -783,33 +779,77 @@ export function VirtualTour360({
           display: none !important;
         }
 
-        /* Matterport-style floor hotspot dots */
+        /* ── Kill every PSV tooltip absolutely ── */
+        .virtual-tour-shell .psv-tooltip,
+        .virtual-tour-shell .psv-tooltip-content,
+        .virtual-tour-shell .psv-tooltip-arrow,
+        .virtual-tour-shell .psv-virtual-tour-link-tooltip,
+        .virtual-tour-shell [class*="psv-tooltip"],
+        .virtual-tour-shell [class*="link-tooltip"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+
+        /* ── Matterport-identical navigation dots ── */
         .virtual-tour-shell .psv-virtual-tour-arrow {
-          width: 32px !important;
-          height: 32px !important;
+          position: relative !important;
+          width: 52px !important;
+          height: 52px !important;
           border-radius: 9999px !important;
-          background: rgba(255, 255, 255, 0.92) !important;
-          border: 2px solid rgba(255, 255, 255, 0.5) !important;
-          box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55), 0 2px 10px rgba(0,0,0,0.45) !important;
-          animation: vt-matterport-pulse 2.2s ease-out infinite !important;
-          transition: transform 0.15s ease, background 0.15s ease !important;
+          /* 3-D sphere: bright highlight top-left, shadow bottom-right */
+          background:
+            radial-gradient(circle at 36% 34%, #ffffff 0%, #eaeaea 42%, #c2c2c2 100%) !important;
+          border: none !important;
+          box-shadow:
+            0 6px 20px rgba(0,0,0,0.55),
+            0 2px 6px  rgba(0,0,0,0.35),
+            inset 0 -4px 8px rgba(0,0,0,0.18) !important;
+          animation: vt-mp-pulse 2.4s ease-out infinite !important;
+          transition: transform 0.15s ease !important;
+          overflow: visible !important;
+        }
+        /* elliptical floor shadow */
+        .virtual-tour-shell .psv-virtual-tour-arrow::after {
+          content: '' !important;
+          position: absolute !important;
+          bottom: -10px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          width: 68% !important;
+          height: 10px !important;
+          background: radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, transparent 72%) !important;
+          border-radius: 50% !important;
+          pointer-events: none !important;
         }
         .virtual-tour-shell .psv-virtual-tour-arrow:hover {
-          background: rgba(255, 255, 255, 1) !important;
-          transform: scale(1.25) !important;
-          box-shadow: 0 0 0 0 rgba(255,255,255,0), 0 4px 16px rgba(0,0,0,0.5) !important;
+          transform: scale(1.18) translateY(-2px) !important;
+          box-shadow:
+            0 10px 28px rgba(0,0,0,0.6),
+            0 4px 10px  rgba(0,0,0,0.4),
+            inset 0 -4px 8px rgba(0,0,0,0.18) !important;
         }
-        .virtual-tour-shell .psv-virtual-tour-arrow svg,
-        .virtual-tour-shell .psv-virtual-tour-arrow img {
-          display: none !important;
+        /* upward chevron arrow — dark, centered */
+        .virtual-tour-shell .psv-virtual-tour-arrow svg {
+          display: block !important;
+          width: 22px !important;
+          height: 22px !important;
+          fill: #333333 !important;
+          filter: none !important;
+          opacity: 0.8 !important;
         }
-        .virtual-tour-shell .psv-virtual-tour-link-tooltip {
-          display: none !important;
-        }
-        @keyframes vt-matterport-pulse {
-          0%   { box-shadow: 0 0 0 0   rgba(255, 255, 255, 0.55), 0 2px 10px rgba(0,0,0,0.45); }
-          60%  { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0),   0 2px 10px rgba(0,0,0,0.45); }
-          100% { box-shadow: 0 0 0 0   rgba(255, 255, 255, 0),   0 2px 10px rgba(0,0,0,0.45); }
+        /* pulse ring */
+        @keyframes vt-mp-pulse {
+          0%   { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35),
+                             inset 0 -4px 8px rgba(0,0,0,0.18),
+                             0 0 0 0   rgba(255,255,255,0.5); }
+          55%  { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35),
+                             inset 0 -4px 8px rgba(0,0,0,0.18),
+                             0 0 0 16px rgba(255,255,255,0); }
+          100% { box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35),
+                             inset 0 -4px 8px rgba(0,0,0,0.18),
+                             0 0 0 0   rgba(255,255,255,0); }
         }
 
         /* Scene name flash animation */
@@ -1094,7 +1134,7 @@ export function VirtualTour360({
           } ${showSceneList ? "pr-72" : ""}`}
         >
           <div className="h-20 bg-gradient-to-t from-black/95 to-transparent flex items-end justify-center pb-3 px-4">
-            <div className="flex gap-2 overflow-x-auto max-w-full pb-1 hide-scrollbar">
+            <div ref={sceneStripScrollRef} className="flex gap-2 overflow-x-auto max-w-full pb-1 hide-scrollbar">
               {sortedScenes.map((scene) => (
                 <button
                   key={scene.id}
