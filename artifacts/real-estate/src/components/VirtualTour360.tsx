@@ -84,14 +84,14 @@ const getCacheMaxItems = () => {
   const profile = getDeviceProfile();
 
   if (profile.isLowMemory || profile.isSlowConnection) {
-    return 3;
+    return 2;
   }
 
   if (profile.isMobile) {
-    return 4;
+    return 3;
   }
 
-  return 10;
+  return 8;
 };
 
 const getNeighborPreloadLimit = () => {
@@ -106,11 +106,10 @@ const getNeighborPreloadLimit = () => {
   }
 
   if (profile.isMobile) {
-    return 2;
+    return 1;
   }
 
-  // Desktop: preload më agresiv për Matterport-like feel.
-  return 5;
+  return 4;
 };
 
 const preloadImage = (
@@ -352,14 +351,9 @@ useEffect(() => {
   
 const preloadedImagesRef = useRef<Set<string>>(new Set());
 const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
-const readySceneIdsRef = useRef<Set<number>>(new Set());
 
 const preloadSceneImageOnce = useCallback(
-  (
-    src?: string | null,
-    priority: "high" | "low" = "low",
-    sceneId?: number,
-  ): Promise<void> => {
+  (src?: string | null, priority: "high" | "low" = "low"): Promise<void> => {
     if (!src) return Promise.resolve();
 
     const existingPromise = preloadPromisesRef.current.get(src);
@@ -367,13 +361,9 @@ const preloadSceneImageOnce = useCallback(
 
     preloadedImagesRef.current.add(src);
 
-    const promise = preloadImage(src, priority).then(() => {
-      if (sceneId !== undefined && sceneId !== null) {
-        readySceneIdsRef.current.add(Number(sceneId));
-      }
-    });
-
+    const promise = preloadImage(src, priority);
     preloadPromisesRef.current.set(src, promise);
+
     return promise;
   },
   [],
@@ -389,7 +379,7 @@ const prepareSceneForNavigation = useCallback(
     const scene = sortedScenes.find((s) => Number(s.id) === Number(sceneId));
     if (!scene) return Promise.resolve();
 
-    return preloadSceneImageOnce(scene.imageUrl, priority, Number(scene.id));
+    return preloadSceneImageOnce(scene.imageUrl, priority);
   },
   [sortedScenes, preloadSceneImageOnce],
 );
@@ -414,11 +404,7 @@ const scenesToPreload = sortedScenes
 
 scheduleIdleTask(() => {
   scenesToPreload.forEach((targetScene) => {
-    preloadSceneImageOnce(
-      targetScene.imageUrl,
-      "low",
-      Number(targetScene.id),
-    );
+preloadSceneImageOnce(targetScene.imageUrl, "low");
   });
 }, 40);
   },
@@ -436,19 +422,15 @@ const goToScene = useCallback(
 
     if (currentSceneRef.current?.id === targetSceneId) return;
 
-    // Mos blloko kalimin. Vetëm sigurohu që preload është nisur në background.
-    preloadSceneImageOnce(
-      targetScene.imageUrl,
-      "high",
-      Number(targetScene.id),
-    );
-
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
 
     try {
       const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
       const entryOrientation = getSceneStartOrientation(targetSceneId);
+
+      // Nis preload në background, por MOS e prit.
+      preloadSceneImageOnce(targetScene.imageUrl, "high");
 
       updateTargetNodeOrientation(
         vtPlugin,
@@ -459,7 +441,7 @@ const goToScene = useCallback(
       await vtPlugin.setCurrentNode(String(targetSceneId), {
         showLoader: false,
         effect: "fade",
-        speed: 180,
+        speed: 120,
         rotation: false,
       });
 
@@ -489,11 +471,7 @@ useEffect(() => {
 useEffect(() => {
   if (!resolvedStartScene) return;
 
-  preloadSceneImageOnce(
-    resolvedStartScene.imageUrl,
-    "high",
-    Number(resolvedStartScene.id),
-  );
+preloadSceneImageOnce(resolvedStartScene.imageUrl, "high");
 }, [resolvedStartScene, preloadSceneImageOnce]);
 
 useEffect(() => {
@@ -513,22 +491,24 @@ useEffect(() => {
     directTargetIds.includes(Number(scene.id)),
   );
 
-  // Preload direkt i të gjitha daljeve nga dhoma aktuale.
-  directTargetScenes.forEach((targetScene) => {
-    preloadSceneImageOnce(
-      targetScene.imageUrl,
-      "high",
-      Number(targetScene.id),
-    );
-  });
-
-  // Preload i nivelit të dytë vetëm në desktop, për ndjesi më Matterport.
   const profile = getDeviceProfile();
+
+  const directPreloadLimit = profile.isMobile
+    ? 1
+    : profile.isLowMemory || profile.isSlowConnection
+      ? 1
+      : 4;
+
+  directTargetScenes.slice(0, directPreloadLimit).forEach((targetScene) => {
+    preloadSceneImageOnce(targetScene.imageUrl, "high");
+  });
 
   if (!profile.isMobile && !profile.isLowMemory && !profile.isSlowConnection) {
     scheduleIdleTask(() => {
       const secondLevelIds = directTargetScenes
-        .flatMap((scene) => scene.hotspots.map((hotspot) => Number(hotspot.toSceneId)))
+        .flatMap((scene) =>
+          scene.hotspots.map((hotspot) => Number(hotspot.toSceneId)),
+        )
         .filter((id) => id !== Number(currentSceneId))
         .filter((id, index, arr) => arr.indexOf(id) === index);
 
@@ -536,7 +516,7 @@ useEffect(() => {
         .filter((scene) => secondLevelIds.includes(Number(scene.id)))
         .slice(0, 4)
         .forEach((scene) => {
-          preloadSceneImageOnce(scene.imageUrl, "low", Number(scene.id));
+          preloadSceneImageOnce(scene.imageUrl, "low");
         });
     }, 900);
   }
@@ -600,7 +580,7 @@ preload: false,   // <-- Preload-in e kontrollojmë vetë me preloadSceneImageOn
 transitionOptions: () => ({
   showLoader: false,
   effect: "fade",
-  speed: 180,
+  speed: 120,
   rotation: false,
 }),
           },
