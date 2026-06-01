@@ -106,72 +106,90 @@ export default function AdminProjectForm() {
     name: "images",
   });
   
-  const savedTabScrollYRef = useRef<number | null>(null);
-  const restoreScrollTimersRef = useRef<number[]>([]);
+  const tabScrollYRef = useRef(0);
+  const shouldRestoreAfterTabReturnRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
 
-  const restoreScrollTo = useCallback((targetY: number) => {
-    if (!Number.isFinite(targetY)) return;
+  const scrollToSavedTabPosition = useCallback(() => {
+    const targetY = tabScrollYRef.current;
 
-    restoreScrollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    restoreScrollTimersRef.current = [];
+    if (!Number.isFinite(targetY) || targetY <= 0) return;
 
-    [0, 50, 150].forEach((delay) => {
-      const timer = window.setTimeout(() => {
+    [0, 50, 150, 300].forEach((delay) => {
+      window.setTimeout(() => {
+        isProgrammaticScrollRef.current = true;
+
         window.scrollTo({
           top: targetY,
           left: 0,
           behavior: "auto",
         });
-      }, delay);
 
-      restoreScrollTimersRef.current.push(timer);
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      }, delay);
     });
   }, []);
 
-  const preserveScroll = useCallback(
-    (callback: () => void) => {
-      const currentY = window.scrollY;
-
-      callback();
-      restoreScrollTo(currentY);
-    },
-    [restoreScrollTo],
-  );
-
   useEffect(() => {
-    const saveTabScroll = () => {
-      savedTabScrollYRef.current = window.scrollY;
+    const saveBeforeLeavingTab = () => {
+      if (isProgrammaticScrollRef.current) return;
+
+      tabScrollYRef.current = window.scrollY;
+      shouldRestoreAfterTabReturnRef.current = true;
     };
 
-    const restoreTabScroll = () => {
-      const savedY = savedTabScrollYRef.current;
-      if (savedY === null) return;
+    const restoreAfterReturningToTab = () => {
+      if (!shouldRestoreAfterTabReturnRef.current) return;
 
-      restoreScrollTo(savedY);
+      shouldRestoreAfterTabReturnRef.current = false;
+      scrollToSavedTabPosition();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        saveTabScroll();
+        saveBeforeLeavingTab();
         return;
       }
 
       if (document.visibilityState === "visible") {
-        restoreTabScroll();
+        restoreAfterReturningToTab();
       }
     };
 
-    window.addEventListener("blur", saveTabScroll);
-    window.addEventListener("focus", restoreTabScroll);
+    window.addEventListener("blur", saveBeforeLeavingTab);
+    window.addEventListener("focus", restoreAfterReturningToTab);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("blur", saveTabScroll);
-      window.removeEventListener("focus", restoreTabScroll);
+      window.removeEventListener("blur", saveBeforeLeavingTab);
+      window.removeEventListener("focus", restoreAfterReturningToTab);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      restoreScrollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [restoreScrollTo]);
+  }, [scrollToSavedTabPosition]);
+
+  const preserveScroll = useCallback((callback: () => void) => {
+    const currentY = window.scrollY;
+
+    callback();
+
+    [0, 50, 150].forEach((delay) => {
+      window.setTimeout(() => {
+        isProgrammaticScrollRef.current = true;
+
+        window.scrollTo({
+          top: currentY,
+          left: 0,
+          behavior: "auto",
+        });
+
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      }, delay);
+    });
+  }, []);
 
   const handleAddImage = useCallback(() => {
     preserveScroll(() => {
