@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
@@ -106,19 +106,72 @@ export default function AdminProjectForm() {
     name: "images",
   });
   
-  const preserveScroll = useCallback((callback: () => void) => {
-    const currentY = window.scrollY;
+  const savedTabScrollYRef = useRef<number | null>(null);
+  const restoreScrollTimersRef = useRef<number[]>([]);
 
-    callback();
+  const restoreScrollTo = useCallback((targetY: number) => {
+    if (!Number.isFinite(targetY)) return;
 
-    requestAnimationFrame(() => {
-      window.scrollTo({
-        top: currentY,
-        left: 0,
-        behavior: "auto",
-      });
+    restoreScrollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    restoreScrollTimersRef.current = [];
+
+    [0, 50, 150].forEach((delay) => {
+      const timer = window.setTimeout(() => {
+        window.scrollTo({
+          top: targetY,
+          left: 0,
+          behavior: "auto",
+        });
+      }, delay);
+
+      restoreScrollTimersRef.current.push(timer);
     });
   }, []);
+
+  const preserveScroll = useCallback(
+    (callback: () => void) => {
+      const currentY = window.scrollY;
+
+      callback();
+      restoreScrollTo(currentY);
+    },
+    [restoreScrollTo],
+  );
+
+  useEffect(() => {
+    const saveTabScroll = () => {
+      savedTabScrollYRef.current = window.scrollY;
+    };
+
+    const restoreTabScroll = () => {
+      const savedY = savedTabScrollYRef.current;
+      if (savedY === null) return;
+
+      restoreScrollTo(savedY);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        saveTabScroll();
+        return;
+      }
+
+      if (document.visibilityState === "visible") {
+        restoreTabScroll();
+      }
+    };
+
+    window.addEventListener("blur", saveTabScroll);
+    window.addEventListener("focus", restoreTabScroll);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("blur", saveTabScroll);
+      window.removeEventListener("focus", restoreTabScroll);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      restoreScrollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [restoreScrollTo]);
 
   const handleAddImage = useCallback(() => {
     preserveScroll(() => {
