@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
@@ -36,50 +36,77 @@ export default function AdminProjectForm() {
   const isEditing = !!id;
   const { toast } = useToast();
 
+  const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
+const lastScrollYRef = useRef(0);
+
+const saveCurrentScroll = useCallback(() => {
+  lastScrollYRef.current = window.scrollY;
+  sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+}, [scrollStorageKey]);
+
+const restoreSavedScroll = useCallback(() => {
+  const savedY = sessionStorage.getItem(scrollStorageKey);
+  const targetY = savedY ? Number(savedY) : lastScrollYRef.current;
+
+  if (!Number.isFinite(targetY)) return;
+
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+
+    setTimeout(() => {
+      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+    }, 50);
+  });
+}, [scrollStorageKey]);
+
+const runWithoutLosingScroll = useCallback(
+  (callback: () => void) => {
+    saveCurrentScroll();
+
+    callback();
+
+    requestAnimationFrame(() => {
+      restoreSavedScroll();
+    });
+  },
+  [saveCurrentScroll, restoreSavedScroll],
+);
+
+useEffect(() => {
+  const handleScroll = () => {
+    lastScrollYRef.current = window.scrollY;
+    sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      handleScroll();
+    }
+
+    if (document.visibilityState === "visible") {
+      restoreSavedScroll();
+    }
+  };
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  window.addEventListener("focus", restoreSavedScroll);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  restoreSavedScroll();
+
+  return () => {
+    handleScroll();
+    window.removeEventListener("scroll", handleScroll);
+    window.removeEventListener("focus", restoreSavedScroll);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+}, [scrollStorageKey, restoreSavedScroll]);
+
   const [projectToEdit, setProjectToEdit] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
 
-const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
 
-useEffect(() => {
-  const saveScrollPosition = () => {
-    sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-  };
-
-  const restoreScrollPosition = () => {
-    const savedY = sessionStorage.getItem(scrollStorageKey);
-    if (!savedY) return;
-
-    requestAnimationFrame(() => {
-      window.scrollTo({
-        top: Number(savedY),
-        left: 0,
-        behavior: "auto",
-      });
-    });
-  };
-
-  window.addEventListener("scroll", saveScrollPosition, { passive: true });
-  window.addEventListener("focus", restoreScrollPosition);
-
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === "visible") {
-      restoreScrollPosition();
-    }
-  };
-
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-
-  restoreScrollPosition();
-
-  return () => {
-    saveScrollPosition();
-    window.removeEventListener("scroll", saveScrollPosition);
-    window.removeEventListener("focus", restoreScrollPosition);
-    document.removeEventListener("visibilitychange", handleVisibilityChange);
-  };
-}, [scrollStorageKey]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -602,16 +629,18 @@ useEffect(() => {
                 <ImageIcon size={20} /> Galeria e Fotove
               </h2>
 
-              <button
-                type="button"
-                onClick={() =>
-appendImage({
-  url: "",
-  thumbnailUrl: "",
-  caption: "",
-  isPrimary: imageFields.length === 0,
-})
-                }
+<button
+  type="button"
+  onClick={() =>
+    runWithoutLosingScroll(() =>
+      appendImage({
+        url: "",
+        thumbnailUrl: "",
+        caption: "",
+        isPrimary: false,
+      }),
+    )
+  }
                 className="text-sm text-primary hover:text-foreground font-medium flex items-center gap-1"
               >
                 <Plus size={16} /> Shto Foto
@@ -659,9 +688,9 @@ appendImage({
                       Kryesore
                     </label>
 
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
+<button
+  type="button"
+  onClick={() => runWithoutLosingScroll(() => removeImage(index))}
                       className="text-destructive hover:text-red-400 p-2 bg-destructive/10 rounded-lg"
                     >
                       <Trash2 size={16} />
@@ -669,6 +698,26 @@ appendImage({
                   </div>
                 </div>
               ))}
+			  
+			  <div className="pt-4 flex justify-end">
+  <button
+    type="button"
+    onClick={() =>
+      runWithoutLosingScroll(() =>
+        appendImage({
+          url: "",
+          thumbnailUrl: "",
+          caption: "",
+          isPrimary: false,
+        }),
+      )
+    }
+    className="flex items-center gap-2 px-4 py-2 text-primary font-bold text-sm hover:text-foreground transition-colors"
+  >
+    <Plus size={16} />
+    Shto Foto
+  </button>
+</div>
 
               {imageFields.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">
