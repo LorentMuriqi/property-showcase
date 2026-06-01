@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
@@ -106,67 +106,33 @@ export default function AdminProjectForm() {
     name: "images",
   });
   
-  const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
-  const DISABLE_GLOBAL_SCROLL_TOP_KEY = "disable-global-scroll-top";
-  const lastScrollYRef = useRef(0);
-  const restoreTimersRef = useRef<number[]>([]);
-  const ignoreScrollSaveUntilRef = useRef(0);
-
-  const getSavedScrollY = useCallback(() => {
-    const savedY = sessionStorage.getItem(scrollStorageKey);
-    const parsedY = savedY ? Number(savedY) : lastScrollYRef.current;
-
-    return Number.isFinite(parsedY) ? parsedY : 0;
-  }, [scrollStorageKey]);
-
-  const saveCurrentScroll = useCallback(() => {
-    if (Date.now() < ignoreScrollSaveUntilRef.current) return;
-
+  const preserveScroll = useCallback((callback: () => void) => {
     const currentY = window.scrollY;
-    lastScrollYRef.current = currentY;
-    sessionStorage.setItem(scrollStorageKey, String(currentY));
-  }, [scrollStorageKey]);
 
-  const restoreSavedScroll = useCallback(() => {
-    const targetY = getSavedScrollY();
+    callback();
 
-    restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    restoreTimersRef.current = [];
-
-    // Mos lejo që ndonjë scroll-to-top global/browser të ruajë gabimisht "0"
-    // menjëherë pas rikthimit të tab-it ose pas re-render-it të formës.
-    ignoreScrollSaveUntilRef.current = Date.now() + 1800;
-
-    [0, 50, 150, 300, 600, 1000, 1500].forEach((delay) => {
-      const timer = window.setTimeout(() => {
-        window.scrollTo({
-          top: targetY,
-          left: 0,
-          behavior: "auto",
-        });
-      }, delay);
-
-      restoreTimersRef.current.push(timer);
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: currentY,
+        left: 0,
+        behavior: "auto",
+      });
     });
-  }, [getSavedScrollY]);
+  }, []);
 
   const handleAddImage = useCallback(() => {
-    const currentY = window.scrollY;
-    lastScrollYRef.current = currentY;
-    sessionStorage.setItem(scrollStorageKey, String(currentY));
-
-    appendImage(
-      {
-        url: "",
-        thumbnailUrl: "",
-        caption: "",
-        isPrimary: false,
-      },
-      { shouldFocus: false },
-    );
-
-    restoreSavedScroll();
-  }, [appendImage, restoreSavedScroll, scrollStorageKey]);
+    preserveScroll(() => {
+      appendImage(
+        {
+          url: "",
+          thumbnailUrl: "",
+          caption: "",
+          isPrimary: false,
+        },
+        { shouldFocus: false },
+      );
+    });
+  }, [appendImage, preserveScroll]);
 
   const handleRemoveImage = useCallback(
     (index: number) => {
@@ -176,67 +142,12 @@ export default function AdminProjectForm() {
 
       if (!confirmed) return;
 
-      const currentY = window.scrollY;
-      lastScrollYRef.current = currentY;
-      sessionStorage.setItem(scrollStorageKey, String(currentY));
-
-      removeImage(index);
-      restoreSavedScroll();
+      preserveScroll(() => {
+        removeImage(index);
+      });
     },
-    [removeImage, restoreSavedScroll, scrollStorageKey],
+    [removeImage, preserveScroll],
   );
-
-  useEffect(() => {
-    sessionStorage.setItem(DISABLE_GLOBAL_SCROLL_TOP_KEY, "1");
-
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-
-    const handleScroll = () => {
-      saveCurrentScroll();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        saveCurrentScroll();
-        return;
-      }
-
-      restoreSavedScroll();
-    };
-
-    const handleFocus = () => {
-      restoreSavedScroll();
-    };
-
-    const handlePageShow = () => {
-      restoreSavedScroll();
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("pageshow", handlePageShow);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      saveCurrentScroll();
-
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("pageshow", handlePageShow);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-
-      restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-      sessionStorage.removeItem(DISABLE_GLOBAL_SCROLL_TOP_KEY);
-    };
-  }, [DISABLE_GLOBAL_SCROLL_TOP_KEY, saveCurrentScroll, restoreSavedScroll]);
-
-  useLayoutEffect(() => {
-    if (!authLoading && !isLoading) {
-      restoreSavedScroll();
-    }
-  }, [authLoading, isLoading, imageFields.length, restoreSavedScroll]);
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -432,7 +343,6 @@ export default function AdminProjectForm() {
         });
       }
 
-	  sessionStorage.removeItem(scrollStorageKey);
       setLocation("/admin");
     } catch (error: any) {
       console.error("Save property error:", error);
@@ -762,7 +672,7 @@ export default function AdminProjectForm() {
 
               {imageFields.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">
-                  Nuk u shtuan foto. Kliko "Shto Foto" më poshtë.
+                  Nuk u shtuan foto. Kliko "Shto Foto" më sipër.
                 </p>
               )}
             </div>

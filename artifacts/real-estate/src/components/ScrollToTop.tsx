@@ -3,16 +3,6 @@ import { useLocation } from "wouter";
 
 const SKIP_GLOBAL_SCROLL_KEY = "skip-global-scroll";
 const FORCE_SCROLL_TOP_KEY = "force-scroll-top";
-const DISABLE_GLOBAL_SCROLL_TOP_KEY = "disable-global-scroll-top";
-
-function isAdminProjectFormRoute(location: string) {
-  return (
-    location === "/admin/projects/new" ||
-    location.startsWith("/admin/projects/new?") ||
-    /^\/admin\/projects\/[^/]+\/edit\/?$/.test(location) ||
-    /^\/admin\/projects\/[^/]+\/edit\?/.test(location)
-  );
-}
 
 export function ScrollToTop() {
   const [location] = useLocation();
@@ -23,20 +13,12 @@ export function ScrollToTop() {
     };
 
     window.addEventListener("popstate", handlePopState);
-
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
 
   useEffect(() => {
-    const globalScrollTopDisabled =
-      sessionStorage.getItem(DISABLE_GLOBAL_SCROLL_TOP_KEY) === "1";
-
-    if (globalScrollTopDisabled || isAdminProjectFormRoute(location)) {
-      return;
-    }
-
     const shouldForceTop =
       sessionStorage.getItem(FORCE_SCROLL_TOP_KEY) === "1";
 
@@ -51,7 +33,6 @@ export function ScrollToTop() {
           behavior: "auto",
         });
       });
-
       return;
     }
 
