@@ -36,6 +36,7 @@ export default function AdminProjectForm() {
   const isEditing = !!id;
   const { toast } = useToast();
 
+
   const [projectToEdit, setProjectToEdit] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
@@ -106,98 +107,114 @@ export default function AdminProjectForm() {
   });
   
   const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
-const lastScrollYRef = useRef(0);
-const restoreTimersRef = useRef<number[]>([]);
-const isRestoringRef = useRef(false);
+  const lastScrollYRef = useRef(0);
+  const restoreTimersRef = useRef<number[]>([]);
+  const isRestoringRef = useRef(false);
 
-const saveCurrentScroll = useCallback(() => {
-  if (isRestoringRef.current) return;
+  const saveCurrentScroll = useCallback(() => {
+    if (isRestoringRef.current) return;
 
-  lastScrollYRef.current = window.scrollY;
-  sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-}, [scrollStorageKey]);
+    lastScrollYRef.current = window.scrollY;
+    sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+  }, [scrollStorageKey]);
 
-const restoreSavedScroll = useCallback(() => {
-  const savedY = sessionStorage.getItem(scrollStorageKey);
-  const targetY = savedY ? Number(savedY) : lastScrollYRef.current;
+  const restoreSavedScroll = useCallback(() => {
+    const savedY = sessionStorage.getItem(scrollStorageKey);
+    const targetY = savedY ? Number(savedY) : lastScrollYRef.current;
 
-  if (!Number.isFinite(targetY)) return;
-
-  restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-  restoreTimersRef.current = [];
-
-  [0, 50, 150, 300, 600, 1000].forEach((delay) => {
-    const timer = window.setTimeout(() => {
-      isRestoringRef.current = true;
-
-      window.scrollTo({
-        top: targetY,
-        left: 0,
-        behavior: "auto",
-      });
-
-      requestAnimationFrame(() => {
-        isRestoringRef.current = false;
-      });
-    }, delay);
-
-    restoreTimersRef.current.push(timer);
-  });
-}, [scrollStorageKey]);
-
-const handleAddImage = useCallback(() => {
-  saveCurrentScroll();
-
-  appendImage({
-    url: "",
-    thumbnailUrl: "",
-    caption: "",
-    isPrimary: false,
-  });
-
-  restoreSavedScroll();
-}, [appendImage, saveCurrentScroll, restoreSavedScroll]);
-
-const handleRemoveImage = useCallback(
-  (index: number) => {
-    saveCurrentScroll();
-    removeImage(index);
-    restoreSavedScroll();
-  },
-  [removeImage, saveCurrentScroll, restoreSavedScroll],
-);
-
-useEffect(() => {
-  if ("scrollRestoration" in window.history) {
-    window.history.scrollRestoration = "manual";
-  }
-
-  const handleScroll = () => saveCurrentScroll();
-
-  const handleRestore = () => {
-    restoreSavedScroll();
-  };
-
-  window.addEventListener("scroll", handleScroll, { passive: true });
-  window.addEventListener("focus", handleRestore);
-  window.addEventListener("pageshow", handleRestore);
-  document.addEventListener("visibilitychange", handleRestore);
-
-  return () => {
-    window.removeEventListener("scroll", handleScroll);
-    window.removeEventListener("focus", handleRestore);
-    window.removeEventListener("pageshow", handleRestore);
-    document.removeEventListener("visibilitychange", handleRestore);
+    if (!Number.isFinite(targetY)) return;
 
     restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-  };
-}, [saveCurrentScroll, restoreSavedScroll]);
+    restoreTimersRef.current = [];
 
-useLayoutEffect(() => {
-  if (!authLoading && !isLoading) {
+    [0, 50, 150, 300, 600, 1000].forEach((delay) => {
+      const timer = window.setTimeout(() => {
+        isRestoringRef.current = true;
+
+        window.scrollTo({
+          top: targetY,
+          left: 0,
+          behavior: "auto",
+        });
+
+        requestAnimationFrame(() => {
+          isRestoringRef.current = false;
+        });
+      }, delay);
+
+      restoreTimersRef.current.push(timer);
+    });
+  }, [scrollStorageKey]);
+
+  const handleAddImage = useCallback(() => {
+    saveCurrentScroll();
+
+    appendImage(
+      {
+        url: "",
+        thumbnailUrl: "",
+        caption: "",
+        isPrimary: false,
+      },
+      { shouldFocus: false },
+    );
+
     restoreSavedScroll();
-  }
-}, [authLoading, isLoading, imageFields.length, restoreSavedScroll]);
+  }, [appendImage, saveCurrentScroll, restoreSavedScroll]);
+
+  const handleRemoveImage = useCallback(
+    (index: number) => {
+      const confirmed = window.confirm(
+        "A jeni i sigurt që dëshironi ta fshini këtë foto?",
+      );
+
+      if (!confirmed) return;
+
+      saveCurrentScroll();
+      removeImage(index);
+      restoreSavedScroll();
+    },
+    [removeImage, saveCurrentScroll, restoreSavedScroll],
+  );
+
+  useEffect(() => {
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
+    const handleScroll = () => saveCurrentScroll();
+
+    const handleRestore = () => {
+      if (document.visibilityState === "hidden") {
+        saveCurrentScroll();
+        return;
+      }
+
+      restoreSavedScroll();
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("focus", handleRestore);
+    window.addEventListener("pageshow", handleRestore);
+    document.addEventListener("visibilitychange", handleRestore);
+
+    return () => {
+      saveCurrentScroll();
+
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("focus", handleRestore);
+      window.removeEventListener("pageshow", handleRestore);
+      document.removeEventListener("visibilitychange", handleRestore);
+
+      restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [saveCurrentScroll, restoreSavedScroll]);
+
+  useLayoutEffect(() => {
+    if (!authLoading && !isLoading) {
+      restoreSavedScroll();
+    }
+  }, [authLoading, isLoading, imageFields.length, restoreSavedScroll]);
 
   useEffect(() => {
     const fetchProject = async () => {
