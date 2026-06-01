@@ -107,47 +107,53 @@ export default function AdminProjectForm() {
   });
   
   const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
+  const DISABLE_GLOBAL_SCROLL_TOP_KEY = "disable-global-scroll-top";
   const lastScrollYRef = useRef(0);
   const restoreTimersRef = useRef<number[]>([]);
-  const isRestoringRef = useRef(false);
+  const ignoreScrollSaveUntilRef = useRef(0);
+
+  const getSavedScrollY = useCallback(() => {
+    const savedY = sessionStorage.getItem(scrollStorageKey);
+    const parsedY = savedY ? Number(savedY) : lastScrollYRef.current;
+
+    return Number.isFinite(parsedY) ? parsedY : 0;
+  }, [scrollStorageKey]);
 
   const saveCurrentScroll = useCallback(() => {
-    if (isRestoringRef.current) return;
+    if (Date.now() < ignoreScrollSaveUntilRef.current) return;
 
-    lastScrollYRef.current = window.scrollY;
-    sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+    const currentY = window.scrollY;
+    lastScrollYRef.current = currentY;
+    sessionStorage.setItem(scrollStorageKey, String(currentY));
   }, [scrollStorageKey]);
 
   const restoreSavedScroll = useCallback(() => {
-    const savedY = sessionStorage.getItem(scrollStorageKey);
-    const targetY = savedY ? Number(savedY) : lastScrollYRef.current;
-
-    if (!Number.isFinite(targetY)) return;
+    const targetY = getSavedScrollY();
 
     restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     restoreTimersRef.current = [];
 
-    [0, 50, 150, 300, 600, 1000].forEach((delay) => {
-      const timer = window.setTimeout(() => {
-        isRestoringRef.current = true;
+    // Mos lejo që ndonjë scroll-to-top global/browser të ruajë gabimisht "0"
+    // menjëherë pas rikthimit të tab-it ose pas re-render-it të formës.
+    ignoreScrollSaveUntilRef.current = Date.now() + 1800;
 
+    [0, 50, 150, 300, 600, 1000, 1500].forEach((delay) => {
+      const timer = window.setTimeout(() => {
         window.scrollTo({
           top: targetY,
           left: 0,
           behavior: "auto",
         });
-
-        requestAnimationFrame(() => {
-          isRestoringRef.current = false;
-        });
       }, delay);
 
       restoreTimersRef.current.push(timer);
     });
-  }, [scrollStorageKey]);
+  }, [getSavedScrollY]);
 
   const handleAddImage = useCallback(() => {
-    saveCurrentScroll();
+    const currentY = window.scrollY;
+    lastScrollYRef.current = currentY;
+    sessionStorage.setItem(scrollStorageKey, String(currentY));
 
     appendImage(
       {
@@ -160,7 +166,7 @@ export default function AdminProjectForm() {
     );
 
     restoreSavedScroll();
-  }, [appendImage, saveCurrentScroll, restoreSavedScroll]);
+  }, [appendImage, restoreSavedScroll, scrollStorageKey]);
 
   const handleRemoveImage = useCallback(
     (index: number) => {
@@ -170,21 +176,28 @@ export default function AdminProjectForm() {
 
       if (!confirmed) return;
 
-      saveCurrentScroll();
+      const currentY = window.scrollY;
+      lastScrollYRef.current = currentY;
+      sessionStorage.setItem(scrollStorageKey, String(currentY));
+
       removeImage(index);
       restoreSavedScroll();
     },
-    [removeImage, saveCurrentScroll, restoreSavedScroll],
+    [removeImage, restoreSavedScroll, scrollStorageKey],
   );
 
   useEffect(() => {
+    sessionStorage.setItem(DISABLE_GLOBAL_SCROLL_TOP_KEY, "1");
+
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
 
-    const handleScroll = () => saveCurrentScroll();
+    const handleScroll = () => {
+      saveCurrentScroll();
+    };
 
-    const handleRestore = () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         saveCurrentScroll();
         return;
@@ -193,22 +206,31 @@ export default function AdminProjectForm() {
       restoreSavedScroll();
     };
 
+    const handleFocus = () => {
+      restoreSavedScroll();
+    };
+
+    const handlePageShow = () => {
+      restoreSavedScroll();
+    };
+
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("focus", handleRestore);
-    window.addEventListener("pageshow", handleRestore);
-    document.addEventListener("visibilitychange", handleRestore);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       saveCurrentScroll();
 
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("focus", handleRestore);
-      window.removeEventListener("pageshow", handleRestore);
-      document.removeEventListener("visibilitychange", handleRestore);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      sessionStorage.removeItem(DISABLE_GLOBAL_SCROLL_TOP_KEY);
     };
-  }, [saveCurrentScroll, restoreSavedScroll]);
+  }, [DISABLE_GLOBAL_SCROLL_TOP_KEY, saveCurrentScroll, restoreSavedScroll]);
 
   useLayoutEffect(() => {
     if (!authLoading && !isLoading) {
@@ -740,7 +762,7 @@ export default function AdminProjectForm() {
 
               {imageFields.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">
-                  Nuk u shtuan foto. Kliko "Shto Foto" më sipër.
+                  Nuk u shtuan foto. Kliko "Shto Foto" më poshtë.
                 </p>
               )}
             </div>
