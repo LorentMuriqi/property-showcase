@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
@@ -35,72 +35,6 @@ export default function AdminProjectForm() {
   const { id } = useParams();
   const isEditing = !!id;
   const { toast } = useToast();
-
-  const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
-const lastScrollYRef = useRef(0);
-
-const saveCurrentScroll = useCallback(() => {
-  lastScrollYRef.current = window.scrollY;
-  sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-}, [scrollStorageKey]);
-
-const restoreSavedScroll = useCallback(() => {
-  const savedY = sessionStorage.getItem(scrollStorageKey);
-  const targetY = savedY ? Number(savedY) : lastScrollYRef.current;
-
-  if (!Number.isFinite(targetY)) return;
-
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
-
-    setTimeout(() => {
-      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
-    }, 50);
-  });
-}, [scrollStorageKey]);
-
-const runWithoutLosingScroll = useCallback(
-  (callback: () => void) => {
-    saveCurrentScroll();
-
-    callback();
-
-    requestAnimationFrame(() => {
-      restoreSavedScroll();
-    });
-  },
-  [saveCurrentScroll, restoreSavedScroll],
-);
-
-useEffect(() => {
-  const handleScroll = () => {
-    lastScrollYRef.current = window.scrollY;
-    sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-  };
-
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === "hidden") {
-      handleScroll();
-    }
-
-    if (document.visibilityState === "visible") {
-      restoreSavedScroll();
-    }
-  };
-
-  window.addEventListener("scroll", handleScroll, { passive: true });
-  window.addEventListener("focus", restoreSavedScroll);
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-
-  restoreSavedScroll();
-
-  return () => {
-    handleScroll();
-    window.removeEventListener("scroll", handleScroll);
-    window.removeEventListener("focus", restoreSavedScroll);
-    document.removeEventListener("visibilitychange", handleVisibilityChange);
-  };
-}, [scrollStorageKey, restoreSavedScroll]);
 
   const [projectToEdit, setProjectToEdit] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(isEditing);
@@ -170,6 +104,100 @@ useEffect(() => {
     control,
     name: "images",
   });
+  
+  const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
+const lastScrollYRef = useRef(0);
+const restoreTimersRef = useRef<number[]>([]);
+const isRestoringRef = useRef(false);
+
+const saveCurrentScroll = useCallback(() => {
+  if (isRestoringRef.current) return;
+
+  lastScrollYRef.current = window.scrollY;
+  sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+}, [scrollStorageKey]);
+
+const restoreSavedScroll = useCallback(() => {
+  const savedY = sessionStorage.getItem(scrollStorageKey);
+  const targetY = savedY ? Number(savedY) : lastScrollYRef.current;
+
+  if (!Number.isFinite(targetY)) return;
+
+  restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+  restoreTimersRef.current = [];
+
+  [0, 50, 150, 300, 600, 1000].forEach((delay) => {
+    const timer = window.setTimeout(() => {
+      isRestoringRef.current = true;
+
+      window.scrollTo({
+        top: targetY,
+        left: 0,
+        behavior: "auto",
+      });
+
+      requestAnimationFrame(() => {
+        isRestoringRef.current = false;
+      });
+    }, delay);
+
+    restoreTimersRef.current.push(timer);
+  });
+}, [scrollStorageKey]);
+
+const handleAddImage = useCallback(() => {
+  saveCurrentScroll();
+
+  appendImage({
+    url: "",
+    thumbnailUrl: "",
+    caption: "",
+    isPrimary: false,
+  });
+
+  restoreSavedScroll();
+}, [appendImage, saveCurrentScroll, restoreSavedScroll]);
+
+const handleRemoveImage = useCallback(
+  (index: number) => {
+    saveCurrentScroll();
+    removeImage(index);
+    restoreSavedScroll();
+  },
+  [removeImage, saveCurrentScroll, restoreSavedScroll],
+);
+
+useEffect(() => {
+  if ("scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
+
+  const handleScroll = () => saveCurrentScroll();
+
+  const handleRestore = () => {
+    restoreSavedScroll();
+  };
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  window.addEventListener("focus", handleRestore);
+  window.addEventListener("pageshow", handleRestore);
+  document.addEventListener("visibilitychange", handleRestore);
+
+  return () => {
+    window.removeEventListener("scroll", handleScroll);
+    window.removeEventListener("focus", handleRestore);
+    window.removeEventListener("pageshow", handleRestore);
+    document.removeEventListener("visibilitychange", handleRestore);
+
+    restoreTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+  };
+}, [saveCurrentScroll, restoreSavedScroll]);
+
+useLayoutEffect(() => {
+  if (!authLoading && !isLoading) {
+    restoreSavedScroll();
+  }
+}, [authLoading, isLoading, imageFields.length, restoreSavedScroll]);
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -628,23 +656,6 @@ useEffect(() => {
               <h2 className="font-display text-xl text-primary flex items-center gap-2">
                 <ImageIcon size={20} /> Galeria e Fotove
               </h2>
-
-<button
-  type="button"
-  onClick={() =>
-    runWithoutLosingScroll(() =>
-      appendImage({
-        url: "",
-        thumbnailUrl: "",
-        caption: "",
-        isPrimary: false,
-      }),
-    )
-  }
-                className="text-sm text-primary hover:text-foreground font-medium flex items-center gap-1"
-              >
-                <Plus size={16} /> Shto Foto
-              </button>
             </div>
 
             <div className="space-y-4">
@@ -690,7 +701,7 @@ useEffect(() => {
 
 <button
   type="button"
-  onClick={() => runWithoutLosingScroll(() => removeImage(index))}
+  onClick={() => handleRemoveImage(index)}
                       className="text-destructive hover:text-red-400 p-2 bg-destructive/10 rounded-lg"
                     >
                       <Trash2 size={16} />
@@ -702,16 +713,7 @@ useEffect(() => {
 			  <div className="pt-4 flex justify-end">
   <button
     type="button"
-    onClick={() =>
-      runWithoutLosingScroll(() =>
-        appendImage({
-          url: "",
-          thumbnailUrl: "",
-          caption: "",
-          isPrimary: false,
-        }),
-      )
-    }
+    onClick={handleAddImage}
     className="flex items-center gap-2 px-4 py-2 text-primary font-bold text-sm hover:text-foreground transition-colors"
   >
     <Plus size={16} />
