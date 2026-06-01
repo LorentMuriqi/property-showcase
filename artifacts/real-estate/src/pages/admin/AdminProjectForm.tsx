@@ -40,6 +40,47 @@ export default function AdminProjectForm() {
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
 
+const scrollStorageKey = `admin-project-form-scroll-${id || "new"}`;
+
+useEffect(() => {
+  const saveScrollPosition = () => {
+    sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
+  };
+
+  const restoreScrollPosition = () => {
+    const savedY = sessionStorage.getItem(scrollStorageKey);
+    if (!savedY) return;
+
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: Number(savedY),
+        left: 0,
+        behavior: "auto",
+      });
+    });
+  };
+
+  window.addEventListener("scroll", saveScrollPosition, { passive: true });
+  window.addEventListener("focus", restoreScrollPosition);
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      restoreScrollPosition();
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  restoreScrollPosition();
+
+  return () => {
+    saveScrollPosition();
+    window.removeEventListener("scroll", saveScrollPosition);
+    window.removeEventListener("focus", restoreScrollPosition);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+}, [scrollStorageKey]);
+
   useEffect(() => {
     if (authLoading) return;
 
@@ -297,6 +338,7 @@ export default function AdminProjectForm() {
         });
       }
 
+	  sessionStorage.removeItem(scrollStorageKey);
       setLocation("/admin");
     } catch (error: any) {
       console.error("Save property error:", error);
