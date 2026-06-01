@@ -36,21 +36,29 @@ export function ScrollToTop() {
       return;
     }
 
-    const shouldSkip =
-      sessionStorage.getItem(SKIP_GLOBAL_SCROLL_KEY) === "1";
+const shouldSkip =
+  sessionStorage.getItem(SKIP_GLOBAL_SCROLL_KEY) === "1";
 
-    if (shouldSkip) {
-      sessionStorage.removeItem(SKIP_GLOBAL_SCROLL_KEY);
-      return;
-    }
+if (shouldSkip) {
+  sessionStorage.removeItem(SKIP_GLOBAL_SCROLL_KEY);
+  return;
+}
 
-    requestAnimationFrame(() => {
-      window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "auto",
-      });
-    });
+const isAdminProjectForm =
+  location === "/admin/projects/new" ||
+  /^\/admin\/projects\/[^/]+\/edit$/.test(location);
+
+if (isAdminProjectForm) {
+  return;
+}
+
+requestAnimationFrame(() => {
+  window.scrollTo({
+    top: 0,
+    left: 0,
+    behavior: "auto",
+  });
+});
   }, [location]);
 
   return null;
