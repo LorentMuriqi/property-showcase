@@ -40,8 +40,6 @@ type Scene = {
   thumbnail_url: string | null;
   is_default: boolean;
   sort_order: number;
-  position_x: number | null;
-  position_y: number | null;
   initial_yaw: number | null;
   initial_pitch: number | null;
   hotspots: Hotspot[];
@@ -280,41 +278,57 @@ const toNullableNumber = (value: any) => {
   return Number.isFinite(n) ? n : null;
 };
 
-const DEFAULT_TARGET_PITCH = 0;
+const ENTRY_PITCH = 0;
 
-const getReciprocalHotspot = (
-  targetScene: Scene | undefined,
-  currentSceneId: number,
-  excludeHotspotId?: number,
+const normalizeYaw = (yaw: number) => {
+  const twoPi = Math.PI * 2;
+  return ((yaw + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
+};
+
+
+const findSceneById = (scenes: Scene[], sceneId: number | string | null | undefined) => {
+  if (sceneId === null || sceneId === undefined || sceneId === "") return null;
+  return scenes.find((scene) => Number(scene.id) === Number(sceneId)) || null;
+};
+
+const findReverseHotspot = (
+  scenes: Scene[],
+  fromSceneId: number,
+  toSceneId: number,
 ) => {
+  const targetScene = findSceneById(scenes, toSceneId);
+  if (!targetScene) return null;
+
   return (
-    targetScene?.hotspots.find(
-      (hotspot) =>
-        Number(hotspot.to_scene_id) === Number(currentSceneId) &&
-        Number(hotspot.id) !== Number(excludeHotspotId),
+    targetScene.hotspots.find(
+      (hotspot) => Number(hotspot.to_scene_id) === Number(fromSceneId),
     ) || null
   );
 };
 
-const getArrivalViewFromReciprocal = (
-  targetScene: Scene | undefined,
-  currentSceneId: number,
-  fallbackYaw: number | null,
-  fallbackPitch: number | null,
-  excludeHotspotId?: number,
+const getEntryViewFromReverseLink = (
+  scenes: Scene[],
+  fromScene: Scene,
+  targetScene: Scene,
 ) => {
-  const reciprocal = getReciprocalHotspot(
-    targetScene,
-    currentSceneId,
-    excludeHotspotId,
+  const reverseHotspot = findReverseHotspot(
+    scenes,
+    Number(fromScene.id),
+    Number(targetScene.id),
   );
 
+  if (reverseHotspot) {
+    return {
+      targetYaw: normalizeYaw(Number(reverseHotspot.yaw) + Math.PI),
+      targetPitch: targetScene.initial_pitch ?? ENTRY_PITCH,
+    };
+  }
+
   return {
-    targetYaw: reciprocal ? Number(reciprocal.yaw) : fallbackYaw,
-    targetPitch: fallbackPitch ?? DEFAULT_TARGET_PITCH,
+    targetYaw: targetScene.initial_yaw ?? null,
+    targetPitch: targetScene.initial_pitch ?? ENTRY_PITCH,
   };
 };
-
 
 
 export default function AdminVirtualTour() {
@@ -595,8 +609,6 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
     is_default: !!scene.is_default,
     sort_order: toNumber(scene.sort_order, 0),
-    position_x: toNullableNumber(scene.position_x),
-    position_y: toNullableNumber(scene.position_y),
     initial_yaw: toNullableNumber(scene.initial_yaw),
     initial_pitch: toNullableNumber(scene.initial_pitch),
     hotspots: hotspotsMap.get(normalizedId) || [],
@@ -1101,7 +1113,6 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
       });
     }
   };
-  
 
   const handleSetDefaultScene = async (sceneId: number) => {
     try {
@@ -1321,24 +1332,26 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
   };
 
   const handleAddHotspot = async () => {
-    if (
-      !selectedScene ||
-      draft.to_scene_id === "" ||
-      draft.yaw === null ||
-      draft.pitch === null
-    ) {
+    if (!selectedScene || draft.to_scene_id === "") {
       toast({
         title: "Gabim",
-        description:
-          "Zgjidh destinacionin dhe vendos pikën e hotspot-it në dysheme.",
+        description: "Zgjidh skenën destinacion.",
         variant: "destructive",
       });
       return;
     }
 
-    const targetScene = scenes.find(
-      (scene) => Number(scene.id) === Number(draft.to_scene_id),
-    );
+    if (draft.yaw === null || draft.pitch === null) {
+      toast({
+        title: "Mungon pika e hotspot-it",
+        description:
+          "Aktivizo vendosjen në dysheme dhe kliko saktësisht në vendin ku duhet të shfaqet hotspoti.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const targetScene = findSceneById(scenes, draft.to_scene_id);
 
     if (!targetScene) {
       toast({
@@ -1349,11 +1362,10 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
       return;
     }
 
-    const arrivalView = getArrivalViewFromReciprocal(
+    const entryView = getEntryViewFromReverseLink(
+      scenes,
+      selectedScene,
       targetScene,
-      selectedScene.id,
-      targetScene.initial_yaw,
-      targetScene.initial_pitch,
     );
 
     try {
@@ -1364,8 +1376,8 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
           to_scene_id: Number(draft.to_scene_id),
           yaw: draft.yaw,
           pitch: draft.pitch,
-          target_yaw: arrivalView.targetYaw,
-          target_pitch: arrivalView.targetPitch,
+          target_yaw: entryView.targetYaw,
+          target_pitch: entryView.targetPitch,
           label: draft.label.trim() || null,
         })
         .select("*")
@@ -1384,18 +1396,23 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
         label: insertedHotspot.label || null,
       };
 
-      const reciprocal = getReciprocalHotspot(targetScene, selectedScene.id);
+      const reverseHotspot = findReverseHotspot(
+        scenes,
+        Number(selectedScene.id),
+        Number(draft.to_scene_id),
+      );
 
-      if (reciprocal) {
-        const { error: reciprocalError } = await supabase
+      if (reverseHotspot) {
+        const reverseTargetYaw = normalizeYaw(Number(draft.yaw) + Math.PI);
+        const reverseTargetPitch = selectedScene.initial_pitch ?? ENTRY_PITCH;
+
+        await supabase
           .from("virtual_tour_hotspots")
           .update({
-            target_yaw: normalizedInsertedHotspot.yaw,
-            target_pitch: selectedScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+            target_yaw: reverseTargetYaw,
+            target_pitch: reverseTargetPitch,
           })
-          .eq("id", reciprocal.id);
-
-        if (reciprocalError) throw reciprocalError;
+          .eq("id", reverseHotspot.id);
       }
 
       setScenes((prev) =>
@@ -1407,16 +1424,15 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
             };
           }
 
-          if (reciprocal && scene.id === targetScene.id) {
+          if (reverseHotspot && scene.id === Number(draft.to_scene_id)) {
             return {
               ...scene,
               hotspots: scene.hotspots.map((hotspot) =>
-                hotspot.id === reciprocal.id
+                hotspot.id === reverseHotspot.id
                   ? {
                       ...hotspot,
-                      target_yaw: normalizedInsertedHotspot.yaw,
-                      target_pitch:
-                        selectedScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+                      target_yaw: normalizeYaw(Number(draft.yaw) + Math.PI),
+                      target_pitch: selectedScene.initial_pitch ?? ENTRY_PITCH,
                     }
                   : hotspot,
               ),
@@ -1433,10 +1449,13 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
         pitch: null,
       }));
 
+      setIsPlacementMode(false);
+
       toast({
         title: "Hotspot u ruajt",
-        description:
-          "Pika u ruajt në pozicionin manual të dyshemesë. Drejtimi i hyrjes u sinkronizua nëse ekziston lidhja kthimi.",
+        description: reverseHotspot
+          ? "Hotspot-i u vendos saktë dhe drejtimi i hyrjes u sinkronizua me lidhjen kthim."
+          : "Hotspot-i u vendos saktë. Për drejtim maksimalisht të saktë, krijo edhe lidhjen kthim nga skena destinacion.",
       });
     } catch (error: any) {
       toast({
@@ -1457,13 +1476,8 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
       return;
     }
 
-    const currentScene = scenes.find(
-      (scene) => Number(scene.id) === Number(selectedSceneId),
-    );
-
-    const targetScene = scenes.find(
-      (scene) => Number(scene.id) === Number(editingHotspot.to_scene_id),
-    );
+    const currentScene = findSceneById(scenes, selectedSceneId);
+    const targetScene = findSceneById(scenes, editingHotspot.to_scene_id);
 
     if (!currentScene || !targetScene) {
       toast({
@@ -1474,12 +1488,10 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
       return;
     }
 
-    const arrivalView = getArrivalViewFromReciprocal(
+    const entryView = getEntryViewFromReverseLink(
+      scenes,
+      currentScene,
       targetScene,
-      currentScene.id,
-      targetScene.initial_yaw,
-      targetScene.initial_pitch,
-      editingHotspot.id,
     );
 
     try {
@@ -1490,29 +1502,27 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
           label: editingHotspot.label.trim() || null,
           yaw: editingHotspot.yaw,
           pitch: editingHotspot.pitch,
-          target_yaw: arrivalView.targetYaw,
-          target_pitch: arrivalView.targetPitch,
+          target_yaw: entryView.targetYaw,
+          target_pitch: entryView.targetPitch,
         })
         .eq("id", editingHotspot.id);
 
       if (error) throw error;
 
-      const reciprocal = getReciprocalHotspot(
-        targetScene,
-        currentScene.id,
-        editingHotspot.id,
+      const reverseHotspot = findReverseHotspot(
+        scenes,
+        Number(currentScene.id),
+        Number(editingHotspot.to_scene_id),
       );
 
-      if (reciprocal) {
-        const { error: reciprocalError } = await supabase
+      if (reverseHotspot) {
+        await supabase
           .from("virtual_tour_hotspots")
           .update({
-            target_yaw: editingHotspot.yaw,
-            target_pitch: currentScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+            target_yaw: normalizeYaw(Number(editingHotspot.yaw) + Math.PI),
+            target_pitch: currentScene.initial_pitch ?? ENTRY_PITCH,
           })
-          .eq("id", reciprocal.id);
-
-        if (reciprocalError) throw reciprocalError;
+          .eq("id", reverseHotspot.id);
       }
 
       setScenes((prev) =>
@@ -1528,24 +1538,23 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
                       label: editingHotspot.label.trim() || null,
                       yaw: editingHotspot.yaw,
                       pitch: editingHotspot.pitch,
-                      target_yaw: arrivalView.targetYaw,
-                      target_pitch: arrivalView.targetPitch,
+                      target_yaw: entryView.targetYaw,
+                      target_pitch: entryView.targetPitch,
                     }
                   : hotspot,
               ),
             };
           }
 
-          if (reciprocal && scene.id === targetScene.id) {
+          if (reverseHotspot && scene.id === Number(editingHotspot.to_scene_id)) {
             return {
               ...scene,
               hotspots: scene.hotspots.map((hotspot) =>
-                hotspot.id === reciprocal.id
+                hotspot.id === reverseHotspot.id
                   ? {
                       ...hotspot,
-                      target_yaw: editingHotspot.yaw,
-                      target_pitch:
-                        currentScene.initial_pitch ?? DEFAULT_TARGET_PITCH,
+                      target_yaw: normalizeYaw(Number(editingHotspot.yaw) + Math.PI),
+                      target_pitch: currentScene.initial_pitch ?? ENTRY_PITCH,
                     }
                   : hotspot,
               ),
@@ -1562,8 +1571,9 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
 
       toast({
         title: "Sukses",
-        description:
-          "Hotspot-i u përditësua dhe drejtimi i lidhjes kthim u sinkronizua nëse ekziston.",
+        description: reverseHotspot
+          ? "Hotspot-i u përditësua dhe drejtimi u sinkronizua me lidhjen kthim."
+          : "Hotspot-i u përditësua. Për drejtim maksimalisht të saktë, krijo edhe lidhjen kthim.",
       });
     } catch (error: any) {
       toast({
@@ -2265,8 +2275,8 @@ return validScenes.map((scene) => ({
   2. Editor Profesional i Hotspot-eve
 </h2>
 <p className="text-sm text-muted-foreground mt-1">
-  Zgjidh destinacionin, vendos pikën manualisht në dysheme dhe ruaj hotspot-in.
-  Nëse ekziston lidhja kthim, drejtimi i hyrjes sinkronizohet automatikisht.
+  Vendos manualisht pikën e hotspot-it në dysheme për çdo lidhje.
+  Për drejtim maksimalisht të saktë, krijo lidhjet në të dy drejtimet, p.sh. 1 → 2 dhe 2 → 1.
 </p>
 				
               </div>
@@ -2311,12 +2321,12 @@ return validScenes.map((scene) => ({
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                     {isEditingHotspotPlacement
-                      ? "Kliko në dysheme për pozicionin e ri, ose rrotulloje pamjen dhe kliko “Vendose në qendër të pamjes”."
+                      ? "Kliko në dysheme për pozicionin e ri të hotspot-it."
                       : isPlacementMode
                         ? draft.yaw !== null && draft.pitch !== null
-                          ? "Pozicioni u vendos. Rafinoje me butonat ose kliko përsëri në dysheme për pozicion të ri."
+                          ? "Pika u vendos. Rafinoje me butonat ose kliko përsëri mbi dysheme."
                           : "Kliko saktësisht në dysheme aty ku duhet të shfaqet hotspoti."
-                        : "Zgjidh destinacionin dhe kliko “Aktivizo vendosjen në dysheme”."}
+                        : "Zgjidh destinacionin, aktivizo vendosjen në dysheme dhe kliko pikën e hotspot-it."}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
@@ -2329,7 +2339,7 @@ return validScenes.map((scene) => ({
 
                 <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
                   <h3 className="text-foreground font-medium flex items-center gap-2">
-                    <Link2 size={16} /> Shto hotspot të ri
+                    <Link2 size={16} /> Shto hotspot të ri në dysheme
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2382,8 +2392,16 @@ return validScenes.map((scene) => ({
                   <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <span>
-                        <strong className="text-foreground">Modaliteti:</strong>{" "}
-                        Vendosje manuale në dysheme
+                        <strong className="text-foreground">Status:</strong>{" "}
+                        {draft.yaw !== null && draft.pitch !== null
+                          ? "Pika në dysheme është vendosur"
+                          : "Vendos pikën në dysheme"}
+                      </span>
+                      <span>
+                        <strong className="text-foreground">Pozicioni:</strong>{" "}
+                        {draft.yaw !== null && draft.pitch !== null
+                          ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
+                          : "Pa zgjedhur"}
                       </span>
                       <span>
                         <strong className="text-foreground">Destinacioni:</strong>{" "}
@@ -2392,12 +2410,6 @@ return validScenes.map((scene) => ({
                           : scenes.find(
                               (scene) => scene.id === Number(draft.to_scene_id),
                             )?.title || "Pa zgjedhur"}
-                      </span>
-                      <span>
-                        <strong className="text-foreground">Pozicioni:</strong>{" "}
-                        {draft.yaw !== null && draft.pitch !== null
-                          ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
-                          : "Kliko në dysheme për ta vendosur"}
                       </span>
                     </div>
                   </div>
@@ -2450,7 +2462,7 @@ return validScenes.map((scene) => ({
                           onClick={handleStopPlacement}
                           className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                         >
-                          Dil nga vendosja manuale
+                          Dil nga vendosja në dysheme
                         </button>
                       </>
                     )}
@@ -2618,7 +2630,6 @@ return validScenes.map((scene) => ({
             </div>
           )}
         </div>
-
 
       </main>
 
@@ -2822,7 +2833,7 @@ return validScenes.map((scene) => ({
                   className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
                 >
                   <LocateFixed size={16} />
-                  Vendose në qendër të pamjes
+                  Vendose në Qendër
                 </button>
 
                 <button
