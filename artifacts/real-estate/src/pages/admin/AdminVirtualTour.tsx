@@ -5,9 +5,12 @@ import {
   Plus,
   Trash2,
   Edit,
+  Map as MapIcon,
   Crosshair,
   Star,
   Link2,
+  Image as ImageIcon,
+  Move,
   Check,
   X,
   LocateFixed,
@@ -40,6 +43,8 @@ type Scene = {
   thumbnail_url: string | null;
   is_default: boolean;
   sort_order: number;
+  position_x: number | null;
+  position_y: number | null;
   initial_yaw: number | null;
   initial_pitch: number | null;
   hotspots: Hotspot[];
@@ -86,101 +91,46 @@ type PlacementDraft = {
 
 const NORMAL_HOTSPOT_HTML = `
   <div style="
-    position: relative;
-    width: 58px;
-    height: 58px;
+    width: 42px;
+    height: 42px;
     border-radius: 9999px;
-    cursor: pointer;
-    user-select: none;
+    background: rgba(0,0,0,0.58);
+    border: 3px solid #d4af37;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:0 10px 24px rgba(0,0,0,.38);
+    cursor:pointer;
+    user-select:none;
   ">
-    <div style="
-      position:absolute;
-      left:50%;
-      top:50%;
-      width:56px;
-      height:56px;
-      border-radius:9999px;
-      transform:translate(-50%, -50%) rotateX(64deg);
-      background:radial-gradient(circle at 50% 48%,
-        rgba(255,255,255,0.95) 0%,
-        rgba(255,255,255,0.58) 22%,
-        rgba(255,255,255,0.20) 44%,
-        rgba(255,255,255,0.04) 70%,
-        rgba(255,255,255,0) 100%);
-      border:1px solid rgba(255,255,255,0.72);
-      box-shadow:
-        0 0 18px rgba(255,255,255,0.35),
-        0 10px 30px rgba(0,0,0,0.35);
-    "></div>
-
-    <div style="
-      position:absolute;
-      left:50%;
-      top:50%;
-      width:22px;
-      height:22px;
-      border-radius:9999px;
-      transform:translate(-50%, -50%) rotateX(64deg);
-      background:radial-gradient(circle at 42% 35%,
-        rgba(255,255,255,1) 0%,
-        rgba(245,245,245,0.95) 42%,
-        rgba(185,185,185,0.86) 100%);
-      border:1px solid rgba(255,255,255,0.95);
-      box-shadow:
-        inset 0 1px 2px rgba(255,255,255,0.9),
-        inset 0 -2px 5px rgba(0,0,0,0.24),
-        0 6px 16px rgba(0,0,0,0.34);
-    "></div>
+    ↗
   </div>
 `;
 
 const EDITING_HOTSPOT_HTML = `
   <div style="
     position: relative;
-    width: 64px;
-    height: 64px;
+    width: 42px;
+    height: 42px;
     border-radius: 9999px;
-    cursor: pointer;
-    user-select: none;
+    background: rgba(239,68,68,0.88);
+    border: 3px solid white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:
+      0 0 0 10px rgba(239,68,68,.16),
+      0 10px 24px rgba(0,0,0,.38);
+    cursor:pointer;
+    user-select:none;
   ">
-    <div style="
-      position:absolute;
-      left:50%;
-      top:50%;
-      width:64px;
-      height:64px;
-      border-radius:9999px;
-      transform:translate(-50%, -50%) rotateX(64deg);
-      background:radial-gradient(circle at 50% 48%,
-        rgba(255,255,255,0.98) 0%,
-        rgba(212,175,55,0.55) 24%,
-        rgba(212,175,55,0.18) 52%,
-        rgba(212,175,55,0) 100%);
-      border:2px solid rgba(212,175,55,0.95);
-      box-shadow:
-        0 0 26px rgba(212,175,55,0.75),
-        0 12px 32px rgba(0,0,0,0.42);
-    "></div>
-
-    <div style="
-      position:absolute;
-      left:50%;
-      top:50%;
-      width:26px;
-      height:26px;
-      border-radius:9999px;
-      transform:translate(-50%, -50%) rotateX(64deg);
-      background:radial-gradient(circle at 42% 35%,
-        rgba(255,255,255,1) 0%,
-        rgba(255,244,190,0.98) 45%,
-        rgba(212,175,55,0.9) 100%);
-      border:1px solid rgba(255,255,255,1);
-      box-shadow:
-        inset 0 1px 2px rgba(255,255,255,1),
-        inset 0 -2px 5px rgba(0,0,0,0.2),
-        0 0 18px rgba(212,175,55,0.65);
-    "></div>
-
+    ↗
     <div style="
       position:absolute;
       left:50%;
@@ -194,7 +144,7 @@ const EDITING_HOTSPOT_HTML = `
       border:1px solid rgba(255,255,255,0.12);
       border-radius:9999px;
       padding:4px 8px;
-      box-shadow:0 6px 18px rgba(0,0,0,0.28);
+      box-shadow:0 6px 18px rgba(0,0,0,.28);
     ">
       Duke u edituar
     </div>
@@ -204,49 +154,36 @@ const EDITING_HOTSPOT_HTML = `
 const TEMP_HOTSPOT_HTML = `
   <div style="
     position: relative;
-    width: 64px;
-    height: 64px;
+    width: 34px;
+    height: 34px;
     border-radius: 9999px;
-    user-select: none;
+    background: rgba(239,68,68,0.95);
+    border: 3px solid white;
+    box-shadow:
+      0 0 0 10px rgba(239,68,68,.16),
+      0 8px 24px rgba(0,0,0,.35);
+    user-select:none;
   ">
     <div style="
       position:absolute;
-      left:50%;
       top:50%;
-      width:64px;
-      height:64px;
-      border-radius:9999px;
-      transform:translate(-50%, -50%) rotateX(64deg);
-      background:radial-gradient(circle at 50% 48%,
-        rgba(255,255,255,0.98) 0%,
-        rgba(239,68,68,0.52) 24%,
-        rgba(239,68,68,0.18) 52%,
-        rgba(239,68,68,0) 100%);
-      border:2px solid rgba(239,68,68,0.95);
-      box-shadow:
-        0 0 26px rgba(239,68,68,0.65),
-        0 12px 32px rgba(0,0,0,0.42);
+      left:50%;
+      width:2px;
+      height:34px;
+      background:white;
+      transform:translate(-50%, -50%);
+      opacity:.95;
     "></div>
-
     <div style="
       position:absolute;
-      left:50%;
       top:50%;
-      width:26px;
-      height:26px;
-      border-radius:9999px;
-      transform:translate(-50%, -50%) rotateX(64deg);
-      background:radial-gradient(circle at 42% 35%,
-        rgba(255,255,255,1) 0%,
-        rgba(255,210,210,0.98) 45%,
-        rgba(239,68,68,0.92) 100%);
-      border:1px solid rgba(255,255,255,1);
-      box-shadow:
-        inset 0 1px 2px rgba(255,255,255,1),
-        inset 0 -2px 5px rgba(0,0,0,0.2),
-        0 0 18px rgba(239,68,68,0.62);
+      left:50%;
+      width:34px;
+      height:2px;
+      background:white;
+      transform:translate(-50%, -50%);
+      opacity:.95;
     "></div>
-
     <div style="
       position:absolute;
       left:50%;
@@ -260,7 +197,7 @@ const TEMP_HOTSPOT_HTML = `
       border:1px solid rgba(255,255,255,0.12);
       border-radius:9999px;
       padding:4px 8px;
-      box-shadow:0 6px 18px rgba(0,0,0,0.28);
+      box-shadow:0 6px 18px rgba(0,0,0,.28);
     ">
       Hotspot i ri
     </div>
@@ -277,59 +214,6 @@ const toNullableNumber = (value: any) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
-
-const ENTRY_PITCH = 0;
-
-const normalizeYaw = (yaw: number) => {
-  const twoPi = Math.PI * 2;
-  return ((yaw + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
-};
-
-
-const findSceneById = (scenes: Scene[], sceneId: number | string | null | undefined) => {
-  if (sceneId === null || sceneId === undefined || sceneId === "") return null;
-  return scenes.find((scene) => Number(scene.id) === Number(sceneId)) || null;
-};
-
-const findReverseHotspot = (
-  scenes: Scene[],
-  fromSceneId: number,
-  toSceneId: number,
-) => {
-  const targetScene = findSceneById(scenes, toSceneId);
-  if (!targetScene) return null;
-
-  return (
-    targetScene.hotspots.find(
-      (hotspot) => Number(hotspot.to_scene_id) === Number(fromSceneId),
-    ) || null
-  );
-};
-
-const getEntryViewFromReverseLink = (
-  scenes: Scene[],
-  fromScene: Scene,
-  targetScene: Scene,
-) => {
-  const reverseHotspot = findReverseHotspot(
-    scenes,
-    Number(fromScene.id),
-    Number(targetScene.id),
-  );
-
-  if (reverseHotspot) {
-    return {
-      targetYaw: normalizeYaw(Number(reverseHotspot.yaw) + Math.PI),
-      targetPitch: targetScene.initial_pitch ?? ENTRY_PITCH,
-    };
-  }
-
-  return {
-    targetYaw: targetScene.initial_yaw ?? null,
-    targetPitch: targetScene.initial_pitch ?? ENTRY_PITCH,
-  };
-};
-
 
 export default function AdminVirtualTour() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
@@ -597,23 +481,25 @@ const editorViewerLoadIdRef = useRef(0);
       }
     }
 
-const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
-  const normalizedId = toNumber(scene.id);
+    const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
+      const normalizedId = toNumber(scene.id);
 
-  return {
-    id: normalizedId,
-    property_id: scene.property_id ?? null,
-    virtual_tour_id: scene.virtual_tour_id ?? null,
-    title: scene.title || "",
-    image_url: (scene.image_url || "").trim(),
-    thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
-    is_default: !!scene.is_default,
-    sort_order: toNumber(scene.sort_order, 0),
-    initial_yaw: toNullableNumber(scene.initial_yaw),
-    initial_pitch: toNullableNumber(scene.initial_pitch),
-    hotspots: hotspotsMap.get(normalizedId) || [],
-  };
-});
+      return {
+        id: normalizedId,
+        property_id: scene.property_id ?? null,
+        virtual_tour_id: scene.virtual_tour_id ?? null,
+        title: scene.title || "",
+        image_url: (scene.image_url || "").trim(),
+        thumbnail_url: scene.thumbnail_url ? String(scene.thumbnail_url).trim() : null,
+        is_default: !!scene.is_default,
+        sort_order: toNumber(scene.sort_order, 0),
+        position_x: toNullableNumber(scene.position_x),
+        position_y: toNullableNumber(scene.position_y),
+        initial_yaw: toNullableNumber(scene.initial_yaw),
+        initial_pitch: toNullableNumber(scene.initial_pitch),
+        hotspots: hotspotsMap.get(normalizedId) || [],
+      };
+    });
 
     setProject(projectData);
     setScenes(normalizedScenes);
@@ -1167,7 +1053,7 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     toast({
       title: "Placement mode aktiv",
       description:
-        "Kliko saktësisht në dysheme aty ku duhet të shfaqet hotspoti.",
+        "Rrotullo panoramën derisa vendi i saktë të jetë në qendër, pastaj kliko “Vendose në Qendër”.",
     });
   };
 
@@ -1332,41 +1218,19 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
   };
 
   const handleAddHotspot = async () => {
-    if (!selectedScene || draft.to_scene_id === "") {
+    if (
+      !selectedScene ||
+      draft.to_scene_id === "" ||
+      draft.yaw === null ||
+      draft.pitch === null
+    ) {
       toast({
         title: "Gabim",
-        description: "Zgjidh skenën destinacion.",
+        description: "Zgjidh destinacionin dhe vendose pozicionin e hotspot-it.",
         variant: "destructive",
       });
       return;
     }
-
-    if (draft.yaw === null || draft.pitch === null) {
-      toast({
-        title: "Mungon pika e hotspot-it",
-        description:
-          "Aktivizo vendosjen në dysheme dhe kliko saktësisht në vendin ku duhet të shfaqet hotspoti.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const targetScene = findSceneById(scenes, draft.to_scene_id);
-
-    if (!targetScene) {
-      toast({
-        title: "Gabim",
-        description: "Skena destinacion nuk u gjet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const entryView = getEntryViewFromReverseLink(
-      scenes,
-      selectedScene,
-      targetScene,
-    );
 
     try {
       const { data: insertedHotspot, error } = await supabase
@@ -1376,8 +1240,12 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
           to_scene_id: Number(draft.to_scene_id),
           yaw: draft.yaw,
           pitch: draft.pitch,
-          target_yaw: entryView.targetYaw,
-          target_pitch: entryView.targetPitch,
+          target_yaw:
+            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
+              ?.initial_yaw ?? null,
+          target_pitch:
+            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
+              ?.initial_pitch ?? null,
           label: draft.label.trim() || null,
         })
         .select("*")
@@ -1396,51 +1264,15 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
         label: insertedHotspot.label || null,
       };
 
-      const reverseHotspot = findReverseHotspot(
-        scenes,
-        Number(selectedScene.id),
-        Number(draft.to_scene_id),
-      );
-
-      if (reverseHotspot) {
-        const reverseTargetYaw = normalizeYaw(Number(draft.yaw) + Math.PI);
-        const reverseTargetPitch = selectedScene.initial_pitch ?? ENTRY_PITCH;
-
-        await supabase
-          .from("virtual_tour_hotspots")
-          .update({
-            target_yaw: reverseTargetYaw,
-            target_pitch: reverseTargetPitch,
-          })
-          .eq("id", reverseHotspot.id);
-      }
-
       setScenes((prev) =>
-        prev.map((scene) => {
-          if (scene.id === selectedScene.id) {
-            return {
-              ...scene,
-              hotspots: [...scene.hotspots, normalizedInsertedHotspot],
-            };
-          }
-
-          if (reverseHotspot && scene.id === Number(draft.to_scene_id)) {
-            return {
-              ...scene,
-              hotspots: scene.hotspots.map((hotspot) =>
-                hotspot.id === reverseHotspot.id
-                  ? {
-                      ...hotspot,
-                      target_yaw: normalizeYaw(Number(draft.yaw) + Math.PI),
-                      target_pitch: selectedScene.initial_pitch ?? ENTRY_PITCH,
-                    }
-                  : hotspot,
-              ),
-            };
-          }
-
-          return scene;
-        }),
+        prev.map((scene) =>
+          scene.id === selectedScene.id
+            ? {
+                ...scene,
+                hotspots: [...scene.hotspots, normalizedInsertedHotspot],
+              }
+            : scene,
+        ),
       );
 
       setDraft((prev) => ({
@@ -1449,13 +1281,10 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
         pitch: null,
       }));
 
-      setIsPlacementMode(false);
-
       toast({
         title: "Hotspot u ruajt",
-        description: reverseHotspot
-          ? "Hotspot-i u vendos saktë dhe drejtimi i hyrjes u sinkronizua me lidhjen kthim."
-          : "Hotspot-i u vendos saktë. Për drejtim maksimalisht të saktë, krijo edhe lidhjen kthim nga skena destinacion.",
+        description:
+          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
       });
     } catch (error: any) {
       toast({
@@ -1476,24 +1305,6 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
       return;
     }
 
-    const currentScene = findSceneById(scenes, selectedSceneId);
-    const targetScene = findSceneById(scenes, editingHotspot.to_scene_id);
-
-    if (!currentScene || !targetScene) {
-      toast({
-        title: "Gabim",
-        description: "Skena aktuale ose destinacioni nuk u gjet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const entryView = getEntryViewFromReverseLink(
-      scenes,
-      currentScene,
-      targetScene,
-    );
-
     try {
       const { error } = await supabase
         .from("virtual_tour_hotspots")
@@ -1502,67 +1313,34 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
           label: editingHotspot.label.trim() || null,
           yaw: editingHotspot.yaw,
           pitch: editingHotspot.pitch,
-          target_yaw: entryView.targetYaw,
-          target_pitch: entryView.targetPitch,
+          target_yaw: editingHotspot.target_yaw,
+          target_pitch: editingHotspot.target_pitch,
         })
         .eq("id", editingHotspot.id);
 
       if (error) throw error;
 
-      const reverseHotspot = findReverseHotspot(
-        scenes,
-        Number(currentScene.id),
-        Number(editingHotspot.to_scene_id),
-      );
-
-      if (reverseHotspot) {
-        await supabase
-          .from("virtual_tour_hotspots")
-          .update({
-            target_yaw: normalizeYaw(Number(editingHotspot.yaw) + Math.PI),
-            target_pitch: currentScene.initial_pitch ?? ENTRY_PITCH,
-          })
-          .eq("id", reverseHotspot.id);
-      }
-
       setScenes((prev) =>
-        prev.map((scene) => {
-          if (scene.id === selectedSceneId) {
-            return {
-              ...scene,
-              hotspots: scene.hotspots.map((hotspot) =>
-                hotspot.id === editingHotspot.id
-                  ? {
-                      ...hotspot,
-                      to_scene_id: Number(editingHotspot.to_scene_id),
-                      label: editingHotspot.label.trim() || null,
-                      yaw: editingHotspot.yaw,
-                      pitch: editingHotspot.pitch,
-                      target_yaw: entryView.targetYaw,
-                      target_pitch: entryView.targetPitch,
-                    }
-                  : hotspot,
-              ),
-            };
-          }
-
-          if (reverseHotspot && scene.id === Number(editingHotspot.to_scene_id)) {
-            return {
-              ...scene,
-              hotspots: scene.hotspots.map((hotspot) =>
-                hotspot.id === reverseHotspot.id
-                  ? {
-                      ...hotspot,
-                      target_yaw: normalizeYaw(Number(editingHotspot.yaw) + Math.PI),
-                      target_pitch: currentScene.initial_pitch ?? ENTRY_PITCH,
-                    }
-                  : hotspot,
-              ),
-            };
-          }
-
-          return scene;
-        }),
+        prev.map((scene) =>
+          scene.id === selectedSceneId
+            ? {
+                ...scene,
+                hotspots: scene.hotspots.map((hotspot) =>
+                  hotspot.id === editingHotspot.id
+                    ? {
+                        ...hotspot,
+                        to_scene_id: Number(editingHotspot.to_scene_id),
+                        label: editingHotspot.label.trim() || null,
+                        yaw: editingHotspot.yaw,
+                        pitch: editingHotspot.pitch,
+                        target_yaw: editingHotspot.target_yaw,
+                        target_pitch: editingHotspot.target_pitch,
+                      }
+                    : hotspot,
+                ),
+              }
+            : scene,
+        ),
       );
 
       setIsEditHotspotModalOpen(false);
@@ -1571,9 +1349,7 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
 
       toast({
         title: "Sukses",
-        description: reverseHotspot
-          ? "Hotspot-i u përditësua dhe drejtimi u sinkronizua me lidhjen kthim."
-          : "Hotspot-i u përditësua. Për drejtim maksimalisht të saktë, krijo edhe lidhjen kthim.",
+        description: "Hotspot-i u përditësua.",
       });
     } catch (error: any) {
       toast({
@@ -1627,6 +1403,23 @@ const normalizedScenes: Scene[] = (scenesData || []).map((scene) => {
     }
   };
 
+  const handleUpdateScenePosition = async (sceneId: number, x: number, y: number) => {
+    try {
+      const { error } = await supabase
+        .from("virtual_tour_scenes")
+        .update({
+          position_x: x,
+          position_y: y,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", sceneId);
+
+      if (error) throw error;
+      await refreshTour();
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   useEffect(() => {
     if (
@@ -1654,13 +1447,13 @@ let viewer: Viewer | null = null;
 let cameraInterval: number | null = null;
 
     try {
-viewer = new Viewer({
-  container: editorContainerRef.current,
-  panorama: selectedScene.image_url,
-  navbar: ["zoom", "move", "fullscreen"],
-  adapter: EquirectangularAdapter.withConfig({
-    resolution: 128,
-  }),
+      viewer = new Viewer({
+        container: editorContainerRef.current,
+        panorama: selectedScene.image_url,
+        navbar: ["zoom", "move", "fullscreen"],
+        adapter: EquirectangularAdapter.withConfig({
+          resolution: 128,
+        }),
         defaultYaw: selectedScene.initial_yaw ?? 0,
         defaultPitch: selectedScene.initial_pitch ?? 0,
         moveInertia: true,
@@ -1711,24 +1504,6 @@ viewer = new Viewer({
           tooltip: "Pozicioni i ri i hotspot-it",
         });
       }
-
-      // Click-to-place: clicking the panorama directly sets the hotspot position
-      viewer.addEventListener("click", ({ data }: any) => {
-        const clickedYaw = data?.longitude;
-        const clickedPitch = data?.latitude;
-
-        if (!Number.isFinite(clickedYaw) || !Number.isFinite(clickedPitch)) return;
-
-        if (isPlacementMode) {
-          setDraft((prev) => ({ ...prev, yaw: clickedYaw, pitch: clickedPitch }));
-          setCameraCenter({ yaw: clickedYaw, pitch: clickedPitch });
-        } else if (isEditingHotspotPlacement) {
-          setEditingHotspot((prev) =>
-            prev ? { ...prev, yaw: clickedYaw, pitch: clickedPitch } : prev,
-          );
-          setCameraCenter({ yaw: clickedYaw, pitch: clickedPitch });
-        }
-      });
 
       const syncCameraCenter = () => {
         try {
@@ -1831,10 +1606,10 @@ return () => {
 
     const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
 
-return validScenes.map((scene) => ({
-  id: String(scene.id),
-  panorama: scene.image_url,
-  name: scene.title,
+    return validScenes.map((scene) => ({
+      id: String(scene.id),
+      panorama: scene.image_url,
+      name: scene.title,
       thumbnail: scene.thumbnail_url || scene.image_url,
       data: {
         initialYaw: scene.initial_yaw ?? null,
@@ -2270,15 +2045,14 @@ return validScenes.map((scene) => ({
           <div className="glass-panel p-6 rounded-2xl">
             <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
               <div>
-                
-				<h2 className="font-display text-xl text-primary font-bold">
-  2. Editor Profesional i Hotspot-eve
-</h2>
-<p className="text-sm text-muted-foreground mt-1">
-  Vendos manualisht pikën e hotspot-it në dysheme për çdo lidhje.
-  Për drejtim maksimalisht të saktë, krijo lidhjet në të dy drejtimet, p.sh. 1 → 2 dhe 2 → 1.
-</p>
-				
+                <h2 className="font-display text-xl text-primary font-bold">
+                  2. Editor Profesional i Hotspot-eve
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Një foto mund të ketë sa hotspot-e të duash. Zgjidh destinacionin,
+                  aktivizo placement mode, rrotullo panoramën dhe vendose hotspot-in në
+                  qendrën e pamjes.
+                </p>
               </div>
             </div>
 
@@ -2295,7 +2069,7 @@ return validScenes.map((scene) => ({
                   Start view: {selectedScene.initial_yaw.toFixed(3)} /{" "}
                   {selectedScene.initial_pitch.toFixed(3)}
                 </div>
-			)}
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2321,12 +2095,12 @@ return validScenes.map((scene) => ({
 
                   <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 pointer-events-none backdrop-blur-md">
                     {isEditingHotspotPlacement
-                      ? "Kliko në dysheme për pozicionin e ri të hotspot-it."
+                      ? "Rrotullo panoramën dhe kliko “Vendose në Qendër” për pozicionin e ri"
                       : isPlacementMode
                         ? draft.yaw !== null && draft.pitch !== null
-                          ? "Pika u vendos. Rafinoje me butonat ose kliko përsëri mbi dysheme."
-                          : "Kliko saktësisht në dysheme aty ku duhet të shfaqet hotspoti."
-                        : "Zgjidh destinacionin, aktivizo vendosjen në dysheme dhe kliko pikën e hotspot-it."}
+                          ? "Pozicioni u vendos. Shiko markerin e kuq në pamje, rafinoje me butonat ose ruaje"
+                          : "Placement mode aktiv. Rrotullo panoramën derisa pika e dëshiruar të jetë në qendër dhe kliko “Vendose në Qendër”"
+                        : "Zgjidh target-in dhe aktivizo placement mode"}
                   </div>
 
                   <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/50 text-xs text-white/90 backdrop-blur-md">
@@ -2339,7 +2113,7 @@ return validScenes.map((scene) => ({
 
                 <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
                   <h3 className="text-foreground font-medium flex items-center gap-2">
-                    <Link2 size={16} /> Shto hotspot të ri në dysheme
+                    <Link2 size={16} /> Shto hotspot të ri
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2393,18 +2167,20 @@ return validScenes.map((scene) => ({
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <span>
                         <strong className="text-foreground">Status:</strong>{" "}
-                        {draft.yaw !== null && draft.pitch !== null
-                          ? "Pika në dysheme është vendosur"
-                          : "Vendos pikën në dysheme"}
+                        {isPlacementMode
+                          ? draft.yaw !== null && draft.pitch !== null
+                            ? "Gati për ruajtje"
+                            : "Rrotullo panoramën dhe vendose në qendër"
+                          : "Joaktiv"}
                       </span>
                       <span>
-                        <strong className="text-foreground">Pozicioni:</strong>{" "}
+                        <strong className="text-foreground">Yaw/Pitch:</strong>{" "}
                         {draft.yaw !== null && draft.pitch !== null
                           ? `${draft.yaw.toFixed(3)} / ${draft.pitch.toFixed(3)}`
                           : "Pa zgjedhur"}
                       </span>
                       <span>
-                        <strong className="text-foreground">Destinacioni:</strong>{" "}
+                        <strong className="text-foreground">Target:</strong>{" "}
                         {draft.to_scene_id === ""
                           ? "Pa zgjedhur"
                           : scenes.find(
@@ -2414,18 +2190,13 @@ return validScenes.map((scene) => ({
                     </div>
                   </div>
 
-<div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {!isPlacementMode ? (
                       <button
                         onClick={handleStartPlacement}
-                        disabled={draft.to_scene_id === ""}
-                        className={`px-4 py-2 rounded-xl font-semibold ${
-                          draft.to_scene_id !== ""
-                            ? "bg-primary text-black hover:bg-white"
-                            : "bg-muted text-muted-foreground cursor-not-allowed"
-                        }`}
+                        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold"
                       >
-                        Aktivizo vendosjen në dysheme
+                        Aktivizo Placement Mode
                       </button>
                     ) : (
                       <>
@@ -2434,7 +2205,7 @@ return validScenes.map((scene) => ({
                           className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
                         >
                           <LocateFixed size={16} />
-                          Vendose në qendër të pamjes
+                          Vendose në Qendër
                         </button>
 
                         <button
@@ -2442,7 +2213,7 @@ return validScenes.map((scene) => ({
                           disabled={draft.yaw === null || draft.pitch === null}
                           className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 ${
                             draft.yaw !== null && draft.pitch !== null
-                              ? "bg-primary text-black hover:bg-white"
+                              ? "bg-primary text-black"
                               : "bg-muted text-muted-foreground cursor-not-allowed"
                           }`}
                         >
@@ -2462,7 +2233,7 @@ return validScenes.map((scene) => ({
                           onClick={handleStopPlacement}
                           className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                         >
-                          Dil nga vendosja në dysheme
+                          Dil nga Placement Mode
                         </button>
                       </>
                     )}
@@ -2631,6 +2402,113 @@ return validScenes.map((scene) => ({
           )}
         </div>
 
+        <div className="glass-panel p-6 rounded-2xl">
+          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
+            <div>
+              <h2 className="font-display text-xl text-primary font-bold">
+                4. Plani i Katit (Opsionale)
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Zvarrit pikat për të vendosur skenat në hartë.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-8">
+            <div
+              className="flex-1 max-w-[700px] aspect-[4/3] bg-muted/40 border-2 border-border rounded-2xl relative overflow-hidden"
+              style={{
+                backgroundImage:
+                  "radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px)",
+                backgroundSize: "20px 20px",
+              }}
+            >
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/20 pointer-events-none select-none">
+                <MapIcon size={70} />
+              </div>
+
+              {scenes.map((scene) => {
+                const x = scene.position_x ?? 50;
+                const y = scene.position_y ?? 50;
+                const isSet = scene.position_x != null && scene.position_y != null;
+
+                return (
+                  <div
+                    key={String(scene.id)}
+                    draggable
+                    title={scene.title}
+                    className={`absolute w-7 h-7 -ml-3.5 -mt-3.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-move shadow-lg z-10 ${
+                      isSet
+                        ? "bg-primary text-black"
+                        : "bg-white/50 text-black border-2 border-dashed border-white"
+                    }`}
+                    style={{ left: `${x}%`, top: `${y}%` }}
+                    onDragEnd={(e) => {
+                      const rect = (
+                        e.currentTarget.parentElement as HTMLElement
+                      )?.getBoundingClientRect();
+                      if (!rect) return;
+
+                      const nx = Math.max(
+                        0,
+                        Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
+                      );
+                      const ny = Math.max(
+                        0,
+                        Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
+                      );
+
+                      handleUpdateScenePosition(scene.id, nx, ny);
+                    }}
+                  >
+                    {scene.sort_order + 1}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="w-full md:w-72 rounded-2xl border border-border bg-white/5 p-4">
+              <h3 className="text-foreground font-medium mb-4">Skenat</h3>
+              <div className="space-y-3">
+                {scenes
+                  .slice()
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((scene) => (
+                    <div
+                      key={String(scene.id)}
+                      className="flex items-center gap-3 rounded-xl bg-muted/40 p-2.5 border border-border"
+                    >
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
+                        {scene.thumbnail_url || scene.image_url ? (
+                          <img
+                            src={scene.thumbnail_url || scene.image_url}
+                            alt={scene.title}
+							crossOrigin="anonymous" // <---
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white/30">
+                            <ImageIcon size={14} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">
+                          {scene.title}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Move size={11} />{" "}
+                          {scene.position_x != null && scene.position_y != null
+                            ? "Pozicionuar"
+                            : "Pa pozicion"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
 
       <Dialog open={isSceneModalOpen} onOpenChange={setIsSceneModalOpen}>

@@ -7,7 +7,7 @@ import {
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
-import { Maximize, Minimize, Map as MapIcon, X, Compass } from "lucide-react";
+import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
 
 interface VirtualTour360Props {
   scenes: Array<{
@@ -40,8 +40,8 @@ type SceneType = VirtualTour360Props["scenes"][number];
 type Orientation = { yaw: number; pitch: number };
 
 const INITIAL_LOADING_FALLBACK_MS = 15000;
+
 const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
-const OVERLAY_HIDE_DELAY_MS = 4000;
 
 const getDeviceProfile = () => {
   const width = typeof window !== "undefined" ? window.innerWidth : 1200;
@@ -154,6 +154,7 @@ const scheduleIdleTask = (callback: () => void, delay = 80) => {
 
   const profile = getDeviceProfile();
 
+  // Në mobile mos e vono shumë preload-in, sepse përdoruesi prek hotspot-in shpejt.
   if (profile.isMobile) {
     window.setTimeout(callback, delay);
     return;
@@ -180,28 +181,20 @@ export function VirtualTour360({
   const isNavigatingRef = useRef(false);
   const closeTouchHandledRef = useRef(false);
   const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-  const sceneStripScrollRef = useRef<HTMLDivElement>(null);
-  const pendingEntryOrientationRef = useRef<Orientation | null>(null);
-  const overlayTimerRef = useRef<number | null>(null);
+const pendingEntryOrientationRef = useRef<Orientation | null>(null);
 
-  const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
+   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
-  const [isOverlayVisible, setIsOverlayVisible] = useState(true);
 
   const hasMap = scenes.some((s) => s.positionX != null && s.positionY != null);
-  const [canUseFullscreen, setCanUseFullscreen] = useState(false);
+const [canUseFullscreen, setCanUseFullscreen] = useState(false);
 
   const sortedScenes = useMemo(
     () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
     [scenes],
-  );
-
-  const currentSceneIndex = useMemo(
-    () => sortedScenes.findIndex((s) => s.id === currentSceneId),
-    [sortedScenes, currentSceneId],
   );
 
   const nodes = useMemo(() => {
@@ -295,6 +288,8 @@ export function VirtualTour360({
     [getSceneStartOrientation],
   );
 
+
+
   const updateTargetNodeOrientation = useCallback(
     (
       vtPlugin: any,
@@ -323,218 +318,210 @@ export function VirtualTour360({
     [getNodeById],
   );
 
+
   const applyManualSceneOrientation = useCallback((orientation: Orientation | null) => {
-    const viewer = viewerRef.current;
-    if (!viewer || !orientation) return;
+  const viewer = viewerRef.current;
+  if (!viewer || !orientation) return;
 
-    if (!Number.isFinite(orientation.yaw) || !Number.isFinite(orientation.pitch)) {
-      return;
-    }
+  if (!Number.isFinite(orientation.yaw) || !Number.isFinite(orientation.pitch)) {
+    return;
+  }
 
-    viewer.rotate({
-      yaw: orientation.yaw,
-      pitch: orientation.pitch,
-    });
-  }, []);
+  viewer.rotate({
+    yaw: orientation.yaw,
+    pitch: orientation.pitch,
+  });
+}, []);
 
-  // Overlay auto-hide logic
-  const resetOverlayTimer = useCallback(() => {
-    setIsOverlayVisible(true);
-    if (overlayTimerRef.current) {
-      window.clearTimeout(overlayTimerRef.current);
-    }
-    overlayTimerRef.current = window.setTimeout(() => {
-      setIsOverlayVisible(false);
-    }, OVERLAY_HIDE_DELAY_MS);
-  }, []);
 
-  useEffect(() => {
-    resetOverlayTimer();
-    return () => {
-      if (overlayTimerRef.current) window.clearTimeout(overlayTimerRef.current);
-    };
-  }, []);
 
-  useEffect(() => {
-    Cache.enabled = true;
-    Cache.ttl = 30 * 60 * 1000;
-    Cache.maxItems = getCacheMaxItems();
-  }, []);
 
-  const preloadedImagesRef = useRef<Set<string>>(new Set());
-  const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
 
-  const preloadSceneImageOnce = useCallback(
-    (src?: string | null, priority: "high" | "low" = "low"): Promise<void> => {
-      if (!src) return Promise.resolve();
 
-      const existingPromise = preloadPromisesRef.current.get(src);
-      if (existingPromise) return existingPromise;
+useEffect(() => {
+  Cache.enabled = true;
+  Cache.ttl = 30 * 60 * 1000;
+  Cache.maxItems = getCacheMaxItems();
+}, []);
+  
+  
+  
+  
+  
+  
+const preloadedImagesRef = useRef<Set<string>>(new Set());
+const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
 
-      preloadedImagesRef.current.add(src);
+const preloadSceneImageOnce = useCallback(
+  (src?: string | null, priority: "high" | "low" = "low"): Promise<void> => {
+    if (!src) return Promise.resolve();
 
-      const promise = preloadImage(src, priority);
-      preloadPromisesRef.current.set(src, promise);
+    const existingPromise = preloadPromisesRef.current.get(src);
+    if (existingPromise) return existingPromise;
 
-      return promise;
-    },
-    [],
-  );
+    preloadedImagesRef.current.add(src);
 
-  const prepareSceneForNavigation = useCallback(
-    (
-      sceneId: number | null,
-      priority: "high" | "low" = "high",
-    ): Promise<void> => {
-      if (sceneId === null) return Promise.resolve();
+    const promise = preloadImage(src, priority);
+    preloadPromisesRef.current.set(src, promise);
 
-      const scene = sortedScenes.find((s) => Number(s.id) === Number(sceneId));
-      if (!scene) return Promise.resolve();
+    return promise;
+  },
+  [],
+);
 
-      return preloadSceneImageOnce(scene.imageUrl, priority);
-    },
-    [sortedScenes, preloadSceneImageOnce],
-  );
+const prepareSceneForNavigation = useCallback(
+  (
+    sceneId: number | null,
+    priority: "high" | "low" = "high",
+  ): Promise<void> => {
+    if (sceneId === null) return Promise.resolve();
 
-  const preloadSceneImages = useCallback(
-    (sceneId: number | null) => {
-      if (sceneId === null) return;
+    const scene = sortedScenes.find((s) => Number(s.id) === Number(sceneId));
+    if (!scene) return Promise.resolve();
 
-      const scene = sortedScenes.find((s) => s.id === sceneId);
-      if (!scene) return;
+    return preloadSceneImageOnce(scene.imageUrl, priority);
+  },
+  [sortedScenes, preloadSceneImageOnce],
+);
 
-      const preloadLimit = getNeighborPreloadLimit();
-      if (preloadLimit <= 0) return;
+const preloadSceneImages = useCallback(
+  (sceneId: number | null) => {
+    if (sceneId === null) return;
 
-      const neighborIds = scene.hotspots
-        .map((h) => h.toSceneId)
-        .filter((id, index, arr) => arr.indexOf(id) === index);
+    const scene = sortedScenes.find((s) => s.id === sceneId);
+    if (!scene) return;
 
-      const scenesToPreload = sortedScenes
-        .filter((s) => neighborIds.includes(s.id))
-        .slice(0, preloadLimit);
+    const preloadLimit = getNeighborPreloadLimit();
+    if (preloadLimit <= 0) return;
 
-      scheduleIdleTask(() => {
-        scenesToPreload.forEach((targetScene) => {
-          preloadSceneImageOnce(targetScene.imageUrl, "low");
-        });
-      }, 40);
-    },
-    [sortedScenes, preloadSceneImageOnce],
-  );
-
-  const goToScene = useCallback(
-    async (targetSceneId: number) => {
-      const viewer = viewerRef.current;
-      if (!viewer) return;
-
-      const targetScene = getSceneById(targetSceneId);
-      if (!targetScene) return;
-
-      if (currentSceneRef.current?.id === targetSceneId) return;
-
-      if (isNavigatingRef.current) return;
-      isNavigatingRef.current = true;
-
-      // Safety valve: always release the lock within 3s even if something goes wrong
-      const safetyTimer = window.setTimeout(() => {
-        isNavigatingRef.current = false;
-      }, 3000);
-
-      try {
-        const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
-        const entryOrientation = getSceneStartOrientation(targetSceneId);
-
-        preloadSceneImageOnce(targetScene.imageUrl, "high");
-
-        updateTargetNodeOrientation(
-          vtPlugin,
-          String(targetSceneId),
-          entryOrientation,
-        );
-
-        await vtPlugin.setCurrentNode(String(targetSceneId), {
-          showLoader: false,
-          effect: "fade",
-          speed: 120,
-          rotation: false,
-        });
-
-        requestAnimationFrame(() => {
-          applyManualSceneOrientation(entryOrientation);
-        });
-      } catch (error) {
-        console.error("Scene change error:", error);
-      } finally {
-        window.clearTimeout(safetyTimer);
-        isNavigatingRef.current = false;
-      }
-    },
-    [
-      getSceneById,
-      getSceneStartOrientation,
-      updateTargetNodeOrientation,
-      applyManualSceneOrientation,
-      preloadSceneImageOnce,
-    ],
-  );
-
-  useEffect(() => {
-    preloadSceneImages(currentSceneId);
-  }, [currentSceneId, preloadSceneImages]);
-
-  useEffect(() => {
-    if (!resolvedStartScene) return;
-    preloadSceneImageOnce(resolvedStartScene.imageUrl, "high");
-  }, [resolvedStartScene, preloadSceneImageOnce]);
-
-  useEffect(() => {
-    if (currentSceneId === null) return;
-
-    const currentScene = sortedScenes.find(
-      (scene) => Number(scene.id) === Number(currentSceneId),
-    );
-
-    if (!currentScene) return;
-
-    const directTargetIds = currentScene.hotspots
-      .map((hotspot) => Number(hotspot.toSceneId))
+    const neighborIds = scene.hotspots
+      .map((h) => h.toSceneId)
       .filter((id, index, arr) => arr.indexOf(id) === index);
 
-    const directTargetScenes = sortedScenes.filter((scene) =>
-      directTargetIds.includes(Number(scene.id)),
-    );
+const scenesToPreload = sortedScenes
+  .filter((s) => neighborIds.includes(s.id))
+  .slice(0, preloadLimit);
 
-    const profile = getDeviceProfile();
+scheduleIdleTask(() => {
+  scenesToPreload.forEach((targetScene) => {
+preloadSceneImageOnce(targetScene.imageUrl, "low");
+  });
+}, 40);
+  },
+  [sortedScenes, preloadSceneImageOnce],
+);
 
-    const directPreloadLimit = profile.isMobile
-      ? 1
-      : profile.isLowMemory || profile.isSlowConnection
-        ? 1
-        : 4;
 
-    directTargetScenes.slice(0, directPreloadLimit).forEach((targetScene) => {
+const goToScene = useCallback(
+  async (targetSceneId: number) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const targetScene = getSceneById(targetSceneId);
+    if (!targetScene) return;
+
+    if (currentSceneRef.current?.id === targetSceneId) return;
+
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+
+    try {
+      const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
+      const entryOrientation = getSceneStartOrientation(targetSceneId);
+
+      // Nis preload në background, por MOS e prit.
       preloadSceneImageOnce(targetScene.imageUrl, "high");
-    });
 
-    if (!profile.isMobile && !profile.isLowMemory && !profile.isSlowConnection) {
-      scheduleIdleTask(() => {
-        const secondLevelIds = directTargetScenes
-          .flatMap((scene) =>
-            scene.hotspots.map((hotspot) => Number(hotspot.toSceneId)),
-          )
-          .filter((id) => id !== Number(currentSceneId))
-          .filter((id, index, arr) => arr.indexOf(id) === index);
+      updateTargetNodeOrientation(
+        vtPlugin,
+        String(targetSceneId),
+        entryOrientation,
+      );
 
-        sortedScenes
-          .filter((scene) => secondLevelIds.includes(Number(scene.id)))
-          .slice(0, 4)
-          .forEach((scene) => {
-            preloadSceneImageOnce(scene.imageUrl, "low");
-          });
-      }, 900);
+      await vtPlugin.setCurrentNode(String(targetSceneId), {
+        showLoader: false,
+        effect: "fade",
+        speed: 120,
+        rotation: false,
+      });
+
+      requestAnimationFrame(() => {
+        applyManualSceneOrientation(entryOrientation);
+      });
+    } catch (error) {
+      console.error("Scene change error:", error);
+    } finally {
+      isNavigatingRef.current = false;
     }
-  }, [currentSceneId, sortedScenes, preloadSceneImageOnce]);
+  },
+  [
+    getSceneById,
+    getSceneStartOrientation,
+    updateTargetNodeOrientation,
+    applyManualSceneOrientation,
+    preloadSceneImageOnce,
+  ],
+);
+
+
+useEffect(() => {
+  preloadSceneImages(currentSceneId);
+}, [currentSceneId, preloadSceneImages]);
+
+useEffect(() => {
+  if (!resolvedStartScene) return;
+
+preloadSceneImageOnce(resolvedStartScene.imageUrl, "high");
+}, [resolvedStartScene, preloadSceneImageOnce]);
+
+useEffect(() => {
+  if (currentSceneId === null) return;
+
+  const currentScene = sortedScenes.find(
+    (scene) => Number(scene.id) === Number(currentSceneId),
+  );
+
+  if (!currentScene) return;
+
+  const directTargetIds = currentScene.hotspots
+    .map((hotspot) => Number(hotspot.toSceneId))
+    .filter((id, index, arr) => arr.indexOf(id) === index);
+
+  const directTargetScenes = sortedScenes.filter((scene) =>
+    directTargetIds.includes(Number(scene.id)),
+  );
+
+  const profile = getDeviceProfile();
+
+  const directPreloadLimit = profile.isMobile
+    ? 1
+    : profile.isLowMemory || profile.isSlowConnection
+      ? 1
+      : 4;
+
+  directTargetScenes.slice(0, directPreloadLimit).forEach((targetScene) => {
+    preloadSceneImageOnce(targetScene.imageUrl, "high");
+  });
+
+  if (!profile.isMobile && !profile.isLowMemory && !profile.isSlowConnection) {
+    scheduleIdleTask(() => {
+      const secondLevelIds = directTargetScenes
+        .flatMap((scene) =>
+          scene.hotspots.map((hotspot) => Number(hotspot.toSceneId)),
+        )
+        .filter((id) => id !== Number(currentSceneId))
+        .filter((id, index, arr) => arr.indexOf(id) === index);
+
+      sortedScenes
+        .filter((scene) => secondLevelIds.includes(Number(scene.id)))
+        .slice(0, 4)
+        .forEach((scene) => {
+          preloadSceneImageOnce(scene.imageUrl, "low");
+        });
+    }, 900);
+  }
+}, [currentSceneId, sortedScenes, preloadSceneImageOnce]);
+
 
   useEffect(() => {
     if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
@@ -544,42 +531,43 @@ export function VirtualTour360({
       viewerRef.current = null;
     }
 
-    setIsInitialLoading(true);
+        setIsInitialLoading(true);
     setIsViewerVisible(false);
 
     const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
     let didFinishInitialLoad = false;
 
-    const finishInitialLoad = () => {
-      if (didFinishInitialLoad) return;
-      didFinishInitialLoad = true;
+const finishInitialLoad = () => {
+  if (didFinishInitialLoad) return;
+  didFinishInitialLoad = true;
 
-      currentSceneRef.current = resolvedStartScene;
-      setCurrentSceneId(resolvedStartScene.id);
+  currentSceneRef.current = resolvedStartScene;
+  setCurrentSceneId(resolvedStartScene.id);
 
-      requestAnimationFrame(() => {
-        setIsViewerVisible(true);
-        setIsInitialLoading(false);
-      });
-    };
+  requestAnimationFrame(() => {
+    setIsViewerVisible(true);
+    setIsInitialLoading(false);
+  });
+};
 
-    const viewer = new Viewer({
+    const viewer = new Viewer({  // rezolucioni ne fuqin 2 bon veq, 64 / 128 / 128
       container: containerRef.current,
       navbar: ["zoom", "move"],
-      adapter: EquirectangularAdapter.withConfig({
-        resolution: getViewerResolution(),
-      }),
+adapter: EquirectangularAdapter.withConfig({
+  resolution: getViewerResolution(),
+}),
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
+	  
+  // Zoom / FOV tuning
+maxFov: window.innerWidth <= 640 ? 110 : 110,
+minFov: 30,
+defaultZoomLvl: window.innerWidth <= 640 ? 35 : 35,
+zoomSpeed: 1.15,
 
-      maxFov: window.innerWidth <= 640 ? 110 : 110,
-      minFov: 30,
-      defaultZoomLvl: window.innerWidth <= 640 ? 35 : 35,
-      zoomSpeed: 1.15,
-
-      moveInertia: true,
-      mousewheelCtrlKey: false,
-      touchmoveTwoFingers: false,
+  moveInertia: true,
+  mousewheelCtrlKey: false,
+  touchmoveTwoFingers: false,
       plugins: [
         [
           VirtualTourPlugin,
@@ -588,13 +576,13 @@ export function VirtualTour360({
             renderMode: "3d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
-            preload: false,
-            transitionOptions: () => ({
-              showLoader: false,
-              effect: "fade",
-              speed: 120,
-              rotation: false,
-            }),
+preload: false,   // <-- Preload-in e kontrollojmë vetë me preloadSceneImageOnce.
+transitionOptions: () => ({
+  showLoader: false,
+  effect: "fade",
+  speed: 120,
+  rotation: false,
+}),
           },
         ],
       ],
@@ -603,42 +591,46 @@ export function VirtualTour360({
     viewerRef.current = viewer;
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin) as any;
-
-    viewer.addEventListener("panorama-loaded", () => {
+	
+	    viewer.addEventListener("panorama-loaded", () => {
       finishInitialLoad();
     });
 
-    vtPlugin.addEventListener("select-link", ({ link }: any) => {
-      const targetSceneId = Number(link?.nodeId);
-      const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
+vtPlugin.addEventListener("select-link", ({ link }: any) => {
+  const targetSceneId = Number(link?.nodeId);
+  const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
 
-      pendingEntryOrientationRef.current = entryOrientation;
+  pendingEntryOrientationRef.current = entryOrientation;
 
-      prepareSceneForNavigation(targetSceneId, "high");
+  // E nisim menjëherë me high priority. Në shumicën e rasteve do jetë gati
+  // sepse e kemi preloaded sapo hyjmë në skenën aktuale.
+  prepareSceneForNavigation(targetSceneId, "high");
 
-      updateTargetNodeOrientation(
-        vtPlugin,
-        String(targetSceneId),
-        entryOrientation,
-      );
+  updateTargetNodeOrientation(
+    vtPlugin,
+    String(targetSceneId),
+    entryOrientation,
+  );
+});
+
+vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+  const nextId = Number(node.id);
+  const nextScene = getSceneById(nextId);
+
+  currentSceneRef.current = nextScene;
+  setCurrentSceneId(nextId);
+
+  // Apliko orientimin e hyrjes menjëherë pas ndërrimit të skenës
+  const pending = pendingEntryOrientationRef.current;
+  pendingEntryOrientationRef.current = null;
+
+  if (pending && Number.isFinite(pending.yaw)) {
+    // requestAnimationFrame siguron që PSV ka mbaruar render-in
+    requestAnimationFrame(() => {
+      viewer.rotate({ yaw: pending.yaw, pitch: pending.pitch });
     });
-
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
-      const nextId = Number(node.id);
-      const nextScene = getSceneById(nextId);
-
-      currentSceneRef.current = nextScene;
-      setCurrentSceneId(nextId);
-
-      const pending = pendingEntryOrientationRef.current;
-      pendingEntryOrientationRef.current = null;
-
-      if (pending && Number.isFinite(pending.yaw)) {
-        requestAnimationFrame(() => {
-          viewer.rotate({ yaw: pending.yaw, pitch: pending.pitch });
-        });
-      }
-    });
+  }
+});
 
     const fallbackTimer = window.setTimeout(() => {
       console.warn("Initial panorama load is taking longer than expected.");
@@ -665,25 +657,8 @@ export function VirtualTour360({
   ]);
 
   const handleSceneChange = async (id: number) => {
-    resetOverlayTimer();
     await goToScene(id);
   };
-
-  const handlePrevScene = useCallback(() => {
-    if (currentSceneIndex <= 0) {
-      handleSceneChange(sortedScenes[sortedScenes.length - 1].id);
-    } else {
-      handleSceneChange(sortedScenes[currentSceneIndex - 1].id);
-    }
-  }, [currentSceneIndex, sortedScenes]);
-
-  const handleNextScene = useCallback(() => {
-    if (currentSceneIndex >= sortedScenes.length - 1) {
-      handleSceneChange(sortedScenes[0].id);
-    } else {
-      handleSceneChange(sortedScenes[currentSceneIndex + 1].id);
-    }
-  }, [currentSceneIndex, sortedScenes]);
 
   const toggleFullscreen = async () => {
     try {
@@ -696,56 +671,38 @@ export function VirtualTour360({
       console.error("Fullscreen error:", error);
     }
   };
+  
+const handleCloseTour = useCallback(() => {
+  if (onClose) onClose();
+}, [onClose]);
 
-  const handleCloseTour = useCallback(() => {
-    if (onClose) onClose();
-  }, [onClose]);
+useEffect(() => {
+  setCanUseFullscreen(!!document.fullscreenEnabled);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleCloseTour();
-        return;
-      }
-      if (e.key === "ArrowRight") {
-        resetOverlayTimer();
-        if (sortedScenes.length > 1) handleNextScene();
-        return;
-      }
-      if (e.key === "ArrowLeft") {
-        resetOverlayTimer();
-        if (sortedScenes.length > 1) handlePrevScene();
-        return;
-      }
-      if (e.key === "f" || e.key === "F") {
-        toggleFullscreen();
-      }
-    };
+  const onFullscreenChange = () => {
+    setIsFullscreen(!!document.fullscreenElement);
+  };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleCloseTour, handleNextScene, handlePrevScene, resetOverlayTimer, sortedScenes.length]);
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+}, []);
 
-  useEffect(() => {
-    setCanUseFullscreen(!!document.fullscreenEnabled);
 
-    const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
 
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
+useEffect(() => {
+  if (currentSceneId === null) return;
 
-  useEffect(() => {
-    if (currentSceneId === null) return;
-    const activeButton = sceneButtonRefs.current[currentSceneId];
-    const strip = sceneStripScrollRef.current;
-    if (!activeButton || !strip) return;
-    const target = activeButton.offsetLeft - strip.offsetWidth / 2 + activeButton.offsetWidth / 2;
-    strip.scrollTo({ left: target, behavior: "smooth" });
-  }, [currentSceneId]);
+  const activeButton = sceneButtonRefs.current[currentSceneId];
+
+  if (!activeButton) return;
+
+  activeButton.scrollIntoView({
+    behavior: "smooth",
+    inline: "center",
+    block: "nearest",
+  });
+}, [currentSceneId]);
+
 
   if (sortedScenes.length === 0) {
     return (
@@ -755,339 +712,144 @@ export function VirtualTour360({
     );
   }
 
-  const currentScene = sortedScenes.find((s) => s.id === currentSceneId);
-
   return (
-    <div
-      className="fixed inset-0 z-[9999] w-screen h-[100dvh] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell"
-      onMouseMove={resetOverlayTimer}
-      onTouchStart={resetOverlayTimer}
-      onClick={resetOverlayTimer}
-    >
+    <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
       <style>{`
         .virtual-tour-shell .psv-loader-container,
         .virtual-tour-shell .psv-loader {
           display: none !important;
         }
-
-        /* ── Kill every PSV tooltip absolutely ── */
-        .virtual-tour-shell .psv-tooltip,
-        .virtual-tour-shell .psv-tooltip-content,
-        .virtual-tour-shell .psv-tooltip-arrow,
-        .virtual-tour-shell .psv-virtual-tour-link-tooltip,
-        .virtual-tour-shell [class*="psv-tooltip"],
-        .virtual-tour-shell [class*="link-tooltip"] {
-          display: none !important;
-          visibility: hidden !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-
-        /* ── 3-D glass directional arrow (professional) ── */
-        /* ── Matterport-style floor navigation point ── */
-.virtual-tour-shell .psv-virtual-tour-arrow {
-  position: relative !important;
-  width: 58px !important;
-  height: 58px !important;
-  border-radius: 9999px !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  overflow: visible !important;
-  cursor: pointer !important;
-  pointer-events: auto !important;
-  transition: opacity 160ms ease !important;
-}
-
-/* outer floor glow */
-.virtual-tour-shell .psv-virtual-tour-arrow::before {
-  content: "" !important;
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  width: 56px !important;
-  height: 56px !important;
-  border-radius: 9999px !important;
-  transform: translate(-50%, -50%) rotateX(64deg) !important;
-  transform-origin: center !important;
-  background:
-    radial-gradient(circle at 50% 48%,
-      rgba(255,255,255,0.95) 0%,
-      rgba(255,255,255,0.58) 22%,
-      rgba(255,255,255,0.20) 44%,
-      rgba(255,255,255,0.04) 70%,
-      rgba(255,255,255,0) 100%) !important;
-  border: 1px solid rgba(255,255,255,0.72) !important;
-  box-shadow:
-    0 0 18px rgba(255,255,255,0.35),
-    0 10px 30px rgba(0,0,0,0.35) !important;
-  opacity: 0.82 !important;
-  transition:
-    opacity 160ms ease,
-    width 160ms ease,
-    height 160ms ease,
-    box-shadow 160ms ease,
-    border-color 160ms ease !important;
-}
-
-/* inner solid point */
-.virtual-tour-shell .psv-virtual-tour-arrow::after {
-  content: "" !important;
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  width: 22px !important;
-  height: 22px !important;
-  border-radius: 9999px !important;
-  transform: translate(-50%, -50%) rotateX(64deg) !important;
-  background:
-    radial-gradient(circle at 42% 35%,
-      rgba(255,255,255,1) 0%,
-      rgba(245,245,245,0.95) 42%,
-      rgba(185,185,185,0.86) 100%) !important;
-  border: 1px solid rgba(255,255,255,0.95) !important;
-  box-shadow:
-    inset 0 1px 2px rgba(255,255,255,0.9),
-    inset 0 -2px 5px rgba(0,0,0,0.24),
-    0 6px 16px rgba(0,0,0,0.34) !important;
-  transition:
-    width 160ms ease,
-    height 160ms ease,
-    box-shadow 160ms ease,
-    background 160ms ease !important;
-}
-
-/* keep the built-in arrow usable on desktop, but make it subtle */
-.virtual-tour-shell .psv-virtual-tour-arrow svg {
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  width: 18px !important;
-  height: 18px !important;
-  transform: translate(-50%, -62%) !important;
-  fill: rgba(20,20,20,0.72) !important;
-  filter: drop-shadow(0 1px 1px rgba(255,255,255,0.35)) !important;
-  opacity: 0.9 !important;
-  z-index: 2 !important;
-  pointer-events: none !important;
-}
-
-/* desktop hover: point lights up like Matterport */
-@media (hover: hover) and (pointer: fine) {
-  .virtual-tour-shell .psv-virtual-tour-arrow:hover::before {
-    width: 68px !important;
-    height: 68px !important;
-    opacity: 1 !important;
-    border-color: rgba(255,255,255,0.95) !important;
-    box-shadow:
-      0 0 28px rgba(255,255,255,0.62),
-      0 0 56px rgba(255,255,255,0.24),
-      0 14px 34px rgba(0,0,0,0.42) !important;
-  }
-
-  .virtual-tour-shell .psv-virtual-tour-arrow:hover::after {
-    width: 28px !important;
-    height: 28px !important;
-    background:
-      radial-gradient(circle at 42% 35%,
-        rgba(255,255,255,1) 0%,
-        rgba(255,255,255,0.98) 48%,
-        rgba(230,230,230,0.95) 100%) !important;
-    box-shadow:
-      inset 0 1px 2px rgba(255,255,255,1),
-      inset 0 -2px 5px rgba(0,0,0,0.18),
-      0 0 22px rgba(255,255,255,0.72),
-      0 8px 20px rgba(0,0,0,0.38) !important;
-  }
-
-  .virtual-tour-shell .psv-virtual-tour-arrow:hover svg {
-    opacity: 1 !important;
-  }
-}
-
-/* mobile: no extra arrow/label, only the tappable point */
-@media (hover: none), (pointer: coarse), (max-width: 640px) {
-  .virtual-tour-shell .psv-virtual-tour-arrow {
-    width: 54px !important;
-    height: 54px !important;
-  }
-
-  .virtual-tour-shell .psv-virtual-tour-arrow::before {
-    width: 52px !important;
-    height: 52px !important;
-    opacity: 0.9 !important;
-  }
-
-  .virtual-tour-shell .psv-virtual-tour-arrow::after {
-    width: 24px !important;
-    height: 24px !important;
-  }
-
-  .virtual-tour-shell .psv-virtual-tour-arrow svg {
-    display: none !important;
-  }
-}
-
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
+	  
+	  
+<button
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-      {/* Close Button */}
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (closeTouchHandledRef.current) {
-            closeTouchHandledRef.current = false;
-            return;
-          }
-          handleCloseTour();
-        }}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          closeTouchHandledRef.current = true;
-          handleCloseTour();
-        }}
-        className={`absolute z-[99999] w-11 h-11 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto transition-all duration-300 ${
-          isOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        style={{
-          top: "max(12px, env(safe-area-inset-top))",
-          right: "max(12px, env(safe-area-inset-right))",
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-        aria-label="Mbyll turin virtual"
-        type="button"
-      >
-        <X size={20} />
-      </button>
+    if (closeTouchHandledRef.current) {
+      closeTouchHandledRef.current = false;
+      return;
+    }
 
-      {/* Main viewer area */}
+    handleCloseTour();
+  }}
+  onTouchEnd={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeTouchHandledRef.current = true;
+    handleCloseTour();
+  }}
+  className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
+  style={{
+    top: "max(12px, env(safe-area-inset-top))",
+    right: "max(12px, env(safe-area-inset-right))",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  }}
+  aria-label="Mbyll turin virtual"
+  type="button"
+>
+  <X size={22} />
+</button>
+
+
+
       <div className="relative w-full h-full flex-1 overflow-hidden">
-        <div
-          ref={containerRef}
-          className="w-full h-full bg-black"
-          style={{
-            opacity: isViewerVisible ? 1 : 0,
-            transition: "opacity 220ms ease",
-          }}
-        />
+<div
+  ref={containerRef}
+  className="w-full h-full bg-black"
+  style={{
+    opacity: isViewerVisible ? 1 : 0,
+    transition: "opacity 220ms ease",  // vetëm për hapjen fillestare
+  }}
+/>
 
-        {/* Initial loading overlay */}
-        {isInitialLoading && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
-            <div className="flex flex-col items-center gap-5">
-              <div className="relative w-16 h-16">
-                <div className="absolute inset-0 rounded-full border-2 border-white/10" />
-                <div className="absolute inset-0 rounded-full border-2 border-t-primary border-r-transparent border-b-transparent border-l-transparent animate-spin" />
-                <div className="absolute inset-[5px] rounded-full border border-white/5" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Compass size={18} className="text-primary/70" />
-                </div>
-              </div>
-              <div className="text-center">
-                <p className="text-white/90 text-sm tracking-wide font-medium mb-1">
-                  Duke hapur turin virtual
-                </p>
-                <span className="text-primary text-[11px] uppercase tracking-[0.25em] font-semibold opacity-70">
-                  Panoramë 360°
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+{isInitialLoading && (
+  <div className="absolute inset-0 z-30 flex items-center justify-center bg-black">
+    <div className="flex flex-col items-center gap-4 animate-pulse">
 
-        {/* Top-left: Scene title */}
-        <div
-          className={`absolute top-5 left-5 z-40 pointer-events-none max-w-[60%] transition-all duration-300 ${
-            isOverlayVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
-          }`}
-        >
-          <div className="px-4 py-2 rounded-2xl bg-black/50 md:backdrop-blur-xl border border-white/10 shadow-xl">
-            <h2 className="text-white/95 text-xs md:text-sm font-semibold tracking-wide leading-tight">
-              {currentScene?.title || "Pamja 360°"}
-            </h2>
-          </div>
-        </div>
+      {/* Spinner premium */}
+      <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
 
-        {/* Top-right: Scene counter */}
-        <div
-          className={`absolute z-40 pointer-events-none transition-all duration-300 ${
-            isOverlayVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
-          }`}
-          style={{
-            top: "max(20px, env(safe-area-inset-top))",
-            right: "max(72px, calc(env(safe-area-inset-right) + 60px))",
-          }}
-        >
-          <div className="px-3 py-1.5 rounded-xl bg-black/50 md:backdrop-blur-xl border border-white/10 shadow-xl">
-            <span className="text-white/70 text-xs font-mono tabular-nums">
-              {currentSceneIndex >= 0 ? currentSceneIndex + 1 : 1}
-              <span className="text-white/30 mx-1">/</span>
-              {sortedScenes.length}
-            </span>
-          </div>
-        </div>
+      {/* Text kryesor */}
+      <p className="text-white/85 text-sm tracking-wide font-medium">
+        Duke hapur turin virtual
+      </p>
+
+      {/* Sub text */}
+      <span className="text-primary text-xs uppercase tracking-[0.2em] font-semibold">
+        Ju lutem prisni
+      </span>
+
+    </div>
+  </div>
+)}
 
 
-        {/* Bottom-right controls */}
-        <div
-          className={`absolute bottom-24 right-5 z-40 flex flex-col gap-2 transition-all duration-300 ${
-            isOverlayVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"
-          }`}
-        >
+<div className="absolute top-6 left-6 z-40 pointer-events-none max-w-[80%]">
+  <div className="
+    px-4 py-2 rounded-2xl
+    bg-gradient-to-br from-black/50 to-black/30
+    md:backdrop-blur-xl
+    border border-white/10
+    shadow-[0_10px_40px_rgba(0,0,0,0.45)]
+  ">
+    <h2 className="text-white/95 text-xs md:text-sm font-semibold tracking-wide">
+      {sortedScenes.find((s) => s.id === currentSceneId)?.title || "Pamja 360°"}
+    </h2>
+  </div>
+</div>
+
+        <div className="absolute bottom-24 right-6 z-40 flex flex-col gap-3">
           {hasMap && (
             <button
               onClick={() => setShowMap(!showMap)}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg ${
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg ${
                 showMap ? "bg-primary text-black" : "bg-black/50 text-white hover:bg-black/70"
               }`}
               title="Plani i Katit"
             >
-              <MapIcon size={18} />
+              <MapIcon size={20} />
             </button>
           )}
 
-          {canUseFullscreen && (
-            <button
-              onClick={toggleFullscreen}
-              className="w-11 h-11 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg"
-            >
-              {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-            </button>
-          )}
+{canUseFullscreen && window.innerWidth >= 1024 && (
+  <button
+    onClick={toggleFullscreen}
+    className="w-12 h-12 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center transition-colors md:backdrop-blur-md border border-white/10 shadow-lg"
+  >
+    {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+  </button>
+)}
         </div>
 
-        {/* Floor plan map */}
         {hasMap && (
           <div
             className={`absolute bottom-24 right-20 z-40 w-64 h-48 bg-black/80 md:backdrop-blur-xl border border-white/10 rounded-2xl p-4 transition-all duration-300 transform origin-bottom-right ${
               showMap ? "scale-100 opacity-100" : "scale-90 opacity-0 pointer-events-none"
             }`}
           >
-            <p className="text-white/40 text-[10px] uppercase tracking-widest mb-2 font-semibold">Plani i Katit</p>
             <div
-              className="w-full h-[calc(100%-20px)] relative border border-white/5 rounded-xl overflow-hidden bg-white/5"
+              className="w-full h-full relative border border-white/5 rounded-xl overflow-hidden bg-white/5"
               style={{
-                backgroundImage: "radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)",
+                backgroundImage: "radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)",
                 backgroundSize: "10px 10px",
               }}
             >
               {sortedScenes
                 .filter((s) => s.positionX != null && s.positionY != null)
                 .map((scene) => (
-                  <button
-                    key={scene.id}
-                    onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
-                    onFocus={() => prepareSceneForNavigation(scene.id, "high")}
-                    onTouchStart={() => prepareSceneForNavigation(scene.id, "high")}
-                    onClick={() => handleSceneChange(scene.id)}
+<button
+  key={scene.id}
+onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
+onFocus={() => prepareSceneForNavigation(scene.id, "high")}
+onTouchStart={() => prepareSceneForNavigation(scene.id, "high")}
+  onClick={() => handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
-                        ? "bg-primary border-white scale-125 z-10 shadow-[0_0_8px_rgba(212,175,55,0.5)]"
-                        : "bg-white/80 border-transparent hover:scale-110"
+                        ? "bg-primary border-white scale-125 z-10"
+                        : "bg-white border-transparent hover:scale-110"
                     }`}
                     style={{ left: `${scene.positionX}%`, top: `${scene.positionY}%` }}
                     title={scene.title}
@@ -1097,56 +859,44 @@ export function VirtualTour360({
           </div>
         )}
 
-        {/* Scene strip at bottom */}
-        <div
-          className={`absolute bottom-0 left-0 right-0 z-40 transition-all duration-300 ${
-            isOverlayVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-          }`}
-        >
-          <div className="h-20 bg-gradient-to-t from-black/95 to-transparent flex items-end justify-center pb-3 px-4">
-            <div ref={sceneStripScrollRef} className="flex gap-2 overflow-x-auto max-w-full pb-1 hide-scrollbar">
-              {sortedScenes.map((scene) => (
-                <button
-                  key={scene.id}
-                  ref={(el) => {
-                    sceneButtonRefs.current[scene.id] = el;
-                  }}
-                  onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
-                  onFocus={() => prepareSceneForNavigation(scene.id, "high")}
-                  onTouchStart={() => prepareSceneForNavigation(scene.id, "high")}
-                  onClick={() => handleSceneChange(scene.id)}
-                  className={`relative shrink-0 w-24 h-14 rounded-xl overflow-hidden border-2 transition-all ${
-                    currentSceneId === scene.id
-                      ? "border-primary shadow-[0_0_12px_rgba(212,175,55,0.35)]"
-                      : "border-white/10 opacity-60 hover:opacity-90 hover:border-white/30"
-                  }`}
-                >
-                  <img
-                    src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
-                    alt={scene.title}
-                    crossOrigin="anonymous"
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority={currentSceneId === scene.id ? "high" : "low"}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-1.5">
-                    <span className="text-[9px] text-white font-medium truncate drop-shadow-md leading-tight">
-                      {scene.title}
-                    </span>
-                  </div>
-                  {currentSceneId === scene.id && (
-                    <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              ))}
-            </div>
+        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
+          <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
+            {sortedScenes.map((scene) => (
+<button
+  key={scene.id}
+  ref={(el) => {
+    sceneButtonRefs.current[scene.id] = el;
+  }}
+onMouseEnter={() => prepareSceneForNavigation(scene.id, "high")}
+onFocus={() => prepareSceneForNavigation(scene.id, "high")}
+onTouchStart={() => prepareSceneForNavigation(scene.id, "high")}
+  onClick={() => handleSceneChange(scene.id)}
+                className={`relative shrink-0 w-24 h-14 rounded-lg overflow-hidden border-2 transition-all ${
+                  currentSceneId === scene.id
+                    ? "border-primary"
+                    : "border-transparent opacity-70 hover:opacity-100"
+                }`}
+              >
+<img
+  src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
+  alt={scene.title}
+  crossOrigin="anonymous" // <---
+  loading="lazy"
+  decoding="async"
+  fetchPriority={currentSceneId === scene.id ? "high" : "low"}
+  className="w-full h-full object-cover"
+/>
+                <div className="absolute inset-0 bg-black/20 flex items-end p-1">
+                  <span className="text-[10px] text-white font-medium truncate drop-shadow-md">
+                    {scene.title}
+                  </span>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
-
       </div>
     </div>
   );
 }
-
 export default VirtualTour360;
