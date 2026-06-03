@@ -202,7 +202,8 @@ export default function ProjectDetails() {
 
   const shouldUseVerticalLightboxAxis =
     isLightboxFullscreen &&
-    (activeLightboxOrientation === "portrait" || shouldUseHorizontalFullscreenAxis);
+    activeLightboxOrientation === "portrait" &&
+    !shouldUseHorizontalFullscreenAxis;
 
   const lightboxAxis: "x" | "y" = shouldUseVerticalLightboxAxis ? "y" : "x";
   const [lightboxRef, lightboxApi] = useEmblaCarousel({
@@ -949,11 +950,11 @@ export default function ProjectDetails() {
           isLightboxFullscreen && isScreenPortrait && activeImageOrientation === "landscape";
         const isVerticalSwipeMode = lightboxAxis === "y";
 
-        // iOS Safari does not provide reliable fullscreen dimensions for normal divs.
-        // This shell is sized with real visualViewport pixels and centered by numeric
-        // margins, so browser toolbars cannot push the rotated content off-screen.
-        const shellWidth = shouldUseHorizontalFullscreen ? viewportHeight : viewportWidth;
-        const shellHeight = shouldUseHorizontalFullscreen ? viewportWidth : viewportHeight;
+        // The carousel itself always stays in the real screen coordinate system.
+        // Landscape fullscreen rotates only the image stage inside each slide.
+        // This keeps horizontal swipes and horizontal slide movement truly horizontal.
+        const shellWidth = viewportWidth;
+        const shellHeight = viewportHeight;
 
         return (
           <div
@@ -980,7 +981,7 @@ export default function ProjectDetails() {
                 marginTop: `${-shellHeight / 2}px`,
                 maxWidth: `${shellWidth}px`,
                 maxHeight: `${shellHeight}px`,
-                transform: shouldUseHorizontalFullscreen ? "rotate(90deg)" : "none",
+                transform: "none",
                 transformOrigin: "center center",
               }}
             >
@@ -1074,33 +1075,62 @@ export default function ProjectDetails() {
                           });
                         }}
                       >
-                        <img
-                          src={getLightboxImageUrl(img, idx)}
-                          alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                          onLoad={(e) => {
-                            const { naturalWidth, naturalHeight } = e.currentTarget;
-                            const orientation = getImageOrientation(naturalWidth, naturalHeight);
-                            setImageOrientations((prev) => {
-                              if (prev[idx] === orientation) return prev;
-                              return { ...prev, [idx]: orientation };
-                            });
-                          }}
-                          loading={
-                            lightboxIndex !== null &&
-                            (idx === lightboxIndex ||
-                              idx === (lightboxIndex - 1 + images.length) % images.length ||
-                              idx === (lightboxIndex + 1) % images.length)
-                              ? "eager"
-                              : "lazy"
-                          }
-                          decoding="async"
-                          draggable={false}
-                          className={`select-none object-contain transition-all duration-300 ${
-                            isLightboxFullscreen
-                              ? "h-full w-full max-h-full max-w-full rounded-none"
-                              : "max-h-full max-w-full rounded-xl shadow-2xl md:max-h-[85vh] md:max-w-[85vw]"
-                          }`}
-                        />
+                        {(() => {
+                          const slideImageOrientation = imageOrientations[idx];
+                          const shouldRotateSlideImage =
+                            isLightboxFullscreen &&
+                            isScreenPortrait &&
+                            slideImageOrientation === "landscape";
+
+                          return (
+                            <div
+                              className="flex items-center justify-center"
+                              style={
+                                shouldRotateSlideImage
+                                  ? {
+                                      width: `${viewportHeight}px`,
+                                      height: `${viewportWidth}px`,
+                                      maxWidth: `${viewportHeight}px`,
+                                      maxHeight: `${viewportWidth}px`,
+                                      transform: "rotate(90deg)",
+                                      transformOrigin: "center center",
+                                    }
+                                  : {
+                                      width: "100%",
+                                      height: "100%",
+                                    }
+                              }
+                            >
+                              <img
+                                src={getLightboxImageUrl(img, idx)}
+                                alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+                                onLoad={(e) => {
+                                  const { naturalWidth, naturalHeight } = e.currentTarget;
+                                  const orientation = getImageOrientation(naturalWidth, naturalHeight);
+                                  setImageOrientations((prev) => {
+                                    if (prev[idx] === orientation) return prev;
+                                    return { ...prev, [idx]: orientation };
+                                  });
+                                }}
+                                loading={
+                                  lightboxIndex !== null &&
+                                  (idx === lightboxIndex ||
+                                    idx === (lightboxIndex - 1 + images.length) % images.length ||
+                                    idx === (lightboxIndex + 1) % images.length)
+                                    ? "eager"
+                                    : "lazy"
+                                }
+                                decoding="async"
+                                draggable={false}
+                                className={`select-none object-contain transition-all duration-300 ${
+                                  isLightboxFullscreen
+                                    ? "h-full w-full max-h-full max-w-full rounded-none"
+                                    : "max-h-full max-w-full rounded-xl shadow-2xl md:max-h-[85vh] md:max-w-[85vw]"
+                                }`}
+                              />
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
