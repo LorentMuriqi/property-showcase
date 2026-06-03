@@ -152,7 +152,6 @@ export default function ProjectDetails() {
   const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   
-  // Shtetet për menaxhimin e Lightbox dhe Orientimit
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait'>>({});
   const [isScreenPortrait, setIsScreenPortrait] = useState(typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : true);
@@ -163,7 +162,6 @@ export default function ProjectDetails() {
   const [canLightboxNext, setCanLightboxNext] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
 
-  // Ndjekja e ndryshimit të dritares (Resize)
   useEffect(() => {
     const handleResize = () => {
       setIsScreenPortrait(window.innerHeight > window.innerWidth);
@@ -172,7 +170,6 @@ export default function ProjectDetails() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Ndjekja e daljes nga Fullscreen e sistemit operativ
   useEffect(() => {
     const onFullscreenChange = () => {
       const doc = document as any;
@@ -854,7 +851,7 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* LIGHTBOX-I I RI ME ROTULLIM FOTOJE INDIVIDUALE (E RREGULLON SAKTE SWIPE DHE BUTONAT) */}
+      {/* LIGHTBOX-I I RREGULLUAR COPMLETELY - TRULY FULLSCREEN EDGE-TO-EDGE */}
       {lightboxIndex !== null && images.length > 0 && (
         <div
           id="lightbox-container"
@@ -862,10 +859,10 @@ export default function ProjectDetails() {
           onClick={closeLightbox}
           style={{ top: 0, left: 0, width: "100%", height: "100%" }}
         >
-          {/* Butoni Sipër për mbyllje - Qëndron përherë fiks lart-djathtas pa lëvizur */}
+          {/* Butoni i Mbylljes - Qëndron përherë fiks sipër djathtas */}
           <button
             onClick={closeLightbox}
-            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/5 shadow-xl"
+            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
           >
             <X size={22} />
           </button>
@@ -875,7 +872,7 @@ export default function ProjectDetails() {
             {lightboxIndex + 1} / {images.length}
           </div>
 
-          {/* Embla Carousel Slider - Slider-i mbetet horizontal normal, swipe funksionon majtas/djathtas */}
+          {/* Slider-i Embla - Reagon saktë ndaj Swipe Horizontal */}
           <div
             className="w-full h-full overflow-hidden flex items-center justify-center"
             ref={lightboxRef}
@@ -884,13 +881,14 @@ export default function ProjectDetails() {
             <div className="flex w-full h-full flex-row">
               {images.map((img, idx) => {
                 const isImgLandscape = imageOrientations[idx] === 'landscape';
-                // Rrotullimi ndodh vetëm nëse kërkohet fullscreen, ekrani është vertikal dhe fotoja është horizontale
                 const shouldRotateThisImg = isLightboxFullscreen && isScreenPortrait && isImgLandscape;
 
                 return (
                   <div
                     key={img.id || idx}
-                    className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative p-4 overflow-hidden"
+                    className={`flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative overflow-hidden ${
+                      isLightboxFullscreen ? "p-0" : "p-4 md:p-8"
+                    }`}
                     ref={(node) => {
                       if (!node) return;
                       if (node.hasAttribute('data-zoom-attached')) return;
@@ -958,12 +956,24 @@ export default function ProjectDetails() {
                       });
                     }}
                   >
-                    {/* KORNIZA HIBRIDE QË RROTULLOHET VETËM NËSE DUHET */}
+                    {/* KORNIZA E FOTOS - ZGJEROHET ABSOLUTISHT NË FULLSCREEN QË TË MOS ZVOGËLOHET */}
                     <div
-                      className={`flex items-center justify-center transition-all duration-300 ${
-                        shouldRotateThisImg ? "w-[100vh] h-[100vw]" : "w-full h-full"
-                      }`}
-                      style={shouldRotateThisImg ? { transform: 'rotate(90deg)', transformOrigin: 'center' } : undefined}
+                      className={shouldRotateThisImg ? "" : "w-full h-full flex items-center justify-center"}
+                      style={
+                        shouldRotateThisImg
+                          ? {
+                              position: "absolute",
+                              width: "100vh",
+                              height: "100vw",
+                              top: "50%",
+                              left: "50%",
+                              transform: "translate(-50%, -50%) rotate(90deg)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }
+                          : undefined
+                      }
                     >
                       <img
                         src={getLightboxImageUrl(img, idx)}
@@ -985,7 +995,11 @@ export default function ProjectDetails() {
                             : "lazy"
                         }
                         decoding="async"
-                        className="max-w-full max-h-full md:max-w-[90vw] md:max-h-[90vh] object-contain rounded-xl shadow-2xl"
+                        className={`object-contain transition-all duration-300 ${
+                          isLightboxFullscreen 
+                            ? "w-full h-full max-w-full max-h-full rounded-none" 
+                            : "max-w-full max-h-full md:max-w-[85vw] md:max-h-[85vh] rounded-xl shadow-2xl"
+                        }`}
                       />
                     </div>
                   </div>
@@ -1001,7 +1015,7 @@ export default function ProjectDetails() {
             </div>
           )}
 
-          {/* Butoni Fullscreen Poshtë Djathtas - Qëndron fiks në ekran pa u ndikuar nga rrotullimi */}
+          {/* Butoni Fullscreen - Qëndron fiks poshtë djathtas pa lëvizur kurrë */}
           <button
             onClick={async (e) => {
               e.stopPropagation();
@@ -1029,16 +1043,16 @@ export default function ProjectDetails() {
                   }
                 }
               } catch (error) {
-                console.error("Native fullscreen request error (Handled via CSS orientation):", error);
+                console.error("Fullscreen error handled natively via simulation:", error);
               }
             }}
-            className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-xl"
+            className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
             title="Full Screen"
           >
             <Maximize size={20} />
           </button>
 
-          {/* Shigjetat anësore të navigimit desktop */}
+          {/* Shigjetat e navigimit për Desktop */}
           {images.length > 1 && (
             <>
               <button
