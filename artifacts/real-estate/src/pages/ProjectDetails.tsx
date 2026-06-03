@@ -106,10 +106,10 @@ function normalizeProject(raw: any): ProjectType {
     virtualTourEmbedCode:
       raw?.virtualTourEmbedCode ?? raw?.virtual_tour_embed_code,
     virtualTourScenes: raw?.virtualTourScenes ?? raw?.virtual_tour_scenes ?? [],
-    virtualTourStatus:
-      raw?.virtualTourStatus ?? raw?.virtual_tour_status ?? "draft",
-    virtualTourPublishedAt:
-      raw?.virtualTourPublishedAt ?? raw?.virtual_tour_published_at ?? null,
+	virtualTourStatus:
+  raw?.virtualTourStatus ?? raw?.virtual_tour_status ?? "draft",
+virtualTourPublishedAt:
+  raw?.virtualTourPublishedAt ?? raw?.virtual_tour_published_at ?? null,
     defaultSceneId: raw?.defaultSceneId ?? raw?.default_scene_id,
     images: Array.isArray(raw?.images) ? raw.images : [],
   };
@@ -139,38 +139,6 @@ const formatBathroomLabel = (_value: number | string) => {
   return "Banjo";
 };
 
-type ImageOrientation = "landscape" | "portrait";
-
-type LightboxViewport = {
-  width: number;
-  height: number;
-  offsetTop: number;
-  offsetLeft: number;
-};
-
-const getImageOrientation = (width: number, height: number): ImageOrientation => {
-  if (!width || !height) return "portrait";
-
-  // Square and near-square images stay in the natural vertical layout.
-  // Only clearly horizontal images rotate in mobile fullscreen.
-  return width / height > 1.08 ? "landscape" : "portrait";
-};
-
-const getLightboxViewport = (): LightboxViewport => {
-  if (typeof window === "undefined") {
-    return { width: 0, height: 0, offsetTop: 0, offsetLeft: 0 };
-  }
-
-  const visualViewport = window.visualViewport;
-
-  return {
-    width: Math.round(visualViewport?.width ?? window.innerWidth),
-    height: Math.round(visualViewport?.height ?? window.innerHeight),
-    offsetTop: Math.round(visualViewport?.offsetTop ?? 0),
-    offsetLeft: Math.round(visualViewport?.offsetLeft ?? 0),
-  };
-};
-
 export default function ProjectDetails() {
   const { id } = useParams();
 
@@ -180,85 +148,17 @@ export default function ProjectDetails() {
 
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
-  
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [imageOrientations, setImageOrientations] = useState<Record<number, ImageOrientation>>({});
-  const [lightboxViewport, setLightboxViewport] = useState<LightboxViewport>(() => getLightboxViewport());
-  const [isScreenPortrait, setIsScreenPortrait] = useState(() => {
-    const viewport = getLightboxViewport();
-    return viewport.height >= viewport.width;
-  });
-  const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
-
-  const activeLightboxOrientation =
-    lightboxIndex !== null ? imageOrientations[lightboxIndex] : undefined;
-
-  const shouldUseHorizontalFullscreenAxis =
-    isLightboxFullscreen &&
-    isScreenPortrait &&
-    activeLightboxOrientation === "landscape";
-
-  const shouldUseVerticalLightboxAxis =
-    isLightboxFullscreen &&
-    activeLightboxOrientation === "portrait" &&
-    !shouldUseHorizontalFullscreenAxis;
-
-  const lightboxAxis: "x" | "y" = shouldUseVerticalLightboxAxis ? "y" : "x";
-  const [lightboxRef, lightboxApi] = useEmblaCarousel({
-    loop: false,
-    axis: lightboxAxis,
-  });
-
-  const lightboxStartIndexRef = useRef(0);
-  const [canLightboxPrev, setCanLightboxPrev] = useState(false);
-  const [canLightboxNext, setCanLightboxNext] = useState(false);
-  const [showContactModal, setShowContactModal] = useState(false);
-
-  useEffect(() => {
-    let frame = 0;
-
-    const updateViewport = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const viewport = getLightboxViewport();
-        setLightboxViewport(viewport);
-        setIsScreenPortrait(viewport.height >= viewport.width);
-      });
-    };
-
-    updateViewport();
-
-    window.addEventListener("resize", updateViewport);
-    window.addEventListener("orientationchange", updateViewport);
-    window.visualViewport?.addEventListener("resize", updateViewport);
-    window.visualViewport?.addEventListener("scroll", updateViewport);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", updateViewport);
-      window.removeEventListener("orientationchange", updateViewport);
-      window.visualViewport?.removeEventListener("resize", updateViewport);
-      window.visualViewport?.removeEventListener("scroll", updateViewport);
-    };
-  }, []);
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      const doc = document as any;
-      const isNativeActive = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
-      if (!isNativeActive && (document.fullscreenEnabled || doc.webkitFullscreenEnabled)) {
-        setIsLightboxFullscreen(false);
-      }
-    };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
-    };
-  }, []);
+const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+const [imageOrientations, setImageOrientations] = useState<Record<number, "landscape" | "portrait">>({});
+const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
+const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+const [dragOffset, setDragOffset] = useState(0);
+const [isDraggingLightbox, setIsDraggingLightbox] = useState(false);
+const dragStartRef = useRef({ x: 0, y: 0 });
+const activePointerIdRef = useRef<number | null>(null);
+const [showContactModal, setShowContactModal] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -278,48 +178,110 @@ export default function ProjectDetails() {
     if (emblaApi) emblaApi.scrollNext();
   }, [emblaApi]);
 
-  const openLightbox = (idx: number) => {
-    lightboxStartIndexRef.current = idx;
-    setLightboxIndex(idx);
-  };
+const openLightbox = (idx: number) => {
+  setDragOffset(0);
+  setIsDraggingLightbox(false);
+  setIsLightboxFullscreen(false);
+  setLightboxIndex(idx);
+};
 
-  const closeLightbox = () => {
-    setLightboxIndex(null);
-    setIsLightboxFullscreen(false);
-  };
+const closeLightbox = () => {
+  setLightboxIndex(null);
+  setIsLightboxFullscreen(false);
+  setDragOffset(0);
+  setIsDraggingLightbox(false);
+};
 
   const images = project?.images || [];
   
   const getImagePreviewUrl = (img: any) =>
-    img?.thumbnailUrl ||
-    img?.thumbnail_url ||
-    img?.thumbUrl ||
-    img?.thumb_url ||
-    img?.url;
+  img?.thumbnailUrl ||
+  img?.thumbnail_url ||
+  img?.thumbUrl ||
+  img?.thumb_url ||
+  img?.url;
   
   const getLightboxImageUrl = (img: any, idx: number) => {
-    if (lightboxIndex === null || images.length === 0) {
-      return getImagePreviewUrl(img);
+  if (lightboxIndex === null || images.length === 0) {
+    return getImagePreviewUrl(img);
+  }
+
+  const prevIndex = Math.max(lightboxIndex - 1, 0);
+  const nextIndex = Math.min(lightboxIndex + 1, images.length - 1);
+
+  const shouldLoadFullImage =
+    idx === lightboxIndex || idx === prevIndex || idx === nextIndex;
+
+  return shouldLoadFullImage ? img.url : getImagePreviewUrl(img);
+};
+
+const lightboxViewportWidth = viewportSize.width || (typeof window !== "undefined" ? window.innerWidth : 1);
+const lightboxViewportHeight = viewportSize.height || (typeof window !== "undefined" ? window.innerHeight : 1);
+const isViewportPortrait = lightboxViewportHeight > lightboxViewportWidth;
+const activeImageOrientation = lightboxIndex !== null ? imageOrientations[lightboxIndex] : undefined;
+const isActiveImageLandscape = activeImageOrientation === "landscape";
+const shouldRotateActiveLightbox = Boolean(
+  isLightboxFullscreen && isViewportPortrait && isActiveImageLandscape
+);
+const activeSwipeAxis: "horizontal" | "vertical" =
+  shouldRotateActiveLightbox || activeImageOrientation === "landscape"
+    ? "horizontal"
+    : "vertical";
+const canLightboxPrev = lightboxIndex !== null && lightboxIndex > 0;
+const canLightboxNext = lightboxIndex !== null && lightboxIndex < images.length - 1;
+
+const lightboxPrev = useCallback(() => {
+  setLightboxIndex((current) => {
+    if (current === null) return current;
+    return Math.max(current - 1, 0);
+  });
+  setDragOffset(0);
+}, []);
+
+const lightboxNext = useCallback(() => {
+  setLightboxIndex((current) => {
+    if (current === null) return current;
+    return Math.min(current + 1, images.length - 1);
+  });
+  setDragOffset(0);
+}, [images.length]);
+
+const updateViewportSize = useCallback(() => {
+  if (typeof window === "undefined") return;
+
+  const visualViewport = window.visualViewport;
+  setViewportSize({
+    width: Math.round(visualViewport?.width || window.innerWidth || 1),
+    height: Math.round(visualViewport?.height || window.innerHeight || 1),
+  });
+}, []);
+
+const toggleLightboxFullscreen = useCallback(async () => {
+  const container = document.getElementById("project-lightbox-container");
+  const doc = document as any;
+  const isNativeFullscreen = Boolean(
+    document.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement
+  );
+  const nextState = !isLightboxFullscreen;
+
+  setIsLightboxFullscreen(nextState);
+  updateViewportSize();
+
+  try {
+    if (nextState && container && !isNativeFullscreen) {
+      if (container.requestFullscreen) await container.requestFullscreen();
+      else if ((container as any).webkitRequestFullscreen) await (container as any).webkitRequestFullscreen();
+    } else if (!nextState && isNativeFullscreen) {
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else if (doc.webkitExitFullscreen) await doc.webkitExitFullscreen();
     }
-
-    const prevIndex = (lightboxIndex - 1 + images.length) % images.length;
-    const nextIndex = (lightboxIndex + 1) % images.length;
-
-    const shouldLoadFullImage =
-      idx === lightboxIndex || idx === prevIndex || idx === nextIndex;
-
-    return shouldLoadFullImage ? img.url : getImagePreviewUrl(img);
-  };
-  
-  const lightboxPrev = useCallback(() => {
-    if (!images.length || !lightboxApi || !lightboxApi.canScrollPrev()) return;
-    lightboxApi.scrollPrev();
-  }, [lightboxApi, images.length]);
-
-  const lightboxNext = useCallback(() => {
-    if (!images.length || !lightboxApi || !lightboxApi.canScrollNext()) return;
-    lightboxApi.scrollNext();
-  }, [lightboxApi, images.length]);
+  } catch (error) {
+    console.error("Lightbox fullscreen error:", error);
+  }
+}, [isLightboxFullscreen, updateViewportSize]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -331,129 +293,127 @@ export default function ProjectDetails() {
 
       if (lightboxIndex === null) return;
 
-      if (e.key === "ArrowLeft") lightboxPrev();
-      if (e.key === "ArrowRight") lightboxNext();
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") lightboxPrev();
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") lightboxNext();
     };
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [lightboxIndex, lightboxPrev, lightboxNext, showContactModal, showVirtualTour]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchProject = async () => {
-      if (!id) {
-        if (isMounted) {
-          setProject(null);
-          setFetchError(true);
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      setIsLoading(true);
-      setFetchError(false);
-
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (!isMounted) return;
-
-      if (error || !data) {
-        console.error("Project details fetch error:", error);
-        setProject(null);
-        setHasBuiltInVirtualTour(false);
-        setFetchError(true);
-        setIsLoading(false);
-        return;
-      }
-
-      setProject(normalizeProject(data));
-
-      const { count, error: scenesError } = await supabase
-        .from("virtual_tour_scenes")
-        .select("id", { count: "exact", head: true })
-        .eq("property_id", data.id);
-
-      if (scenesError) {
-        console.error("Virtual tour scenes count error:", scenesError);
-        setHasBuiltInVirtualTour(false);
-      } else {
-        setHasBuiltInVirtualTour(
-          data.virtual_tour_status === "published" && (count || 0) > 0
-        );
-      }
-
-      setFetchError(false);
-      setIsLoading(false);
-    };
-
-    fetchProject();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
+  
   
   useEffect(() => {
-    if (lightboxIndex === null) return;
+  let isMounted = true;
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+  const fetchProject = async () => {
+    if (!id) {
+      if (isMounted) {
+        setProject(null);
+        setFetchError(true);
+        setIsLoading(false);
+      }
+      return;
+    }
 
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [lightboxIndex]);
+    setIsLoading(true);
+    setFetchError(false);
 
-  useEffect(() => {
-    if (!lightboxApi) return;
+    const { data, error } = await supabase
+      .from("properties")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
 
-    const updateLightboxState = () => {
-      setLightboxIndex(lightboxApi.selectedScrollSnap());
-      setCanLightboxPrev(lightboxApi.canScrollPrev());
-      setCanLightboxNext(lightboxApi.canScrollNext());
-    };
+    if (!isMounted) return;
 
-    updateLightboxState();
+    if (error || !data) {
+      console.error("Project details fetch error:", error);
+      setProject(null);
+      setHasBuiltInVirtualTour(false);
+      setFetchError(true);
+      setIsLoading(false);
+      return;
+    }
 
-    lightboxApi.on("select", updateLightboxState);
-    lightboxApi.on("reInit", updateLightboxState);
+    setProject(normalizeProject(data));
 
-    return () => {
-      lightboxApi.off("select", updateLightboxState);
-      lightboxApi.off("reInit", updateLightboxState);
-    };
-  }, [lightboxApi]);
+    const { count, error: scenesError } = await supabase
+      .from("virtual_tour_scenes")
+      .select("id", { count: "exact", head: true })
+      .eq("property_id", data.id);
 
-  const isLightboxOpen = lightboxIndex !== null;
+    if (scenesError) {
+      console.error("Virtual tour scenes count error:", scenesError);
+      setHasBuiltInVirtualTour(false);
+    } else {
+      setHasBuiltInVirtualTour(
+        data.virtual_tour_status === "published" && (count || 0) > 0
+      );
+    }
 
-  useEffect(() => {
-    if (!isLightboxOpen || !lightboxApi) return;
+    setFetchError(false);
+    setIsLoading(false);
+  };
 
-    const frame = requestAnimationFrame(() => {
-      lightboxApi.reInit();
-      lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
-    });
+  fetchProject();
 
-    return () => cancelAnimationFrame(frame);
-  }, [isLightboxOpen, lightboxApi]);
+  return () => {
+    isMounted = false;
+  };
+}, [id]);
+  
 
-  useEffect(() => {
-    if (!isLightboxOpen || !lightboxApi) return;
 
-    const frame = requestAnimationFrame(() => {
-      const currentIndex = lightboxIndex ?? lightboxApi.selectedScrollSnap();
-      lightboxApi.reInit({ loop: false, axis: lightboxAxis });
-      lightboxApi.scrollTo(currentIndex, true);
-    });
+useEffect(() => {
+  if (lightboxIndex === null) return;
 
-    return () => cancelAnimationFrame(frame);
-  }, [isLightboxOpen, lightboxApi, lightboxAxis]);
+  const originalOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    document.body.style.overflow = originalOverflow;
+  };
+}, [lightboxIndex]);
+
+useEffect(() => {
+  updateViewportSize();
+
+  window.addEventListener("resize", updateViewportSize);
+  window.addEventListener("orientationchange", updateViewportSize);
+  window.visualViewport?.addEventListener("resize", updateViewportSize);
+  window.visualViewport?.addEventListener("scroll", updateViewportSize);
+
+  return () => {
+    window.removeEventListener("resize", updateViewportSize);
+    window.removeEventListener("orientationchange", updateViewportSize);
+    window.visualViewport?.removeEventListener("resize", updateViewportSize);
+    window.visualViewport?.removeEventListener("scroll", updateViewportSize);
+  };
+}, [updateViewportSize]);
+
+useEffect(() => {
+  const onFullscreenChange = () => {
+    const doc = document as any;
+    const isNativeFullscreen = Boolean(
+      document.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+    );
+
+    if (!isNativeFullscreen) setIsLightboxFullscreen(false);
+    updateViewportSize();
+  };
+
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+  return () => {
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
+    document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+  };
+}, [updateViewportSize]);
 
   if (isLoading) {
     return (
@@ -495,14 +455,14 @@ export default function ProjectDetails() {
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-  const hasFallbackVirtualTour = !!(
-    project.virtualTourUrl ||
-    project.virtual_tour_url ||
-    project.virtualTourEmbedCode ||
-    project.virtual_tour_embed_code
-  );
+const hasFallbackVirtualTour = !!(
+  project.virtualTourUrl ||
+  project.virtual_tour_url ||
+  project.virtualTourEmbedCode ||
+  project.virtual_tour_embed_code
+);
 
-  const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
+const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
@@ -517,7 +477,7 @@ export default function ProjectDetails() {
 
   return (
     <Layout>
-      <Helmet>
+	<Helmet>
         <title>
           {project
             ? `${project.title ?? "Pronë"}${project.city ? ` — ${project.city}` : ""}${project.country ? `, ${project.country}` : ""} | Aura Estates`
@@ -543,13 +503,13 @@ export default function ProjectDetails() {
               : "Shiko detajet e pronës."
           }
         />
-        <meta
-          property="og:image"
-          content={
-            project?.images?.[0]?.url ||
-            "https://auraks.com/images/hero-bg.png"
-          }
-        />
+<meta
+  property="og:image"
+  content={
+    project?.images?.[0]?.url ||
+    "https://auraks.com/images/hero-bg.png"
+  }
+/>
         <meta
           property="og:url"
           content={`https://auraks.com/projects/${project?.id ?? ""}`}
@@ -570,14 +530,14 @@ export default function ProjectDetails() {
                     key={img.id || idx}
                     onClick={() => openLightbox(idx)}
                   >
-                    <img
-                      src={idx === 0 ? img.url : getImagePreviewUrl(img)}
-                      alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                      loading={idx === 0 ? "eager" : "lazy"}
-                      decoding="async"
-                      fetchPriority={idx === 0 ? "high" : "low"}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                    />
+<img
+  src={idx === 0 ? img.url : getImagePreviewUrl(img)}
+  alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+  loading={idx === 0 ? "eager" : "lazy"}
+  decoding="async"
+  fetchPriority={idx === 0 ? "high" : "low"}
+  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+/>
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
                       <ZoomIn
                         size={40}
@@ -654,12 +614,12 @@ export default function ProjectDetails() {
                   className="flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors"
                 >
                   <img
-                    src={getImagePreviewUrl(img)}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-full object-cover"
-                  />
+  src={getImagePreviewUrl(img)}
+  alt=""
+  loading="lazy"
+  decoding="async"
+  className="w-full h-full object-cover"
+/>
                 </button>
               ))}
             </div>
@@ -670,11 +630,11 @@ export default function ProjectDetails() {
           <div className="lg:col-span-2 space-y-12">
             <div>
               <div className="flex items-center gap-4 mb-4">
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
-                  {project.status
-                    ? statusLabels[project.status] || project.status.replaceAll("_", " ")
-                    : "Pa status"}
-                </span>
+<span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+  {project.status
+    ? statusLabels[project.status] || project.status.replaceAll("_", " ")
+    : "Pa status"}
+</span>
                 {project.propertyType && (
                   <span className="text-primary text-sm font-medium tracking-wide uppercase">
                     {project.propertyType}
@@ -823,12 +783,12 @@ export default function ProjectDetails() {
                 </div>
 
                 <div className="space-y-4">
-                  <button
-                    onClick={() => (window.location.href = "/Contact")}
-                    className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
-                  >
-                    Planifiko një Vizitë
-                  </button>
+<button
+  onClick={() => (window.location.href = "/Contact")}
+  className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
+>
+  Planifiko një Vizitë
+</button>
                   <button
                     onClick={() => setShowContactModal(true)}
                     className="w-full py-4 bg-transparent border border-border text-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
@@ -939,312 +899,258 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* Lightbox profesional me orientim dinamik për landscape dhe portrait/square */}
       {lightboxIndex !== null && images.length > 0 && (() => {
-        const fallbackViewportWidth = typeof window !== "undefined" ? window.innerWidth : 1;
-        const fallbackViewportHeight = typeof window !== "undefined" ? window.innerHeight : 1;
-        const viewportWidth = Math.max(1, lightboxViewport.width || fallbackViewportWidth);
-        const viewportHeight = Math.max(1, lightboxViewport.height || fallbackViewportHeight);
-        const activeImageOrientation = imageOrientations[lightboxIndex];
-        const shouldUseHorizontalFullscreen =
-          isLightboxFullscreen && isScreenPortrait && activeImageOrientation === "landscape";
-        const isVerticalSwipeMode = lightboxAxis === "y";
+        const activeIndex = lightboxIndex;
+        const viewportWidth = lightboxViewportWidth;
+        const viewportHeight = lightboxViewportHeight;
+        const isHorizontalMode = activeSwipeAxis === "horizontal";
+        const trackTranslate = isHorizontalMode
+          ? `translate3d(${-activeIndex * viewportWidth + dragOffset}px, 0, 0)`
+          : `translate3d(0, ${-activeIndex * viewportHeight + dragOffset}px, 0)`;
+        const controlsLayerStyle = shouldRotateActiveLightbox
+          ? {
+              width: `${viewportHeight}px`,
+              height: `${viewportWidth}px`,
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%) rotate(90deg)",
+              transformOrigin: "center center",
+            }
+          : undefined;
 
-        // The carousel itself always stays in the real screen coordinate system.
-        // Landscape fullscreen rotates only the image stage inside each slide.
-        // This keeps horizontal swipes and horizontal slide movement truly horizontal.
-        const shellWidth = viewportWidth;
-        const shellHeight = viewportHeight;
+        const finishSwipe = () => {
+          const threshold = Math.max(
+            55,
+            (isHorizontalMode ? viewportWidth : viewportHeight) * 0.12
+          );
+          const offset = dragOffset;
+
+          setIsDraggingLightbox(false);
+          activePointerIdRef.current = null;
+          setDragOffset(0);
+
+          if (Math.abs(offset) < threshold) return;
+          if (offset < 0 && canLightboxNext) lightboxNext();
+          if (offset > 0 && canLightboxPrev) lightboxPrev();
+        };
+
+        return (
+<div
+  id="project-lightbox-container"
+  className="fixed inset-0 z-[200] bg-black flex items-center justify-center overflow-hidden select-none"
+  onClick={closeLightbox}
+  style={{ width: viewportWidth, height: viewportHeight, touchAction: "none" }}
+>
+  <div
+    className="absolute inset-0 overflow-hidden"
+    onClick={(e) => e.stopPropagation()}
+    onPointerDown={(e) => {
+      if (e.button !== 0) return;
+      activePointerIdRef.current = e.pointerId;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      setIsDraggingLightbox(true);
+      setDragOffset(0);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }}
+    onPointerMove={(e) => {
+      if (!isDraggingLightbox || activePointerIdRef.current !== e.pointerId) return;
+      const deltaX = e.clientX - dragStartRef.current.x;
+      const deltaY = e.clientY - dragStartRef.current.y;
+      const primaryDelta = isHorizontalMode ? deltaX : deltaY;
+      const secondaryDelta = isHorizontalMode ? deltaY : deltaX;
+
+      if (Math.abs(primaryDelta) < 4 && Math.abs(primaryDelta) < Math.abs(secondaryDelta)) {
+        return;
+      }
+
+      e.preventDefault();
+      setDragOffset(primaryDelta);
+    }}
+    onPointerUp={finishSwipe}
+    onPointerCancel={finishSwipe}
+    onLostPointerCapture={() => {
+      if (isDraggingLightbox) finishSwipe();
+    }}
+    style={{ width: viewportWidth, height: viewportHeight, touchAction: "none" }}
+  >
+    <div
+      className="will-change-transform"
+      style={{
+        display: "flex",
+        flexDirection: isHorizontalMode ? "row" : "column",
+        width: isHorizontalMode ? viewportWidth * images.length : viewportWidth,
+        height: isHorizontalMode ? viewportHeight : viewportHeight * images.length,
+        transform: trackTranslate,
+        transition: isDraggingLightbox ? "none" : "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)",
+      }}
+    >
+      {images.map((img, idx) => {
+        const orientation = imageOrientations[idx];
+        const shouldRotateThisImage = Boolean(
+          isLightboxFullscreen && isViewportPortrait && orientation === "landscape"
+        );
 
         return (
           <div
-            id="lightbox-container"
-            className="fixed z-[200] bg-black overflow-hidden touch-none selection:bg-transparent"
-            onClick={closeLightbox}
-            style={{
-              top: `${lightboxViewport.offsetTop}px`,
-              left: `${lightboxViewport.offsetLeft}px`,
-              width: `${viewportWidth}px`,
-              height: `${viewportHeight}px`,
-              maxWidth: `${viewportWidth}px`,
-              maxHeight: `${viewportHeight}px`,
-            }}
+            key={img.id || idx}
+            className="relative flex shrink-0 items-center justify-center overflow-hidden"
+            style={{ width: viewportWidth, height: viewportHeight }}
           >
-            <div
-              className="absolute flex items-center justify-center overflow-hidden bg-black transition-transform duration-300 ease-out"
-              style={{
-                left: `${viewportWidth / 2}px`,
-                top: `${viewportHeight / 2}px`,
-                width: `${shellWidth}px`,
-                height: `${shellHeight}px`,
-                marginLeft: `${-shellWidth / 2}px`,
-                marginTop: `${-shellHeight / 2}px`,
-                maxWidth: `${shellWidth}px`,
-                maxHeight: `${shellHeight}px`,
-                transform: "none",
-                transformOrigin: "center center",
+            <img
+              src={getLightboxImageUrl(img, idx)}
+              alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+              onLoad={(e) => {
+                const { naturalWidth, naturalHeight } = e.currentTarget;
+                const orientation = naturalWidth > naturalHeight * 1.08 ? "landscape" : "portrait";
+                setImageOrientations((prev) => {
+                  if (prev[idx] === orientation) return prev;
+                  return { ...prev, [idx]: orientation };
+                });
               }}
-            >
-              <div
-                className="relative h-full w-full overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div
-                  className="h-full w-full overflow-hidden"
-                  ref={lightboxRef}
-                  style={{ touchAction: isVerticalSwipeMode ? "pan-y" : "pan-x" }}
-                >
-                  <div
-                    className={`flex h-full w-full ${
-                      isVerticalSwipeMode ? "flex-col" : "flex-row"
-                    }`}
-                  >
-                    {images.map((img, idx) => (
-                      <div
-                        key={img.id || idx}
-                        className={`relative flex h-full w-full flex-[0_0_100%] items-center justify-center overflow-hidden ${
-                          isVerticalSwipeMode ? "min-h-0" : "min-w-0"
-                        } ${isLightboxFullscreen ? "p-0" : "p-4 md:p-8"}`}
-                        ref={(node) => {
-                          if (!node) return;
-                          if (node.hasAttribute("data-zoom-attached")) return;
-                          node.setAttribute("data-zoom-attached", "true");
-
-                          let startDist = 0;
-
-                          node.addEventListener("touchstart", (e) => {
-                            if (e.touches.length === 2) {
-                              e.preventDefault();
-                              e.stopPropagation();
-
-                              startDist = Math.hypot(
-                                e.touches[0].pageX - e.touches[1].pageX,
-                                e.touches[0].pageY - e.touches[1].pageY
-                              );
-
-                              const imgEl = node.querySelector("img");
-                              if (imgEl) {
-                                imgEl.style.transition = "none";
-                                imgEl.style.position = "relative";
-                                imgEl.style.zIndex = "9999";
-
-                                const rect = imgEl.getBoundingClientRect();
-                                const centerX =
-                                  (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                                const centerY =
-                                  (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                                const originX = ((centerX - rect.left) / rect.width) * 100;
-                                const originY = ((centerY - rect.top) / rect.height) * 100;
-                                imgEl.style.transformOrigin = `${originX}% ${originY}%`;
-                              }
-                            }
-                          }, { passive: false });
-
-                          node.addEventListener("touchmove", (e) => {
-                            if (e.touches.length === 2 && startDist > 0) {
-                              e.preventDefault();
-                              e.stopPropagation();
-
-                              const dist = Math.hypot(
-                                e.touches[0].pageX - e.touches[1].pageX,
-                                e.touches[0].pageY - e.touches[1].pageY
-                              );
-
-                              const currentScale = Math.min(Math.max(1, dist / startDist), 4);
-
-                              const imgEl = node.querySelector("img");
-                              if (imgEl) {
-                                imgEl.style.transform = `scale(${currentScale})`;
-                              }
-                            }
-                          }, { passive: false });
-
-                          node.addEventListener("touchend", (e) => {
-                            if (e.touches.length < 2) {
-                              startDist = 0;
-                              const imgEl = node.querySelector("img");
-                              if (imgEl) {
-                                imgEl.style.transition =
-                                  "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)";
-                                imgEl.style.transform = "scale(1)";
-                                setTimeout(() => {
-                                  imgEl.style.zIndex = "1";
-                                }, 300);
-                              }
-                            }
-                          });
-                        }}
-                      >
-                        {(() => {
-                          const slideImageOrientation = imageOrientations[idx];
-                          const shouldRotateSlideImage =
-                            isLightboxFullscreen &&
-                            isScreenPortrait &&
-                            slideImageOrientation === "landscape";
-
-                          return (
-                            <div
-                              className="flex items-center justify-center"
-                              style={
-                                shouldRotateSlideImage
-                                  ? {
-                                      width: `${viewportHeight}px`,
-                                      height: `${viewportWidth}px`,
-                                      maxWidth: `${viewportHeight}px`,
-                                      maxHeight: `${viewportWidth}px`,
-                                      transform: "rotate(90deg)",
-                                      transformOrigin: "center center",
-                                    }
-                                  : {
-                                      width: "100%",
-                                      height: "100%",
-                                    }
-                              }
-                            >
-                              <img
-                                src={getLightboxImageUrl(img, idx)}
-                                alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                                onLoad={(e) => {
-                                  const { naturalWidth, naturalHeight } = e.currentTarget;
-                                  const orientation = getImageOrientation(naturalWidth, naturalHeight);
-                                  setImageOrientations((prev) => {
-                                    if (prev[idx] === orientation) return prev;
-                                    return { ...prev, [idx]: orientation };
-                                  });
-                                }}
-                                loading={
-                                  lightboxIndex !== null &&
-                                  (idx === lightboxIndex ||
-                                    idx === (lightboxIndex - 1 + images.length) % images.length ||
-                                    idx === (lightboxIndex + 1) % images.length)
-                                    ? "eager"
-                                    : "lazy"
-                                }
-                                decoding="async"
-                                draggable={false}
-                                className={`select-none object-contain transition-all duration-300 ${
-                                  isLightboxFullscreen
-                                    ? "h-full w-full max-h-full max-w-full rounded-none"
-                                    : "max-h-full max-w-full rounded-xl shadow-2xl md:max-h-[85vh] md:max-w-[85vw]"
-                                }`}
-                              />
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  onClick={closeLightbox}
-                  className="absolute right-4 top-4 z-[210] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/15 text-white shadow-2xl backdrop-blur-md transition-colors hover:bg-white/25 md:right-5 md:top-5"
-                  aria-label="Mbyll galerinë"
-                >
-                  <X size={22} />
-                </button>
-
-                <div className="absolute left-1/2 top-4 z-[210] -translate-x-1/2 rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white backdrop-blur-md md:top-5">
-                  {lightboxIndex + 1} / {images.length}
-                </div>
-
-                {images[lightboxIndex].caption && (
-                  <div
-                    className={`absolute left-1/2 z-[210] max-w-[min(720px,80vw)] -translate-x-1/2 rounded-full bg-black/60 px-5 py-2 text-center text-sm leading-relaxed text-white shadow-2xl backdrop-blur-md ${
-                      isLightboxFullscreen ? "bottom-5" : "bottom-20"
-                    }`}
-                  >
-                    {images[lightboxIndex].caption}
-                  </div>
-                )}
-
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const container = document.getElementById("lightbox-container");
-                    if (!container) return;
-
-                    const nextState = !isLightboxFullscreen;
-                    setIsLightboxFullscreen(nextState);
-
-                    try {
-                      const doc = document as any;
-                      const isNativeActive = !!(
-                        document.fullscreenElement ||
-                        doc.webkitFullscreenElement ||
-                        doc.mozFullScreenElement ||
-                        doc.msFullscreenElement
-                      );
-
-                      if (nextState && !isNativeActive) {
-                        if (container.requestFullscreen) {
-                          await container.requestFullscreen();
-                        } else if ((container as any).webkitRequestFullscreen) {
-                          await (container as any).webkitRequestFullscreen();
-                        }
-                      } else if (!nextState && isNativeActive) {
-                        if (document.exitFullscreen) {
-                          await document.exitFullscreen();
-                        } else if (doc.webkitExitFullscreen) {
-                          await doc.webkitExitFullscreen();
-                        }
-                      }
-                    } catch (error) {
-                      console.error("Fullscreen error handled natively via simulation:", error);
+              loading={
+                idx === activeIndex ||
+                idx === Math.max(activeIndex - 1, 0) ||
+                idx === Math.min(activeIndex + 1, images.length - 1)
+                  ? "eager"
+                  : "lazy"
+              }
+              decoding="async"
+              draggable={false}
+              className="object-contain shadow-2xl"
+              style={
+                shouldRotateThisImage
+                  ? {
+                      width: `${viewportHeight}px`,
+                      height: `${viewportWidth}px`,
+                      maxWidth: "none",
+                      maxHeight: "none",
+                      borderRadius: 0,
+                      transform: "rotate(90deg)",
+                      transformOrigin: "center center",
                     }
-                  }}
-                  className="absolute bottom-4 right-4 z-[210] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/15 text-white shadow-2xl backdrop-blur-md transition-colors hover:bg-white/25 md:bottom-5 md:right-5"
-                  title="Full Screen"
-                  aria-label="Hap ose mbyll fullscreen"
-                >
-                  <Maximize size={20} />
-                </button>
-
-                {images.length > 1 && (
-                  <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        lightboxPrev();
-                      }}
-                      disabled={!canLightboxPrev}
-                      className={`absolute left-3 top-1/2 z-[210] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/90 backdrop-blur-md transition-all duration-300 group md:left-6 md:h-11 md:w-11 ${
-                        canLightboxPrev
-                          ? "hover:border-white/20 hover:bg-white/20"
-                          : "cursor-not-allowed opacity-30"
-                      }`}
-                      aria-label="Fotoja e mëparshme"
-                    >
-                      <ChevronLeft
-                        size={19}
-                        strokeWidth={2.2}
-                        className="transition-transform group-hover:-translate-x-0.5"
-                      />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        lightboxNext();
-                      }}
-                      disabled={!canLightboxNext}
-                      className={`absolute right-3 top-1/2 z-[210] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/90 backdrop-blur-md transition-all duration-300 group md:right-6 md:h-11 md:w-11 ${
-                        canLightboxNext
-                          ? "hover:border-white/20 hover:bg-white/20"
-                          : "cursor-not-allowed opacity-30"
-                      }`}
-                      aria-label="Fotoja tjetër"
-                    >
-                      <ChevronRight
-                        size={19}
-                        strokeWidth={2.2}
-                        className="transition-transform group-hover:translate-x-0.5"
-                      />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+                  : isLightboxFullscreen
+                    ? {
+                        width: `${viewportWidth}px`,
+                        height: `${viewportHeight}px`,
+                        maxWidth: "none",
+                        maxHeight: "none",
+                        borderRadius: 0,
+                      }
+                    : {
+                        width: "auto",
+                        height: "auto",
+                        maxWidth: "90vw",
+                        maxHeight: "90vh",
+                        borderRadius: "0.75rem",
+                      }
+              }
+            />
           </div>
+        );
+      })}
+    </div>
+  </div>
+
+  <div
+    className="absolute z-[215] pointer-events-none"
+    style={controlsLayerStyle}
+  >
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        closeLightbox();
+      }}
+      className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 shadow-2xl backdrop-blur-md pointer-events-auto"
+      aria-label="Mbyll foton"
+    >
+      <X size={22} />
+    </button>
+
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/15 backdrop-blur-md text-white text-sm font-medium border border-white/10 pointer-events-none">
+      {activeIndex + 1} / {images.length}
+    </div>
+
+    {images[activeIndex].caption && (
+      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm max-w-[82%] text-center pointer-events-none">
+        {images[activeIndex].caption}
+      </div>
+    )}
+
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleLightboxFullscreen();
+      }}
+      className="absolute bottom-4 right-4 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors border border-white/10 shadow-2xl backdrop-blur-md pointer-events-auto"
+      title="Full Screen"
+      aria-label="Full Screen"
+    >
+      <Maximize size={20} />
+    </button>
+
+    {images.length > 1 && isHorizontalMode && (
+      <>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            lightboxPrev();
+          }}
+          disabled={!canLightboxPrev}
+          aria-disabled={!canLightboxPrev}
+          className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/15 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group pointer-events-auto ${
+            canLightboxPrev ? "hover:bg-white/25 hover:border-white/20" : "opacity-30 cursor-not-allowed"
+          }`}
+        >
+          <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            lightboxNext();
+          }}
+          disabled={!canLightboxNext}
+          aria-disabled={!canLightboxNext}
+          className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/15 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group pointer-events-auto ${
+            canLightboxNext ? "hover:bg-white/25 hover:border-white/20" : "opacity-30 cursor-not-allowed"
+          }`}
+        >
+          <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
+        </button>
+      </>
+    )}
+
+    {images.length > 1 && !isHorizontalMode && (
+      <>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            lightboxPrev();
+          }}
+          disabled={!canLightboxPrev}
+          aria-disabled={!canLightboxPrev}
+          className={`absolute top-16 left-1/2 -translate-x-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/15 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group pointer-events-auto ${
+            canLightboxPrev ? "hover:bg-white/25 hover:border-white/20" : "opacity-30 cursor-not-allowed"
+          }`}
+        >
+          <ChevronLeft size={19} strokeWidth={2.2} className="rotate-90 group-hover:-translate-y-0.5 transition-transform" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            lightboxNext();
+          }}
+          disabled={!canLightboxNext}
+          aria-disabled={!canLightboxNext}
+          className={`absolute bottom-16 left-1/2 -translate-x-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/15 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group pointer-events-auto ${
+            canLightboxNext ? "hover:bg-white/25 hover:border-white/20" : "opacity-30 cursor-not-allowed"
+          }`}
+        >
+          <ChevronRight size={19} strokeWidth={2.2} className="rotate-90 group-hover:translate-y-0.5 transition-transform" />
+        </button>
+      </>
+    )}
+  </div>
+</div>
         );
       })()}
 
