@@ -181,7 +181,6 @@ export default function ProjectDetails() {
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
-  const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -192,6 +191,24 @@ export default function ProjectDetails() {
     return viewport.height >= viewport.width;
   });
   const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
+
+  const activeLightboxOrientation =
+    lightboxIndex !== null ? imageOrientations[lightboxIndex] : undefined;
+
+  const shouldUseHorizontalFullscreenAxis =
+    isLightboxFullscreen &&
+    isScreenPortrait &&
+    activeLightboxOrientation === "landscape";
+
+  const shouldUseVerticalLightboxAxis =
+    isLightboxFullscreen &&
+    (activeLightboxOrientation === "portrait" || shouldUseHorizontalFullscreenAxis);
+
+  const lightboxAxis: "x" | "y" = shouldUseVerticalLightboxAxis ? "y" : "x";
+  const [lightboxRef, lightboxApi] = useEmblaCarousel({
+    loop: false,
+    axis: lightboxAxis,
+  });
 
   const lightboxStartIndexRef = useRef(0);
   const [canLightboxPrev, setCanLightboxPrev] = useState(false);
@@ -429,13 +446,13 @@ export default function ProjectDetails() {
     if (!isLightboxOpen || !lightboxApi) return;
 
     const frame = requestAnimationFrame(() => {
-      const currentIndex = lightboxApi.selectedScrollSnap();
-      lightboxApi.reInit();
+      const currentIndex = lightboxIndex ?? lightboxApi.selectedScrollSnap();
+      lightboxApi.reInit({ loop: false, axis: lightboxAxis });
       lightboxApi.scrollTo(currentIndex, true);
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isLightboxOpen, lightboxApi, isLightboxFullscreen, isScreenPortrait]);
+  }, [isLightboxOpen, lightboxApi, lightboxAxis]);
 
   if (isLoading) {
     return (
@@ -930,6 +947,7 @@ export default function ProjectDetails() {
         const activeImageOrientation = imageOrientations[lightboxIndex];
         const shouldUseHorizontalFullscreen =
           isLightboxFullscreen && isScreenPortrait && activeImageOrientation === "landscape";
+        const isVerticalSwipeMode = lightboxAxis === "y";
 
         // iOS Safari does not provide reliable fullscreen dimensions for normal divs.
         // This shell is sized with real visualViewport pixels and centered by numeric
@@ -973,14 +991,19 @@ export default function ProjectDetails() {
                 <div
                   className="h-full w-full overflow-hidden"
                   ref={lightboxRef}
+                  style={{ touchAction: isVerticalSwipeMode ? "pan-y" : "pan-x" }}
                 >
-                  <div className="flex h-full w-full flex-row">
+                  <div
+                    className={`flex h-full w-full ${
+                      isVerticalSwipeMode ? "flex-col" : "flex-row"
+                    }`}
+                  >
                     {images.map((img, idx) => (
                       <div
                         key={img.id || idx}
-                        className={`relative flex h-full min-w-0 flex-[0_0_100%] items-center justify-center overflow-hidden ${
-                          isLightboxFullscreen ? "p-0" : "p-4 md:p-8"
-                        }`}
+                        className={`relative flex h-full w-full flex-[0_0_100%] items-center justify-center overflow-hidden ${
+                          isVerticalSwipeMode ? "min-h-0" : "min-w-0"
+                        } ${isLightboxFullscreen ? "p-0" : "p-4 md:p-8"}`}
                         ref={(node) => {
                           if (!node) return;
                           if (node.hasAttribute("data-zoom-attached")) return;
