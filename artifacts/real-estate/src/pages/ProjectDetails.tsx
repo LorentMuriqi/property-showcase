@@ -371,11 +371,14 @@ export default function ProjectDetails() {
   useEffect(() => {
     if (!isLightboxOpen || !lightboxApi) return;
 
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
+      const targetIndex = lightboxIndex ?? lightboxStartIndexRef.current;
       lightboxApi.reInit();
-      lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
+      lightboxApi.scrollTo(targetIndex, true);
     });
-  }, [isLightboxOpen, lightboxApi]);
+
+    return () => cancelAnimationFrame(frame);
+  }, [isLightboxOpen, lightboxApi, lightboxIndex, isLightboxFullscreen, isScreenPortrait]);
 
   if (isLoading) {
     return (
@@ -869,13 +872,17 @@ export default function ProjectDetails() {
 
         const fullscreenShellStyle = shouldUseHorizontalFullscreen
           ? {
-              width: "100vh",
-              height: "100vw",
+              width: "100dvh",
+              height: "100dvw",
+              maxWidth: "100dvh",
+              maxHeight: "100dvw",
               transform: "rotate(90deg)",
             }
           : {
-              width: "100vw",
-              height: "100vh",
+              width: "100dvw",
+              height: "100dvh",
+              maxWidth: "100dvw",
+              maxHeight: "100dvh",
               transform: "none",
             };
 
@@ -884,7 +891,14 @@ export default function ProjectDetails() {
             id="lightbox-container"
             className="fixed inset-0 z-[200] bg-black overflow-hidden touch-none selection:bg-transparent"
             onClick={closeLightbox}
-            style={{ top: 0, left: 0, width: "100%", height: "100%" }}
+            style={{
+              top: 0,
+              left: 0,
+              width: "100dvw",
+              height: "100dvh",
+              maxWidth: "100dvw",
+              maxHeight: "100dvh",
+            }}
           >
             <div
               className="absolute left-1/2 top-1/2 flex items-center justify-center overflow-hidden bg-black transition-transform duration-300 ease-out"
