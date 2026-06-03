@@ -153,7 +153,7 @@ export default function ProjectDetails() {
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait' | 'square'>>({});
+  const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait'>>({});
   const [isScreenPortrait, setIsScreenPortrait] = useState(typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : true);
   const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
 
@@ -426,10 +426,6 @@ export default function ProjectDetails() {
     project.contactPhone ||
     project.contactEmail
   );
-
-  // Përcaktojmë nëse fotoja aktuale duhet të rrotullohet në bazë të kërkesës suaj
-  const currentImageOrientation = lightboxIndex !== null ? imageOrientations[lightboxIndex] : 'landscape';
-  const shouldRotateUIAndPhoto = isLightboxFullscreen && isScreenPortrait && (currentImageOrientation === 'landscape');
 
   return (
     <Layout>
@@ -855,55 +851,37 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* LIGHTBOX-I I RREGULLUAR PLOTËSISHT - TRULY FULLSCREEN ME ROTATION TË INTELLIGJENTË TË UI */}
+      {/* LIGHTBOX-I I RREGULLUAR COPMLETELY - TRULY FULLSCREEN EDGE-TO-EDGE */}
       {lightboxIndex !== null && images.length > 0 && (
         <div
           id="lightbox-container"
-          className={`fixed inset-0 z-[200] bg-black flex items-center justify-center overflow-hidden touch-none selection:bg-transparent ${
-            shouldRotateUIAndPhoto ? "flex-row" : "flex-col"
-          }`}
+          className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent"
           onClick={closeLightbox}
           style={{ top: 0, left: 0, width: "100%", height: "100%" }}
         >
-          
-          {/* BUTONI X (CLOSE) - Rrotullohet inteligjentisht në vendin e tij për t'u përshtatur */}
+          {/* Butoni i Mbylljes - Qëndron përherë fiks sipër djathtas */}
           <button
             onClick={closeLightbox}
-            className="absolute w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all z-[220] border border-white/10 shadow-2xl backdrop-blur-md"
-            style={
-              shouldRotateUIAndPhoto
-                ? { top: "20px", left: "20px", transform: "rotate(90deg)" }
-                : { top: "20px", right: "20px" }
-            }
+            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
           >
             <X size={22} />
           </button>
 
-          {/* NUMËRUESI I FOTOVE - Rrotullohet dhe qëndron në qendër të anës përkatëse */}
-          <div 
-            className="absolute px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-[210] transition-all"
-            style={
-              shouldRotateUIAndPhoto
-                ? { left: "24px", top: "50%", transform: "translateY(-50%) rotate(90deg)", transformOrigin: "center" }
-                : { top: "20px", left: "50%", transform: "translateX(-50%)" }
-            }
-          >
+          {/* Numëruesi i fotove - Fiks në mes lart */}
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-[210]">
             {lightboxIndex + 1} / {images.length}
           </div>
 
-          {/* SLLIDERI EMBLA - Ndryshon drejtimin e swipe në nivel layout-i nëse UI është e rrotulluar */}
+          {/* Slider-i Embla - Reagon saktë ndaj Swipe Horizontal */}
           <div
             className="w-full h-full overflow-hidden flex items-center justify-center"
             ref={lightboxRef}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`flex w-full h-full ${shouldRotateUIAndPhoto ? "flex-col" : "flex-row"}`}>
+            <div className="flex w-full h-full flex-row">
               {images.map((img, idx) => {
-                const imgFormat = imageOrientations[idx] || 'landscape';
-                const isImgLandscape = imgFormat === 'landscape';
-                
-                // Rrotullimi ndodh vetëm nëse Fullscreen=Active, Screen=Portrait DHE imazhi specifik është Landscape!
-                const rotateThisSpecificImg = isLightboxFullscreen && isScreenPortrait && isImgLandscape;
+                const isImgLandscape = imageOrientations[idx] === 'landscape';
+                const shouldRotateThisImg = isLightboxFullscreen && isScreenPortrait && isImgLandscape;
 
                 return (
                   <div
@@ -917,36 +895,48 @@ export default function ProjectDetails() {
                       node.setAttribute('data-zoom-attached', 'true');
 
                       let startDist = 0;
+
                       node.addEventListener('touchstart', (e) => {
                         if (e.touches.length === 2) {
-                          e.preventDefault(); e.stopPropagation();
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
                           startDist = Math.hypot(
                             e.touches[0].pageX - e.touches[1].pageX,
                             e.touches[0].pageY - e.touches[1].pageY
                           );
+                          
                           const imgEl = node.querySelector('img');
                           if (imgEl) {
                             imgEl.style.transition = 'none';
                             imgEl.style.position = 'relative';
                             imgEl.style.zIndex = '9999';
+
                             const rect = imgEl.getBoundingClientRect();
                             const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                             const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                            imgEl.style.transformOrigin = `${((centerX - rect.left) / rect.width) * 100}% ${((centerY - rect.top) / rect.height) * 100}%`;
+                            const originX = ((centerX - rect.left) / rect.width) * 100;
+                            const originY = ((centerY - rect.top) / rect.height) * 100;
+                            imgEl.style.transformOrigin = `${originX}% ${originY}%`;
                           }
                         }
                       }, { passive: false });
 
                       node.addEventListener('touchmove', (e) => {
                         if (e.touches.length === 2 && startDist > 0) {
-                          e.preventDefault(); e.stopPropagation();
+                          e.preventDefault(); 
+                          e.stopPropagation();
+                          
                           const dist = Math.hypot(
                             e.touches[0].pageX - e.touches[1].pageX,
                             e.touches[0].pageY - e.touches[1].pageY
                           );
+                          
+                          const currentScale = Math.min(Math.max(1, dist / startDist), 4); 
+                          
                           const imgEl = node.querySelector('img');
                           if (imgEl) {
-                            imgEl.style.transform = `scale(${Math.min(Math.max(1, dist / startDist), 4)})`;
+                            imgEl.style.transform = `scale(${currentScale})`;
                           }
                         }
                       }, { passive: false });
@@ -958,16 +948,19 @@ export default function ProjectDetails() {
                           if (imgEl) {
                             imgEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
                             imgEl.style.transform = 'scale(1)';
-                            setTimeout(() => { imgEl.style.zIndex = '1'; }, 300);
+                            setTimeout(() => {
+                              imgEl.style.zIndex = '1';
+                            }, 300);
                           }
                         }
                       });
                     }}
                   >
+                    {/* KORNIZA E FOTOS - ZGJEROHET ABSOLUTISHT NË FULLSCREEN QË TË MOS ZVOGËLOHET */}
                     <div
-                      className={rotateThisSpecificImg ? "" : "w-full h-full flex items-center justify-center"}
+                      className={shouldRotateThisImg ? "" : "w-full h-full flex items-center justify-center"}
                       style={
-                        rotateThisSpecificImg
+                        shouldRotateThisImg
                           ? {
                               position: "absolute",
                               width: "100vh",
@@ -987,20 +980,21 @@ export default function ProjectDetails() {
                         alt={img.caption || `${project.title} - Foto ${idx + 1}`}
                         onLoad={(e) => {
                           const { naturalWidth, naturalHeight } = e.currentTarget;
-                          let orientation: 'landscape' | 'portrait' | 'square' = 'landscape';
-                          
-                          // Klasifikim strikt i përmasave të fotos
-                          if (Math.abs(naturalWidth - naturalHeight) < (naturalWidth * 0.05)) {
-                            orientation = 'square'; // Formati 1:1 ose afërsisht katror
-                          } else if (naturalWidth < naturalHeight) {
-                            orientation = 'portrait'; // Formati vertikal
-                          }
-                          
+                          const orientation = naturalWidth >= naturalHeight ? 'landscape' : 'portrait';
                           setImageOrientations(prev => {
                             if (prev[idx] === orientation) return prev;
                             return { ...prev, [idx]: orientation };
                           });
                         }}
+                        loading={
+                          lightboxIndex !== null &&
+                          (idx === lightboxIndex ||
+                            idx === (lightboxIndex - 1 + images.length) % images.length ||
+                            idx === (lightboxIndex + 1) % images.length)
+                            ? "eager"
+                            : "lazy"
+                        }
+                        decoding="async"
                         className={`object-contain transition-all duration-300 ${
                           isLightboxFullscreen 
                             ? "w-full h-full max-w-full max-h-full rounded-none" 
@@ -1014,21 +1008,14 @@ export default function ProjectDetails() {
             </div>
           </div>
 
-          {/* CAPTION (PËRSHKRIMI I FOTOS) - Rrotullohet në mënyrë elegante në anën e djathtë të ekranit */}
+          {/* Caption i fotos */}
           {images[lightboxIndex].caption && (
-            <div 
-              className="absolute px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm z-[210] text-center transition-all"
-              style={
-                shouldRotateUIAndPhoto
-                  ? { right: "24px", top: "50%", transform: "translateY(-50%) rotate(90deg)", maxWidth: "75vh" }
-                  : { bottom: "85px", left: "50%", transform: "translateX(-50%)", maxWidth: "80vw" }
-              }
-            >
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm z-[210] max-w-[80vw] text-center">
               {images[lightboxIndex].caption}
             </div>
           )}
 
-          {/* BUTONI FULLSCREEN - Pozicionohet fiks sipas orientimit të zgjedhur */}
+          {/* Butoni Fullscreen - Qëndron fiks poshtë djathtas pa lëvizur kurrë */}
           <button
             onClick={async (e) => {
               e.stopPropagation();
@@ -1056,50 +1043,39 @@ export default function ProjectDetails() {
                   }
                 }
               } catch (error) {
-                console.error("Fullscreen error handled natively:", error);
+                console.error("Fullscreen error handled natively via simulation:", error);
               }
             }}
-            className="absolute w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
-            style={
-              shouldRotateUIAndPhoto
-                ? { bottom: "20px", left: "20px", transform: "rotate(90deg)" }
-                : { bottom: "20px", right: "20px" }
-            }
+            className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
             title="Full Screen"
           >
             <Maximize size={20} />
           </button>
 
-          {/* SHIGJETAT E NAVIGIMIT (DESKTOP & MOBILE) - Rrotullohen fiks në akset e reja horizontale */}
+          {/* Shigjetat e navigimit për Desktop */}
           {images.length > 1 && (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); lightboxPrev(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lightboxPrev();
+                }}
                 disabled={!canLightboxPrev}
-                className={`absolute w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
+                className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
                   canLightboxPrev ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
                 }`}
-                style={
-                  shouldRotateUIAndPhoto
-                    // Kur rrotullohet, "Mbrapsht" bëhet butoni lart (i cili i korrespondon anës së majtë në horizontal)
-                    ? { top: "35%", left: "50%", transform: "translateX(-50%) rotate(90deg)" }
-                    : { left: "20px", top: "50%", transform: "translateY(-50%)" }
-                }
               >
                 <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); lightboxNext(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lightboxNext();
+                }}
                 disabled={!canLightboxNext}
-                className={`absolute w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
+                className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
                   canLightboxNext ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
                 }`}
-                style={
-                  shouldRotateUIAndPhoto
-                    // Kur rrotullohet, "Para" bëhet butoni poshtë (i cili i korrespondon anës së djathtë në horizontal)
-                    ? { bottom: "35%", left: "50%", transform: "translateX(-50%) rotate(90deg)" }
-                    : { right: "20px", top: "50%", transform: "translateY(-50%)" }
-                }
               >
                 <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
               </button>
