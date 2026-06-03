@@ -157,6 +157,139 @@ const [canLightboxPrev, setCanLightboxPrev] = useState(false);
 const [canLightboxNext, setCanLightboxNext] = useState(false);
 const [showContactModal, setShowContactModal] = useState(false);
 
+const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
+const [lightboxScale, setLightboxScale] = useState(1);
+const [lightboxPan, setLightboxPan] = useState({ x: 0, y: 0 });
+const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
+const [imageOrientations, setImageOrientations] = useState<Record<number, "landscape" | "portrait" | "square">>({});
+const pinchStartDistanceRef = useRef<number | null>(null);
+const pinchStartScaleRef = useRef(1);
+const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+
+const resetLightboxZoom = useCallback(() => {
+  setLightboxScale(1);
+  setLightboxPan({ x: 0, y: 0 });
+  pinchStartDistanceRef.current = null;
+  panStartRef.current = null;
+}, []);
+
+const getTouchDistance = (touches: TouchList) => {
+  const first = touches[0];
+  const second = touches[1];
+
+  return Math.hypot(
+    second.clientX - first.clientX,
+    second.clientY - first.clientY,
+  );
+};
+
+const handleLightboxTouchStart = useCallback(
+  (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      pinchStartDistanceRef.current = getTouchDistance(e.touches);
+      pinchStartScaleRef.current = lightboxScale;
+      panStartRef.current = null;
+      return;
+    }
+
+    if (e.touches.length === 1 && lightboxScale > 1) {
+      e.preventDefault();
+      panStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        panX: lightboxPan.x,
+        panY: lightboxPan.y,
+      };
+    }
+  },
+  [lightboxPan.x, lightboxPan.y, lightboxScale],
+);
+
+const handleLightboxTouchMove = useCallback(
+  (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2 && pinchStartDistanceRef.current) {
+      e.preventDefault();
+
+      const nextDistance = getTouchDistance(e.touches);
+      const nextScale = Math.min(
+        4,
+        Math.max(1, pinchStartScaleRef.current * (nextDistance / pinchStartDistanceRef.current)),
+      );
+
+      setLightboxScale(nextScale);
+
+      if (nextScale === 1) {
+        setLightboxPan({ x: 0, y: 0 });
+      }
+
+      return;
+    }
+
+    if (e.touches.length === 1 && lightboxScale > 1 && panStartRef.current) {
+      e.preventDefault();
+
+      const nextX =
+        panStartRef.current.panX + (e.touches[0].clientX - panStartRef.current.x);
+      const nextY =
+        panStartRef.current.panY + (e.touches[0].clientY - panStartRef.current.y);
+
+      setLightboxPan({ x: nextX, y: nextY });
+    }
+  },
+  [lightboxScale],
+);
+
+const handleLightboxTouchEnd = useCallback(() => {
+  pinchStartDistanceRef.current = null;
+  panStartRef.current = null;
+
+  setLightboxScale((currentScale) => {
+    if (currentScale <= 1.02) {
+      setLightboxPan({ x: 0, y: 0 });
+      return 1;
+    }
+
+    return currentScale;
+  });
+}, []);
+
+const toggleLightboxFullscreen = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.stopPropagation();
+
+  const nextFullscreen = !isLightboxFullscreen;
+  setIsLightboxFullscreen(nextFullscreen);
+  resetLightboxZoom();
+
+  try {
+    const container = lightboxContainerRef.current;
+
+    if (nextFullscreen && container?.requestFullscreen && !document.fullscreenElement) {
+      await container.requestFullscreen();
+    } else if (!nextFullscreen && document.fullscreenElement) {
+      await document.exitFullscreen();
+    }
+  } catch {
+    // iOS Safari does not support fullscreen for normal div elements.
+    // The visual fullscreen mode still works because the modal is fixed inset-0.
+  }
+}, [isLightboxFullscreen, resetLightboxZoom]);
+
+useEffect(() => {
+  const handleFullscreenChange = () => {
+    if (!document.fullscreenElement) {
+      setIsLightboxFullscreen(false);
+    }
+  };
+
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+  return () => {
+    document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  };
+}, []);
+
+
   useEffect(() => {
     requestAnimationFrame(() => {
       window.scrollTo({
@@ -181,6 +314,16 @@ const openLightbox = (idx: number) => {
 };
 
 const closeLightbox = () => setLightboxIndex(null);
+
+useEffect(() => {
+  if (lightboxIndex === null) {
+    resetLightboxZoom();
+    setIsLightboxFullscreen(false);
+    return;
+  }
+
+  resetLightboxZoom();
+}, [lightboxIndex, resetLightboxZoom]);
 
   const images = project?.images || [];
   
@@ -737,68 +880,176 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-display text-2xl text-foreground flex items-center gap-2">
-                <Building2 size={22} className="text-primary" /> Kërko Informacion
-              </h3>
-              <button
-                onClick={() => setShowContactModal(false)}
-                className="w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-foreground transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
+              <h3 className="font-displ      {lightboxIndex !== null && images.length > 0 && (
+        <div
+          ref={lightboxContainerRef}
+          className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center overflow-hidden"
+          onClick={closeLightbox}
+        >
+          <button
+            onClick={closeLightbox}
+            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-20"
+          >
+            <X size={22} />
+          </button>
 
-            <p className="text-muted-foreground text-sm mb-6">
-              Kontaktoni agjentin për pronën:
-              <br />
-              <span className="text-foreground font-medium">{project.title}</span>
-            </p>
+          <button
+            onClick={toggleLightboxFullscreen}
+            className="absolute top-5 right-20 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-20"
+            aria-label="Hap foton në fullscreen"
+          >
+            <Maximize size={20} />
+          </button>
 
-            {hasContact ? (
-              <div className="space-y-4">
-                {project.contactCompany && (
-                  <div className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border">
-                    <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-                      <Building2 size={20} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
-                        Kompania
-                      </p>
-                      <p className="text-foreground font-semibold text-lg">
-                        {project.contactCompany}
-                      </p>
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-20">
+            {lightboxIndex + 1} / {images.length}
+          </div>
+
+          {lightboxScale > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                resetLightboxZoom();
+              }}
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white text-sm font-medium z-20 transition-colors"
+            >
+              Reset Zoom
+            </button>
+          )}
+
+          <div
+            className="w-full h-full overflow-hidden touch-pan-y"
+            ref={lightboxRef}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-full">
+              {images.map((img, idx) => {
+                const orientation = imageOrientations[idx];
+                const isPortraitViewport =
+                  typeof window !== "undefined" &&
+                  window.innerHeight > window.innerWidth;
+
+                const shouldRotateForFullscreen =
+                  isLightboxFullscreen &&
+                  orientation === "landscape" &&
+                  isPortraitViewport;
+
+                const isActiveImage = idx === lightboxIndex;
+                const activeTransform = `translate3d(${lightboxPan.x}px, ${lightboxPan.y}px, 0) rotate(${
+                  shouldRotateForFullscreen ? "90deg" : "0deg"
+                }) scale(${lightboxScale})`;
+
+                return (
+                  <div
+                    key={img.id || idx}
+                    className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
+                  >
+                    <div
+                      className="w-full h-full flex items-center justify-center"
+                      onTouchStart={isActiveImage ? handleLightboxTouchStart : undefined}
+                      onTouchMove={isActiveImage ? handleLightboxTouchMove : undefined}
+                      onTouchEnd={isActiveImage ? handleLightboxTouchEnd : undefined}
+                      onTouchCancel={isActiveImage ? handleLightboxTouchEnd : undefined}
+                      style={{
+                        touchAction: isActiveImage && lightboxScale > 1 ? "none" : "pan-y",
+                      }}
+                    >
+                      <img
+                        src={getLightboxImageUrl(img, idx)}
+                        alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+                        loading={
+                          lightboxIndex !== null &&
+                          (idx === lightboxIndex ||
+                            idx === (lightboxIndex - 1 + images.length) % images.length ||
+                            idx === (lightboxIndex + 1) % images.length)
+                            ? "eager"
+                            : "lazy"
+                        }
+                        decoding="async"
+                        onLoad={(event) => {
+                          const { naturalWidth, naturalHeight } = event.currentTarget;
+
+                          if (!naturalWidth || !naturalHeight) return;
+
+                          const nextOrientation =
+                            naturalWidth > naturalHeight
+                              ? "landscape"
+                              : naturalHeight > naturalWidth
+                                ? "portrait"
+                                : "square";
+
+                          setImageOrientations((prev) =>
+                            prev[idx] === nextOrientation
+                              ? prev
+                              : { ...prev, [idx]: nextOrientation },
+                          );
+                        }}
+                        className={`object-contain rounded-xl shadow-2xl select-none transition-transform duration-200 ${
+                          shouldRotateForFullscreen
+                            ? "max-w-[90vh] max-h-[90vw]"
+                            : isLightboxFullscreen
+                              ? "max-w-[100vw] max-h-[100vh]"
+                              : "max-w-[90vw] max-h-[90vh]"
+                        }`}
+                        style={{
+                          transform: isActiveImage ? activeTransform : undefined,
+                          cursor: isActiveImage && lightboxScale > 1 ? "grab" : "zoom-in",
+                        }}
+                        draggable={false}
+                      />
                     </div>
                   </div>
-                )}
+                );
+              })}
+            </div>
+          </div>
 
-                {project.contactPhone && (
-                  <a
-                    href={`tel:${project.contactPhone}`}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                  >
-                    <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
-                      <Phone size={20} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
-                        Telefoni
-                      </p>
-                      <p className="text-foreground group-hover:text-primary font-semibold text-lg transition-colors">
-                        {project.contactPhone}
-                      </p>
-                    </div>
-                  </a>
-                )}
+          {images[lightboxIndex].caption && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm">
+              {images[lightboxIndex].caption}
+            </div>
+          )}
 
-                {project.contactEmail && (
-                  <a
-                    href={`mailto:${project.contactEmail}`}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                  >
-                    <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
-                      <Mail size={20} className="text-primary" />
-                    </div>
+          {images.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resetLightboxZoom();
+                  lightboxPrev();
+                }}
+                disabled={!canLightboxPrev || lightboxScale > 1}
+                aria-disabled={!canLightboxPrev || lightboxScale > 1}
+                className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
+                  canLightboxPrev && lightboxScale === 1
+                    ? "hover:bg-white/20 hover:border-white/20"
+                    : "opacity-30 cursor-not-allowed"
+                }`}
+              >
+                <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resetLightboxZoom();
+                  lightboxNext();
+                }}
+                disabled={!canLightboxNext || lightboxScale > 1}
+                aria-disabled={!canLightboxNext || lightboxScale > 1}
+                className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
+                  canLightboxNext && lightboxScale === 1
+                    ? "hover:bg-white/20 hover:border-white/20"
+                    : "opacity-30 cursor-not-allowed"
+                }`}
+              >
+                <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+                   </div>
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
                         Email
