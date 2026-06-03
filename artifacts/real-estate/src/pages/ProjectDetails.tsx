@@ -161,10 +161,18 @@ const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
 const [lightboxScale, setLightboxScale] = useState(1);
 const [lightboxPan, setLightboxPan] = useState({ x: 0, y: 0 });
 const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
-const [imageOrientations, setImageOrientations] = useState<Record<number, "landscape" | "portrait" | "square">>({});
+const [imageOrientations, setImageOrientations] = useState<
+  Record<number, "landscape" | "portrait" | "square">
+>({});
+
 const pinchStartDistanceRef = useRef<number | null>(null);
 const pinchStartScaleRef = useRef(1);
-const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+const panStartRef = useRef<{
+  x: number;
+  y: number;
+  panX: number;
+  panY: number;
+} | null>(null);
 
 const resetLightboxZoom = useCallback(() => {
   setLightboxScale(1);
@@ -214,12 +222,16 @@ const handleLightboxTouchMove = useCallback(
       const nextDistance = getTouchDistance(e.touches);
       const nextScale = Math.min(
         4,
-        Math.max(1, pinchStartScaleRef.current * (nextDistance / pinchStartDistanceRef.current)),
+        Math.max(
+          1,
+          pinchStartScaleRef.current *
+            (nextDistance / pinchStartDistanceRef.current),
+        ),
       );
 
       setLightboxScale(nextScale);
 
-      if (nextScale === 1) {
+      if (nextScale <= 1.02) {
         setLightboxPan({ x: 0, y: 0 });
       }
 
@@ -229,12 +241,10 @@ const handleLightboxTouchMove = useCallback(
     if (e.touches.length === 1 && lightboxScale > 1 && panStartRef.current) {
       e.preventDefault();
 
-      const nextX =
-        panStartRef.current.panX + (e.touches[0].clientX - panStartRef.current.x);
-      const nextY =
-        panStartRef.current.panY + (e.touches[0].clientY - panStartRef.current.y);
-
-      setLightboxPan({ x: nextX, y: nextY });
+      setLightboxPan({
+        x: panStartRef.current.panX + e.touches[0].clientX - panStartRef.current.x,
+        y: panStartRef.current.panY + e.touches[0].clientY - panStartRef.current.y,
+      });
     }
   },
   [lightboxScale],
@@ -254,26 +264,32 @@ const handleLightboxTouchEnd = useCallback(() => {
   });
 }, []);
 
-const toggleLightboxFullscreen = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
-  e.stopPropagation();
+const toggleLightboxFullscreen = useCallback(
+  async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
 
-  const nextFullscreen = !isLightboxFullscreen;
-  setIsLightboxFullscreen(nextFullscreen);
-  resetLightboxZoom();
+    const nextFullscreen = !isLightboxFullscreen;
+    setIsLightboxFullscreen(nextFullscreen);
+    resetLightboxZoom();
 
-  try {
-    const container = lightboxContainerRef.current;
+    try {
+      const container = lightboxContainerRef.current;
 
-    if (nextFullscreen && container?.requestFullscreen && !document.fullscreenElement) {
-      await container.requestFullscreen();
-    } else if (!nextFullscreen && document.fullscreenElement) {
-      await document.exitFullscreen();
+      if (
+        nextFullscreen &&
+        container?.requestFullscreen &&
+        !document.fullscreenElement
+      ) {
+        await container.requestFullscreen();
+      } else if (!nextFullscreen && document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // iOS Safari nuk lejon fullscreen API për div, por modal-i mbetet full screen vizualisht.
     }
-  } catch {
-    // iOS Safari does not support fullscreen for normal div elements.
-    // The visual fullscreen mode still works because the modal is fixed inset-0.
-  }
-}, [isLightboxFullscreen, resetLightboxZoom]);
+  },
+  [isLightboxFullscreen, resetLightboxZoom],
+);
 
 useEffect(() => {
   const handleFullscreenChange = () => {
@@ -288,6 +304,14 @@ useEffect(() => {
     document.removeEventListener("fullscreenchange", handleFullscreenChange);
   };
 }, []);
+
+useEffect(() => {
+  resetLightboxZoom();
+
+  if (lightboxIndex === null) {
+    setIsLightboxFullscreen(false);
+  }
+}, [lightboxIndex, resetLightboxZoom]);
 
 
   useEffect(() => {
@@ -314,16 +338,6 @@ const openLightbox = (idx: number) => {
 };
 
 const closeLightbox = () => setLightboxIndex(null);
-
-useEffect(() => {
-  if (lightboxIndex === null) {
-    resetLightboxZoom();
-    setIsLightboxFullscreen(false);
-    return;
-  }
-
-  resetLightboxZoom();
-}, [lightboxIndex, resetLightboxZoom]);
 
   const images = project?.images || [];
   
@@ -880,7 +894,94 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-displ      {lightboxIndex !== null && images.length > 0 && (
+              <h3 className="font-display text-2xl text-foreground flex items-center gap-2">
+                <Building2 size={22} className="text-primary" /> Kërko Informacion
+              </h3>
+              <button
+                onClick={() => setShowContactModal(false)}
+                className="w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-foreground transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-muted-foreground text-sm mb-6">
+              Kontaktoni agjentin për pronën:
+              <br />
+              <span className="text-foreground font-medium">{project.title}</span>
+            </p>
+
+            {hasContact ? (
+              <div className="space-y-4">
+                {project.contactCompany && (
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border">
+                    <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                      <Building2 size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
+                        Kompania
+                      </p>
+                      <p className="text-foreground font-semibold text-lg">
+                        {project.contactCompany}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {project.contactPhone && (
+                  <a
+                    href={`tel:${project.contactPhone}`}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
+                      <Phone size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
+                        Telefoni
+                      </p>
+                      <p className="text-foreground group-hover:text-primary font-semibold text-lg transition-colors">
+                        {project.contactPhone}
+                      </p>
+                    </div>
+                  </a>
+                )}
+
+                {project.contactEmail && (
+                  <a
+                    href={`mailto:${project.contactEmail}`}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-muted border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-primary/15 group-hover:bg-primary/25 flex items-center justify-center shrink-0 transition-colors">
+                      <Mail size={20} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
+                        Email
+                      </p>
+                      <p className="text-foreground group-hover:text-primary font-semibold text-lg transition-colors">
+                        {project.contactEmail}
+                      </p>
+                    </div>
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                  <Phone size={24} className="text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">
+                  Informacioni i kontaktit nuk është vendosur ende nga agjenti.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {lightboxIndex !== null && images.length > 0 && (
         <div
           ref={lightboxContainerRef}
           className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center overflow-hidden"
@@ -918,13 +1019,14 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
           )}
 
           <div
-            className="w-full h-full overflow-hidden touch-pan-y"
+            className="w-full h-full overflow-hidden"
             ref={lightboxRef}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex h-full">
               {images.map((img, idx) => {
                 const orientation = imageOrientations[idx];
+                const isActiveImage = idx === lightboxIndex;
                 const isPortraitViewport =
                   typeof window !== "undefined" &&
                   window.innerHeight > window.innerWidth;
@@ -934,7 +1036,6 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                   orientation === "landscape" &&
                   isPortraitViewport;
 
-                const isActiveImage = idx === lightboxIndex;
                 const activeTransform = `translate3d(${lightboxPan.x}px, ${lightboxPan.y}px, 0) rotate(${
                   shouldRotateForFullscreen ? "90deg" : "0deg"
                 }) scale(${lightboxScale})`;
@@ -958,10 +1059,9 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                         src={getLightboxImageUrl(img, idx)}
                         alt={img.caption || `${project.title} - Foto ${idx + 1}`}
                         loading={
-                          lightboxIndex !== null &&
-                          (idx === lightboxIndex ||
-                            idx === (lightboxIndex - 1 + images.length) % images.length ||
-                            idx === (lightboxIndex + 1) % images.length)
+                          idx === lightboxIndex ||
+                          idx === (lightboxIndex - 1 + images.length) % images.length ||
+                          idx === (lightboxIndex + 1) % images.length
                             ? "eager"
                             : "lazy"
                         }
@@ -1005,7 +1105,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
           </div>
 
           {images[lightboxIndex].caption && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm">
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm z-20">
               {images[lightboxIndex].caption}
             </div>
           )}
@@ -1020,14 +1120,19 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                 }}
                 disabled={!canLightboxPrev || lightboxScale > 1}
                 aria-disabled={!canLightboxPrev || lightboxScale > 1}
-                className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
+                className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-20 ${
                   canLightboxPrev && lightboxScale === 1
                     ? "hover:bg-white/20 hover:border-white/20"
                     : "opacity-30 cursor-not-allowed"
                 }`}
               >
-                <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
+                <ChevronLeft
+                  size={19}
+                  strokeWidth={2.2}
+                  className="group-hover:-translate-x-0.5 transition-transform"
+                />
               </button>
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1036,129 +1141,18 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                 }}
                 disabled={!canLightboxNext || lightboxScale > 1}
                 aria-disabled={!canLightboxNext || lightboxScale > 1}
-                className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
+                className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-20 ${
                   canLightboxNext && lightboxScale === 1
                     ? "hover:bg-white/20 hover:border-white/20"
                     : "opacity-30 cursor-not-allowed"
                 }`}
               >
-                <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
+                <ChevronRight
+                  size={19}
+                  strokeWidth={2.2}
+                  className="group-hover:translate-x-0.5 transition-transform"
+                />
               </button>
-            </>
-          )}
-        </div>
-      )}
-
-                   </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">
-                        Email
-                      </p>
-                      <p className="text-foreground group-hover:text-primary font-semibold text-lg transition-colors">
-                        {project.contactEmail}
-                      </p>
-                    </div>
-                  </a>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-6">
-                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                  <Phone size={24} className="text-muted-foreground" />
-                </div>
-                <p className="text-muted-foreground">
-                  Informacioni i kontaktit nuk është vendosur ende nga agjenti.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {lightboxIndex !== null && images.length > 0 && (
-<div
-  className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center overflow-hidden"
-  onClick={closeLightbox}
->
-          <button
-            onClick={closeLightbox}
-            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
-          >
-            <X size={22} />
-          </button>
-
-          <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-10">
-            {lightboxIndex + 1} / {images.length}
-          </div>
-
-<div
-  className="w-full h-full overflow-hidden touch-pan-y"
-  ref={lightboxRef}
-  onClick={(e) => e.stopPropagation()}
->
-  <div className="flex h-full">
-    {images.map((img, idx) => (
-      <div
-        key={img.id || idx}
-        className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
-      >
-<img
-  src={getLightboxImageUrl(img, idx)}
-  alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-  loading={
-    lightboxIndex !== null &&
-    (idx === lightboxIndex ||
-      idx === (lightboxIndex - 1 + images.length) % images.length ||
-      idx === (lightboxIndex + 1) % images.length)
-      ? "eager"
-      : "lazy"
-  }
-  decoding="async"
-  className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
-/>
-      </div>
-    ))}
-  </div>
-</div>
-
-          {images[lightboxIndex].caption && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm">
-              {images[lightboxIndex].caption}
-            </div>
-          )}
-
-          {images.length > 1 && (
-            <>
-<button
-  onClick={(e) => {
-    e.stopPropagation();
-    lightboxPrev();
-  }}
-  disabled={!canLightboxPrev}
-  aria-disabled={!canLightboxPrev}
-  className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
-    canLightboxPrev
-      ? "hover:bg-white/20 hover:border-white/20"
-      : "opacity-30 cursor-not-allowed"
-  }`}
->
-  <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
-</button>
-<button
-  onClick={(e) => {
-    e.stopPropagation();
-    lightboxNext();
-  }}
-  disabled={!canLightboxNext}
-  aria-disabled={!canLightboxNext}
-  className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group ${
-    canLightboxNext
-      ? "hover:bg-white/20 hover:border-white/20"
-      : "opacity-30 cursor-not-allowed"
-  }`}
->
-  <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
-</button>
             </>
           )}
         </div>
