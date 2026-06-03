@@ -845,60 +845,89 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
     {/* Embla Carousel Slider */}
     <div
-      className="w-full h-full overflow-hidden flex items-center justify-center touch-pan-x"
+      className="w-full h-full overflow-hidden flex items-center justify-center"
       ref={lightboxRef}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex h-full w-full">
         {images.map((img, idx) => {
-          let startDist = 0;
-          let currentScale = 1;
-          
-          const handleTouchStart = (e: React.TouchEvent) => {
-            if (e.touches.length === 2) {
-              e.stopPropagation(); // Ndalon rrëshqitjen (swipe) gjatë zoom-it
-              startDist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-              );
-            }
-          };
-
-          const handleTouchMove = (e: React.TouchEvent) => {
-            if (e.touches.length === 2 && startDist > 0) {
-              e.stopPropagation(); // Ndalon rrëshqitjen (swipe)
-              const target = e.currentTarget as HTMLElement;
-              const imgEl = target.querySelector('img');
-              if (!imgEl) return;
-
-              const dist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-              );
-              
-              currentScale = Math.min(Math.max(1, dist / startDist), 3);
-              imgEl.style.transform = `scale(${currentScale})`;
-            }
-          };
-
-          const handleTouchEnd = (e: React.TouchEvent) => {
-            if (e.touches.length < 2) {
-              startDist = 0;
-              const target = e.currentTarget as HTMLElement;
-              const imgEl = target.querySelector('img');
-              if (imgEl && currentScale < 1.1) {
-                imgEl.style.transform = 'scale(1)';
-              }
-            }
-          };
-
           return (
             <div
               key={img.id || idx}
               className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative p-4 overflow-hidden"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
+              ref={(node) => {
+                if (!node) return;
+                // Sigurohemi që eventet të mos shtohen dy herë
+                if (node.hasAttribute('data-zoom-attached')) return;
+                node.setAttribute('data-zoom-attached', 'true');
+
+                let startDist = 0;
+
+                node.addEventListener('touchstart', (e) => {
+                  // Kur përdoren 2 gishta, nisim Zoom-in
+                  if (e.touches.length === 2) {
+                    e.preventDefault(); // Ndalon zoom-in native të telefonit
+                    e.stopPropagation(); // Ndalon Embla-n të bëjë swipe
+                    
+                    startDist = Math.hypot(
+                      e.touches[0].pageX - e.touches[1].pageX,
+                      e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    
+                    const imgEl = node.querySelector('img');
+                    if (imgEl) {
+                      imgEl.style.transition = 'none'; // Heqim animacionin për zoom në kohë reale
+                      imgEl.style.position = 'relative';
+                      imgEl.style.zIndex = '9999'; // E nxjerrim foton sipër UI-t
+
+                      // Llogarisim qendrën mes dy gishtave për të bërë zoom fiks aty ku prekim
+                      const rect = imgEl.getBoundingClientRect();
+                      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                      const originX = ((centerX - rect.left) / rect.width) * 100;
+                      const originY = ((centerY - rect.top) / rect.height) * 100;
+                      imgEl.style.transformOrigin = `${originX}% ${originY}%`;
+                    }
+                  }
+                }, { passive: false }); // PASSIVE: FALSE është çelësi këtu!
+
+                node.addEventListener('touchmove', (e) => {
+                  if (e.touches.length === 2 && startDist > 0) {
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    
+                    const dist = Math.hypot(
+                      e.touches[0].pageX - e.touches[1].pageX,
+                      e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    
+                    // Llogaritja e scale (Maksimumi 4x zoom)
+                    const currentScale = Math.min(Math.max(1, dist / startDist), 4); 
+                    
+                    const imgEl = node.querySelector('img');
+                    if (imgEl) {
+                      imgEl.style.transform = `scale(${currentScale})`;
+                    }
+                  }
+                }, { passive: false });
+
+                node.addEventListener('touchend', (e) => {
+                  // Kur lëshohen gishtat, ktheje foton në vend (Instagram Style)
+                  if (e.touches.length < 2) {
+                    startDist = 0;
+                    const imgEl = node.querySelector('img');
+                    if (imgEl) {
+                      imgEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+                      imgEl.style.transform = 'scale(1)';
+                      
+                      // Ktheje Z-index në normalitet pasi mbaron animacioni
+                      setTimeout(() => {
+                        imgEl.style.zIndex = '1';
+                      }, 300);
+                    }
+                  }
+                });
+              }}
             >
               <img
                 src={getLightboxImageUrl(img, idx)}
@@ -912,8 +941,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                     : "lazy"
                 }
                 decoding="async"
-                className="max-w-full max-h-full md:max-w-[90vw] md:max-h-[90vh] object-contain rounded-xl shadow-2xl transition-transform duration-100 ease-out pointer-events-none origin-center portrait:w-full landscape:h-full"
-                style={{ touchAction: 'none' }}
+                className="max-w-full max-h-full md:max-w-[90vw] md:max-h-[90vh] object-contain rounded-xl shadow-2xl origin-center portrait:w-full landscape:h-full"
               />
             </div>
           );
@@ -928,7 +956,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
       </div>
     )}
 
-    {/* Butoni Fullscreen Poshtë Djathtas - I përmirësuar për kompatibilitet */}
+    {/* Butoni Fullscreen Poshtë Djathtas */}
     <button
       onClick={async (e) => {
         e.stopPropagation();
@@ -936,26 +964,22 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
         if (!container) return;
 
         try {
-          // Kontroll nëse tashmë jemi në Fullscreen duke përdorur API standarde dhe WebKit
           const doc = document as any;
           const isFullscreen = document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
 
           if (!isFullscreen) {
-            // Hyr në Fullscreen
             if (container.requestFullscreen) {
               await container.requestFullscreen();
             } else if ((container as any).webkitRequestFullscreen) {
-              await (container as any).webkitRequestFullscreen(); // Për Safari / iOS
+              await (container as any).webkitRequestFullscreen();
             } else if ((container as any).msRequestFullscreen) {
               await (container as any).msRequestFullscreen();
             }
 
-            // Përpiqemi të kthejmë ekranin horizontalisht (Nëse pajisja e lejon)
             if (window.screen && screen.orientation && screen.orientation.lock) {
-              try { await screen.orientation.lock("landscape"); } catch (err) { /* Injorohet nëse pajisja nuk e mbanhtet */ }
+              try { await screen.orientation.lock("landscape"); } catch (err) { /* Injorohet */ }
             }
           } else {
-            // Dil nga Fullscreen
             if (document.exitFullscreen) {
               await document.exitFullscreen();
             } else if (doc.webkitExitFullscreen) {
@@ -964,13 +988,12 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
               await doc.msExitFullscreen();
             }
 
-            // Kthe orientimin origjinal
             if (window.screen && screen.orientation && screen.orientation.unlock) {
               screen.orientation.unlock();
             }
           }
         } catch (error) {
-          console.error("Ndodhi një gabim me Fullscreen:", error);
+          console.error("Fullscreen Error:", error);
         }
       }}
       className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/10"
@@ -988,11 +1011,8 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
             lightboxPrev();
           }}
           disabled={!canLightboxPrev}
-          aria-disabled={!canLightboxPrev}
           className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
-            canLightboxPrev
-              ? "hover:bg-white/20 hover:border-white/20"
-              : "opacity-30 cursor-not-allowed"
+            canLightboxPrev ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
           }`}
         >
           <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
@@ -1003,11 +1023,8 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
             lightboxNext();
           }}
           disabled={!canLightboxNext}
-          aria-disabled={!canLightboxNext}
           className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
-            canLightboxNext
-              ? "hover:bg-white/20 hover:border-white/20"
-              : "opacity-30 cursor-not-allowed"
+            canLightboxNext ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
           }`}
         >
           <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
