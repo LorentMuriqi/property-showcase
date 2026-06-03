@@ -152,18 +152,18 @@ export default function ProjectDetails() {
   const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   
-  // SHTETET E REJA PËR DETEKTORIN E ORIENTIMIT DHE FULLSCREEN CSS
+  // SHTETET E REJA PËR DIZANJIN DHE ORIENTIMIN E FOTOS
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait'>>({});
-  const [isScreenPortrait, setIsScreenPortrait] = useState(window.innerHeight > window.innerWidth);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isScreenPortrait, setIsScreenPortrait] = useState(typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : true);
+  const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
 
   const lightboxStartIndexRef = useRef(0);
   const [canLightboxPrev, setCanLightboxPrev] = useState(false);
   const [canLightboxNext, setCanLightboxNext] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
 
-  // Ndjekja e ndryshimit të orientimit fizik të dritares së telefonit
+  // Ndjekja e ndryshimit të orientimit fizik të telefonit (Resize)
   useEffect(() => {
     const handleResize = () => {
       setIsScreenPortrait(window.innerHeight > window.innerWidth);
@@ -172,21 +172,20 @@ export default function ProjectDetails() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Ndjekja e saktë nëse Fullscreen është aktiv apo jo në nivel DOM-i
+  // Ndjekja nëse dalim nga Fullscreen i sistemit (për Android/Desktop) që të sinkronizohet shteti ynë CSS
   useEffect(() => {
-    const handleFullscreenChange = () => {
+    const onFullscreenChange = () => {
       const doc = document as any;
-      setIsFullscreen(!!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement));
+      const isNativeActive = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+      if (!isNativeActive && (document.fullscreenEnabled || doc.webkitFullscreenEnabled)) {
+        setIsLightboxFullscreen(false);
+      }
     };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
-    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
-    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
     return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
-      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
-      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
     };
   }, []);
 
@@ -213,7 +212,10 @@ export default function ProjectDetails() {
     setLightboxIndex(idx);
   };
 
-  const closeLightbox = () => setLightboxIndex(null);
+  const closeLightbox = () => {
+    setLightboxIndex(null);
+    setIsLightboxFullscreen(false); // Reseton gjendjen e dritares
+  };
 
   const images = project?.images || [];
   
@@ -337,13 +339,11 @@ export default function ProjectDetails() {
     };
   }, [lightboxIndex]);
 
-  // KONTROLLI I EMBLA SHTETIT GJATË SWIPE
   useEffect(() => {
     if (!lightboxApi) return;
 
     const updateLightboxState = () => {
-      const currentIdx = lightboxApi.selectedScrollSnap();
-      setLightboxIndex(currentIdx);
+      setLightboxIndex(lightboxApi.selectedScrollSnap());
       setCanLightboxPrev(lightboxApi.canScrollPrev());
       setCanLightboxNext(lightboxApi.canScrollNext());
     };
@@ -359,19 +359,6 @@ export default function ProjectDetails() {
     };
   }, [lightboxApi]);
 
-  // Llogaritja nëse duhet ta rrotullojmë Lightbox-in me CSS (Fullscreen aktiv + Telefon Vertikal + Foto Horizontale)
-  const currentImgOrientation = lightboxIndex !== null ? imageOrientations[lightboxIndex] : null;
-  const shouldRotateSideways = isFullscreen && isScreenPortrait && currentImgOrientation === 'landscape';
-
-  // Forcojmë Embla Carousel të ri-kalkulojë dimensionet sa herë ndryshon rrotullimi i pamjes
-  useEffect(() => {
-    if (lightboxApi) {
-      setTimeout(() => {
-        lightboxApi.reInit();
-      }, 150);
-    }
-  }, [lightboxApi, shouldRotateSideways]);
-
   const isLightboxOpen = lightboxIndex !== null;
 
   useEffect(() => {
@@ -382,6 +369,21 @@ export default function ProjectDetails() {
       lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
     });
   }, [isLightboxOpen, lightboxApi]);
+
+  // LLOGARITJA LOGJIKE NËSE DUHET TË ROTULLOHET ME CSS DRITARJA
+  const currentImgOrientation = lightboxIndex !== null ? imageOrientations[lightboxIndex] : null;
+  const shouldRotateSideways = isLightboxFullscreen && isScreenPortrait && currentImgOrientation === 'landscape';
+
+  // Ri-inicializimi automatik i Embla-s dhe ndryshimi i sensit të Swipe (Boshti X ose Boshti Y)
+  useEffect(() => {
+    if (lightboxApi) {
+      setTimeout(() => {
+        lightboxApi.reInit({
+          axis: shouldRotateSideways ? 'y' : 'x'
+        });
+      }, 120);
+    }
+  }, [lightboxApi, shouldRotateSideways]);
 
   if (isLoading) {
     return (
@@ -867,11 +869,11 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* LIGHTBOX-I I PËRMIRËSUAR ME RROTULLIM ME INTELLIGJENT CSS */}
+      {/* LIGHTBOX-I I PËRMIRËSUAR ME ZGJIDHJEN E PLOTË TË RROTULLIMIT CSS */}
       {lightboxIndex !== null && images.length > 0 && (
         <div
           id="lightbox-container"
-          className="fixed z-[200] bg-black/95 flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent transition-all duration-300 ease-out"
+          className="fixed z-[200] bg-black flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent transition-all duration-300 ease-out"
           onClick={closeLightbox}
           style={
             shouldRotateSideways
@@ -909,7 +911,8 @@ export default function ProjectDetails() {
             ref={lightboxRef}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex h-full w-full">
+            {/* Kthejmë dinamikisht layout-in në flex-col nëse kemi rrotullim të ekranit */}
+            <div className={`flex w-full h-full ${shouldRotateSideways ? 'flex-col' : 'flex-row'}`}>
               {images.map((img, idx) => {
                 return (
                   <div
@@ -986,6 +989,7 @@ export default function ProjectDetails() {
                       src={getLightboxImageUrl(img, idx)}
                       alt={img.caption || `${project.title} - Foto ${idx + 1}`}
                       onLoad={(e) => {
+                        // SAKTSIMI I ORIENTIMIT TË FOTOS GJATË NGARKIMIT (Landscape ose Portrait)
                         const { naturalWidth, naturalHeight } = e.currentTarget;
                         const orientation = naturalWidth >= naturalHeight ? 'landscape' : 'portrait';
                         setImageOrientations(prev => {
@@ -1017,46 +1021,36 @@ export default function ProjectDetails() {
             </div>
           )}
 
-          {/* Butoni Fullscreen Poshtë Djathtas */}
+          {/* Butoni Inteligjent Fullscreen Poshtë Djathtas */}
           <button
             onClick={async (e) => {
               e.stopPropagation();
               const container = document.getElementById("lightbox-container");
               if (!container) return;
 
+              const nextState = !isLightboxFullscreen;
+              setIsLightboxFullscreen(nextState); // Ndryshon shtetin UI për CSS
+
               try {
                 const doc = document as any;
-                const isFullscreenActive = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+                const isNativeActive = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
 
-                if (!isFullscreenActive) {
+                if (nextState && !isNativeActive) {
+                  // Për pajisjet që e mbështesin native (Android/Desktop)
                   if (container.requestFullscreen) {
                     await container.requestFullscreen();
                   } else if ((container as any).webkitRequestFullscreen) {
                     await (container as any).webkitRequestFullscreen();
-                  } else if ((container as any).msRequestFullscreen) {
-                    await (container as any).msRequestFullscreen();
                   }
-
-                  // Provon gjithashtu rrotullimin e sistemit nëse pajisja e suporton (p.sh. Android)
-                  if (window.screen && screen.orientation && screen.orientation.lock) {
-                    const nextOrientation = imageOrientations[lightboxIndex] || 'landscape';
-                    try { await screen.orientation.lock(nextOrientation); } catch (err) { /* Injorohet */ }
-                  }
-                } else {
+                } else if (!nextState && isNativeActive) {
                   if (document.exitFullscreen) {
                     await document.exitFullscreen();
                   } else if (doc.webkitExitFullscreen) {
                     await doc.webkitExitFullscreen();
-                  } else if (doc.msExitFullscreen) {
-                    await doc.msExitFullscreen();
-                  }
-
-                  if (window.screen && screen.orientation && screen.orientation.unlock) {
-                    screen.orientation.unlock();
                   }
                 }
               } catch (error) {
-                console.error("Fullscreen Error:", error);
+                console.error("Native fullscreen error (Handled gracefully with pure CSS):", error);
               }
             }}
             className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/10"
