@@ -851,12 +851,12 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
     >
       <div className="flex h-full w-full">
         {images.map((img, idx) => {
-          // Implementimi i Pinch-to-Zoom me Touch Events
           let startDist = 0;
           let currentScale = 1;
           
           const handleTouchStart = (e: React.TouchEvent) => {
             if (e.touches.length === 2) {
+              e.stopPropagation(); // Ndalon rrëshqitjen (swipe) gjatë zoom-it
               startDist = Math.hypot(
                 e.touches[0].pageX - e.touches[1].pageX,
                 e.touches[0].pageY - e.touches[1].pageY
@@ -866,6 +866,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
           const handleTouchMove = (e: React.TouchEvent) => {
             if (e.touches.length === 2 && startDist > 0) {
+              e.stopPropagation(); // Ndalon rrëshqitjen (swipe)
               const target = e.currentTarget as HTMLElement;
               const imgEl = target.querySelector('img');
               if (!imgEl) return;
@@ -875,7 +876,6 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                 e.touches[0].pageY - e.touches[1].pageY
               );
               
-              // Kalkulimi i shkallës së zoom-it (limiti max 3x)
               currentScale = Math.min(Math.max(1, dist / startDist), 3);
               imgEl.style.transform = `scale(${currentScale})`;
             }
@@ -884,7 +884,6 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
           const handleTouchEnd = (e: React.TouchEvent) => {
             if (e.touches.length < 2) {
               startDist = 0;
-              // Ktheje foton në gjendjen normale nëse gishtat largohen
               const target = e.currentTarget as HTMLElement;
               const imgEl = target.querySelector('img');
               if (imgEl && currentScale < 1.1) {
@@ -929,26 +928,49 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
       </div>
     )}
 
-    {/* Butoni Fullscreen Poshtë Djathtas */}
+    {/* Butoni Fullscreen Poshtë Djathtas - I përmirësuar për kompatibilitet */}
     <button
-      onClick={(e) => {
+      onClick={async (e) => {
         e.stopPropagation();
         const container = document.getElementById("lightbox-container");
         if (!container) return;
 
-        if (!document.fullscreenElement) {
-          container.requestFullscreen().catch((err) => {
-            console.error(`Error attempting to enable fullscreen: ${err.message}`);
-          });
-          // Kërkesë për rrotullim automatik në pajisjet mobile nëse foto është landscape
-          if (window.screen.orientation && window.screen.orientation.lock) {
-            window.screen.orientation.lock("landscape").catch(() => {});
+        try {
+          // Kontroll nëse tashmë jemi në Fullscreen duke përdorur API standarde dhe WebKit
+          const doc = document as any;
+          const isFullscreen = document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+
+          if (!isFullscreen) {
+            // Hyr në Fullscreen
+            if (container.requestFullscreen) {
+              await container.requestFullscreen();
+            } else if ((container as any).webkitRequestFullscreen) {
+              await (container as any).webkitRequestFullscreen(); // Për Safari / iOS
+            } else if ((container as any).msRequestFullscreen) {
+              await (container as any).msRequestFullscreen();
+            }
+
+            // Përpiqemi të kthejmë ekranin horizontalisht (Nëse pajisja e lejon)
+            if (window.screen && screen.orientation && screen.orientation.lock) {
+              try { await screen.orientation.lock("landscape"); } catch (err) { /* Injorohet nëse pajisja nuk e mbanhtet */ }
+            }
+          } else {
+            // Dil nga Fullscreen
+            if (document.exitFullscreen) {
+              await document.exitFullscreen();
+            } else if (doc.webkitExitFullscreen) {
+              await doc.webkitExitFullscreen();
+            } else if (doc.msExitFullscreen) {
+              await doc.msExitFullscreen();
+            }
+
+            // Kthe orientimin origjinal
+            if (window.screen && screen.orientation && screen.orientation.unlock) {
+              screen.orientation.unlock();
+            }
           }
-        } else {
-          document.exitFullscreen();
-          if (window.screen.orientation && window.screen.orientation.unlock) {
-            window.screen.orientation.unlock();
-          }
+        } catch (error) {
+          console.error("Ndodhi një gabim me Fullscreen:", error);
         }
       }}
       className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/10"
@@ -957,7 +979,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
       <Maximize size={20} />
     </button>
 
-    {/* Shigjetat e navigimit (Mbyllen në ekrane shumë të vogla nëse dëshironi) */}
+    {/* Shigjetat e navigimit */}
     {images.length > 1 && (
       <>
         <button
