@@ -418,13 +418,24 @@ export default function ProjectDetails() {
     if (!isLightboxOpen || !lightboxApi) return;
 
     const frame = requestAnimationFrame(() => {
-      const targetIndex = lightboxIndex ?? lightboxStartIndexRef.current;
       lightboxApi.reInit();
-      lightboxApi.scrollTo(targetIndex, true);
+      lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isLightboxOpen, lightboxApi, lightboxIndex, isLightboxFullscreen, isScreenPortrait, lightboxViewport.width, lightboxViewport.height]);
+  }, [isLightboxOpen, lightboxApi]);
+
+  useEffect(() => {
+    if (!isLightboxOpen || !lightboxApi) return;
+
+    const frame = requestAnimationFrame(() => {
+      const currentIndex = lightboxApi.selectedScrollSnap();
+      lightboxApi.reInit();
+      lightboxApi.scrollTo(currentIndex, true);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [isLightboxOpen, lightboxApi, isLightboxFullscreen, isScreenPortrait]);
 
   if (isLoading) {
     return (
