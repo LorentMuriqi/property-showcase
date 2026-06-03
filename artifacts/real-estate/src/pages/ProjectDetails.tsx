@@ -139,6 +139,16 @@ const formatBathroomLabel = (_value: number | string) => {
   return "Banjo";
 };
 
+type ImageOrientation = "landscape" | "portrait";
+
+const getImageOrientation = (width: number, height: number): ImageOrientation => {
+  if (!width || !height) return "portrait";
+
+  // Square and near-square images stay in the natural vertical layout.
+  // Only clearly horizontal images rotate in mobile fullscreen.
+  return width / height > 1.08 ? "landscape" : "portrait";
+};
+
 export default function ProjectDetails() {
   const { id } = useParams();
 
@@ -153,7 +163,7 @@ export default function ProjectDetails() {
   const [showVirtualTour, setShowVirtualTour] = useState(false);
   
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait'>>({});
+  const [imageOrientations, setImageOrientations] = useState<Record<number, ImageOrientation>>({});
   const [isScreenPortrait, setIsScreenPortrait] = useState(typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : true);
   const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
 
@@ -851,238 +861,266 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* LIGHTBOX-I I RREGULLUAR COPMLETELY - TRULY FULLSCREEN EDGE-TO-EDGE */}
-      {lightboxIndex !== null && images.length > 0 && (
-        <div
-          id="lightbox-container"
-          className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent"
-          onClick={closeLightbox}
-          style={{ top: 0, left: 0, width: "100%", height: "100%" }}
-        >
-          {/* Butoni i Mbylljes - Qëndron përherë fiks sipër djathtas */}
-          <button
-            onClick={closeLightbox}
-            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
-          >
-            <X size={22} />
-          </button>
+      {/* Lightbox profesional me orientim dinamik për landscape dhe portrait/square */}
+      {lightboxIndex !== null && images.length > 0 && (() => {
+        const activeImageOrientation = imageOrientations[lightboxIndex];
+        const shouldUseHorizontalFullscreen =
+          isLightboxFullscreen && isScreenPortrait && activeImageOrientation === "landscape";
 
-          {/* Numëruesi i fotove - Fiks në mes lart */}
-          <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-[210]">
-            {lightboxIndex + 1} / {images.length}
-          </div>
+        const fullscreenShellStyle = shouldUseHorizontalFullscreen
+          ? {
+              width: "100vh",
+              height: "100vw",
+              transform: "rotate(90deg)",
+            }
+          : {
+              width: "100vw",
+              height: "100vh",
+              transform: "none",
+            };
 
-          {/* Slider-i Embla - Reagon saktë ndaj Swipe Horizontal */}
+        return (
           <div
-            className="w-full h-full overflow-hidden flex items-center justify-center"
-            ref={lightboxRef}
-            onClick={(e) => e.stopPropagation()}
+            id="lightbox-container"
+            className="fixed inset-0 z-[200] bg-black overflow-hidden touch-none selection:bg-transparent"
+            onClick={closeLightbox}
+            style={{ top: 0, left: 0, width: "100%", height: "100%" }}
           >
-            <div className="flex w-full h-full flex-row">
-              {images.map((img, idx) => {
-                const isImgLandscape = imageOrientations[idx] === 'landscape';
-                const shouldRotateThisImg = isLightboxFullscreen && isScreenPortrait && isImgLandscape;
+            <div
+              className="absolute left-1/2 top-1/2 flex items-center justify-center overflow-hidden bg-black transition-transform duration-300 ease-out"
+              style={{
+                ...fullscreenShellStyle,
+                transform: `translate(-50%, -50%) ${fullscreenShellStyle.transform}`,
+              }}
+            >
+              <div
+                className="relative h-full w-full overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  className="h-full w-full overflow-hidden"
+                  ref={lightboxRef}
+                >
+                  <div className="flex h-full w-full flex-row">
+                    {images.map((img, idx) => (
+                      <div
+                        key={img.id || idx}
+                        className={`relative flex h-full min-w-0 flex-[0_0_100%] items-center justify-center overflow-hidden ${
+                          isLightboxFullscreen ? "p-0" : "p-4 md:p-8"
+                        }`}
+                        ref={(node) => {
+                          if (!node) return;
+                          if (node.hasAttribute("data-zoom-attached")) return;
+                          node.setAttribute("data-zoom-attached", "true");
 
-                return (
-                  <div
-                    key={img.id || idx}
-                    className={`flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative overflow-hidden ${
-                      isLightboxFullscreen ? "p-0" : "p-4 md:p-8"
-                    }`}
-                    ref={(node) => {
-                      if (!node) return;
-                      if (node.hasAttribute('data-zoom-attached')) return;
-                      node.setAttribute('data-zoom-attached', 'true');
+                          let startDist = 0;
 
-                      let startDist = 0;
+                          node.addEventListener("touchstart", (e) => {
+                            if (e.touches.length === 2) {
+                              e.preventDefault();
+                              e.stopPropagation();
 
-                      node.addEventListener('touchstart', (e) => {
-                        if (e.touches.length === 2) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          
-                          startDist = Math.hypot(
-                            e.touches[0].pageX - e.touches[1].pageX,
-                            e.touches[0].pageY - e.touches[1].pageY
-                          );
-                          
-                          const imgEl = node.querySelector('img');
-                          if (imgEl) {
-                            imgEl.style.transition = 'none';
-                            imgEl.style.position = 'relative';
-                            imgEl.style.zIndex = '9999';
+                              startDist = Math.hypot(
+                                e.touches[0].pageX - e.touches[1].pageX,
+                                e.touches[0].pageY - e.touches[1].pageY
+                              );
 
-                            const rect = imgEl.getBoundingClientRect();
-                            const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                            const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                            const originX = ((centerX - rect.left) / rect.width) * 100;
-                            const originY = ((centerY - rect.top) / rect.height) * 100;
-                            imgEl.style.transformOrigin = `${originX}% ${originY}%`;
-                          }
-                        }
-                      }, { passive: false });
+                              const imgEl = node.querySelector("img");
+                              if (imgEl) {
+                                imgEl.style.transition = "none";
+                                imgEl.style.position = "relative";
+                                imgEl.style.zIndex = "9999";
 
-                      node.addEventListener('touchmove', (e) => {
-                        if (e.touches.length === 2 && startDist > 0) {
-                          e.preventDefault(); 
-                          e.stopPropagation();
-                          
-                          const dist = Math.hypot(
-                            e.touches[0].pageX - e.touches[1].pageX,
-                            e.touches[0].pageY - e.touches[1].pageY
-                          );
-                          
-                          const currentScale = Math.min(Math.max(1, dist / startDist), 4); 
-                          
-                          const imgEl = node.querySelector('img');
-                          if (imgEl) {
-                            imgEl.style.transform = `scale(${currentScale})`;
-                          }
-                        }
-                      }, { passive: false });
-
-                      node.addEventListener('touchend', (e) => {
-                        if (e.touches.length < 2) {
-                          startDist = 0;
-                          const imgEl = node.querySelector('img');
-                          if (imgEl) {
-                            imgEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
-                            imgEl.style.transform = 'scale(1)';
-                            setTimeout(() => {
-                              imgEl.style.zIndex = '1';
-                            }, 300);
-                          }
-                        }
-                      });
-                    }}
-                  >
-                    {/* KORNIZA E FOTOS - ZGJEROHET ABSOLUTISHT NË FULLSCREEN QË TË MOS ZVOGËLOHET */}
-                    <div
-                      className={shouldRotateThisImg ? "" : "w-full h-full flex items-center justify-center"}
-                      style={
-                        shouldRotateThisImg
-                          ? {
-                              position: "absolute",
-                              width: "100vh",
-                              height: "100vw",
-                              top: "50%",
-                              left: "50%",
-                              transform: "translate(-50%, -50%) rotate(90deg)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
+                                const rect = imgEl.getBoundingClientRect();
+                                const centerX =
+                                  (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                                const centerY =
+                                  (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                                const originX = ((centerX - rect.left) / rect.width) * 100;
+                                const originY = ((centerY - rect.top) / rect.height) * 100;
+                                imgEl.style.transformOrigin = `${originX}% ${originY}%`;
+                              }
                             }
-                          : undefined
-                      }
-                    >
-                      <img
-                        src={getLightboxImageUrl(img, idx)}
-                        alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                        onLoad={(e) => {
-                          const { naturalWidth, naturalHeight } = e.currentTarget;
-                          const orientation = naturalWidth >= naturalHeight ? 'landscape' : 'portrait';
-                          setImageOrientations(prev => {
-                            if (prev[idx] === orientation) return prev;
-                            return { ...prev, [idx]: orientation };
+                          }, { passive: false });
+
+                          node.addEventListener("touchmove", (e) => {
+                            if (e.touches.length === 2 && startDist > 0) {
+                              e.preventDefault();
+                              e.stopPropagation();
+
+                              const dist = Math.hypot(
+                                e.touches[0].pageX - e.touches[1].pageX,
+                                e.touches[0].pageY - e.touches[1].pageY
+                              );
+
+                              const currentScale = Math.min(Math.max(1, dist / startDist), 4);
+
+                              const imgEl = node.querySelector("img");
+                              if (imgEl) {
+                                imgEl.style.transform = `scale(${currentScale})`;
+                              }
+                            }
+                          }, { passive: false });
+
+                          node.addEventListener("touchend", (e) => {
+                            if (e.touches.length < 2) {
+                              startDist = 0;
+                              const imgEl = node.querySelector("img");
+                              if (imgEl) {
+                                imgEl.style.transition =
+                                  "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)";
+                                imgEl.style.transform = "scale(1)";
+                                setTimeout(() => {
+                                  imgEl.style.zIndex = "1";
+                                }, 300);
+                              }
+                            }
                           });
                         }}
-                        loading={
-                          lightboxIndex !== null &&
-                          (idx === lightboxIndex ||
-                            idx === (lightboxIndex - 1 + images.length) % images.length ||
-                            idx === (lightboxIndex + 1) % images.length)
-                            ? "eager"
-                            : "lazy"
-                        }
-                        decoding="async"
-                        className={`object-contain transition-all duration-300 ${
-                          isLightboxFullscreen 
-                            ? "w-full h-full max-w-full max-h-full rounded-none" 
-                            : "max-w-full max-h-full md:max-w-[85vw] md:max-h-[85vh] rounded-xl shadow-2xl"
-                        }`}
-                      />
-                    </div>
+                      >
+                        <img
+                          src={getLightboxImageUrl(img, idx)}
+                          alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+                          onLoad={(e) => {
+                            const { naturalWidth, naturalHeight } = e.currentTarget;
+                            const orientation = getImageOrientation(naturalWidth, naturalHeight);
+                            setImageOrientations((prev) => {
+                              if (prev[idx] === orientation) return prev;
+                              return { ...prev, [idx]: orientation };
+                            });
+                          }}
+                          loading={
+                            lightboxIndex !== null &&
+                            (idx === lightboxIndex ||
+                              idx === (lightboxIndex - 1 + images.length) % images.length ||
+                              idx === (lightboxIndex + 1) % images.length)
+                              ? "eager"
+                              : "lazy"
+                          }
+                          decoding="async"
+                          draggable={false}
+                          className={`select-none object-contain transition-all duration-300 ${
+                            isLightboxFullscreen
+                              ? "h-full w-full max-h-full max-w-full rounded-none"
+                              : "max-h-full max-w-full rounded-xl shadow-2xl md:max-h-[85vh] md:max-w-[85vw]"
+                          }`}
+                        />
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+
+                <button
+                  onClick={closeLightbox}
+                  className="absolute right-4 top-4 z-[210] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/15 text-white shadow-2xl backdrop-blur-md transition-colors hover:bg-white/25 md:right-5 md:top-5"
+                  aria-label="Mbyll galerinë"
+                >
+                  <X size={22} />
+                </button>
+
+                <div className="absolute left-1/2 top-4 z-[210] -translate-x-1/2 rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white backdrop-blur-md md:top-5">
+                  {lightboxIndex + 1} / {images.length}
+                </div>
+
+                {images[lightboxIndex].caption && (
+                  <div
+                    className={`absolute left-1/2 z-[210] max-w-[min(720px,80vw)] -translate-x-1/2 rounded-full bg-black/60 px-5 py-2 text-center text-sm leading-relaxed text-white shadow-2xl backdrop-blur-md ${
+                      isLightboxFullscreen ? "bottom-5" : "bottom-20"
+                    }`}
+                  >
+                    {images[lightboxIndex].caption}
+                  </div>
+                )}
+
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const container = document.getElementById("lightbox-container");
+                    if (!container) return;
+
+                    const nextState = !isLightboxFullscreen;
+                    setIsLightboxFullscreen(nextState);
+
+                    try {
+                      const doc = document as any;
+                      const isNativeActive = !!(
+                        document.fullscreenElement ||
+                        doc.webkitFullscreenElement ||
+                        doc.mozFullScreenElement ||
+                        doc.msFullscreenElement
+                      );
+
+                      if (nextState && !isNativeActive) {
+                        if (container.requestFullscreen) {
+                          await container.requestFullscreen();
+                        } else if ((container as any).webkitRequestFullscreen) {
+                          await (container as any).webkitRequestFullscreen();
+                        }
+                      } else if (!nextState && isNativeActive) {
+                        if (document.exitFullscreen) {
+                          await document.exitFullscreen();
+                        } else if (doc.webkitExitFullscreen) {
+                          await doc.webkitExitFullscreen();
+                        }
+                      }
+                    } catch (error) {
+                      console.error("Fullscreen error handled natively via simulation:", error);
+                    }
+                  }}
+                  className="absolute bottom-4 right-4 z-[210] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/15 text-white shadow-2xl backdrop-blur-md transition-colors hover:bg-white/25 md:bottom-5 md:right-5"
+                  title="Full Screen"
+                  aria-label="Hap ose mbyll fullscreen"
+                >
+                  <Maximize size={20} />
+                </button>
+
+                {images.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        lightboxPrev();
+                      }}
+                      disabled={!canLightboxPrev}
+                      className={`absolute left-3 top-1/2 z-[210] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/90 backdrop-blur-md transition-all duration-300 group md:left-6 md:h-11 md:w-11 ${
+                        canLightboxPrev
+                          ? "hover:border-white/20 hover:bg-white/20"
+                          : "cursor-not-allowed opacity-30"
+                      }`}
+                      aria-label="Fotoja e mëparshme"
+                    >
+                      <ChevronLeft
+                        size={19}
+                        strokeWidth={2.2}
+                        className="transition-transform group-hover:-translate-x-0.5"
+                      />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        lightboxNext();
+                      }}
+                      disabled={!canLightboxNext}
+                      className={`absolute right-3 top-1/2 z-[210] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/90 backdrop-blur-md transition-all duration-300 group md:right-6 md:h-11 md:w-11 ${
+                        canLightboxNext
+                          ? "hover:border-white/20 hover:bg-white/20"
+                          : "cursor-not-allowed opacity-30"
+                      }`}
+                      aria-label="Fotoja tjetër"
+                    >
+                      <ChevronRight
+                        size={19}
+                        strokeWidth={2.2}
+                        className="transition-transform group-hover:translate-x-0.5"
+                      />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-
-          {/* Caption i fotos */}
-          {images[lightboxIndex].caption && (
-            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm z-[210] max-w-[80vw] text-center">
-              {images[lightboxIndex].caption}
-            </div>
-          )}
-
-          {/* Butoni Fullscreen - Qëndron fiks poshtë djathtas pa lëvizur kurrë */}
-          <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              const container = document.getElementById("lightbox-container");
-              if (!container) return;
-
-              const nextState = !isLightboxFullscreen;
-              setIsLightboxFullscreen(nextState);
-
-              try {
-                const doc = document as any;
-                const isNativeActive = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
-
-                if (nextState && !isNativeActive) {
-                  if (container.requestFullscreen) {
-                    await container.requestFullscreen();
-                  } else if ((container as any).webkitRequestFullscreen) {
-                    await (container as any).webkitRequestFullscreen();
-                  }
-                } else if (!nextState && isNativeActive) {
-                  if (document.exitFullscreen) {
-                    await document.exitFullscreen();
-                  } else if (doc.webkitExitFullscreen) {
-                    await doc.webkitExitFullscreen();
-                  }
-                }
-              } catch (error) {
-                console.error("Fullscreen error handled natively via simulation:", error);
-              }
-            }}
-            className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors z-[210] border border-white/10 shadow-2xl backdrop-blur-md"
-            title="Full Screen"
-          >
-            <Maximize size={20} />
-          </button>
-
-          {/* Shigjetat e navigimit për Desktop */}
-          {images.length > 1 && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  lightboxPrev();
-                }}
-                disabled={!canLightboxPrev}
-                className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
-                  canLightboxPrev ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
-                }`}
-              >
-                <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  lightboxNext();
-                }}
-                disabled={!canLightboxNext}
-                className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
-                  canLightboxNext ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
-                }`}
-              >
-                <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {showVirtualTour && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col">
