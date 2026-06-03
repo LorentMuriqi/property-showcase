@@ -151,12 +151,44 @@ export default function ProjectDetails() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
+  
+  // SHTETET E REJA PËR DETEKTORIN E ORIENTIMIT DHE FULLSCREEN CSS
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait'>>({});
+  const [isScreenPortrait, setIsScreenPortrait] = useState(window.innerHeight > window.innerWidth);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const lightboxStartIndexRef = useRef(0);
   const [canLightboxPrev, setCanLightboxPrev] = useState(false);
   const [canLightboxNext, setCanLightboxNext] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+
+  // Ndjekja e ndryshimit të orientimit fizik të dritares së telefonit
+  useEffect(() => {
+    const handleResize = () => {
+      setIsScreenPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Ndjekja e saktë nëse Fullscreen është aktiv apo jo në nivel DOM-i
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const doc = document as any;
+      setIsFullscreen(!!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -305,7 +337,7 @@ export default function ProjectDetails() {
     };
   }, [lightboxIndex]);
 
-  // KONTROLLI I NDREPRERJEVE DHE ORIENTIMIT DINAMIK GJATË SCROLL-IT (NEXT/PREV)
+  // KONTROLLI I EMBLA SHTETIT GJATË SWIPE
   useEffect(() => {
     if (!lightboxApi) return;
 
@@ -314,16 +346,6 @@ export default function ProjectDetails() {
       setLightboxIndex(currentIdx);
       setCanLightboxPrev(lightboxApi.canScrollPrev());
       setCanLightboxNext(lightboxApi.canScrollNext());
-
-      // Kontrolli nëse jemi në Fullscreen
-      const doc = document as any;
-      const isFullscreen = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
-      
-      // Nëse jemi në Fullscreen, ndrysho rrotullimin e ekranit dinamikisht sipas fotos aktuale
-      if (isFullscreen && window.screen && screen.orientation && screen.orientation.lock) {
-        const orientation = imageOrientations[currentIdx] || 'landscape';
-        screen.orientation.lock(orientation).catch(() => {});
-      }
     };
 
     updateLightboxState();
@@ -335,7 +357,20 @@ export default function ProjectDetails() {
       lightboxApi.off("select", updateLightboxState);
       lightboxApi.off("reInit", updateLightboxState);
     };
-  }, [lightboxApi, imageOrientations]);
+  }, [lightboxApi]);
+
+  // Llogaritja nëse duhet ta rrotullojmë Lightbox-in me CSS (Fullscreen aktiv + Telefon Vertikal + Foto Horizontale)
+  const currentImgOrientation = lightboxIndex !== null ? imageOrientations[lightboxIndex] : null;
+  const shouldRotateSideways = isFullscreen && isScreenPortrait && currentImgOrientation === 'landscape';
+
+  // Forcojmë Embla Carousel të ri-kalkulojë dimensionet sa herë ndryshon rrotullimi i pamjes
+  useEffect(() => {
+    if (lightboxApi) {
+      setTimeout(() => {
+        lightboxApi.reInit();
+      }, 150);
+    }
+  }, [lightboxApi, shouldRotateSideways]);
 
   const isLightboxOpen = lightboxIndex !== null;
 
@@ -832,11 +867,28 @@ export default function ProjectDetails() {
         </div>
       )}
 
+      {/* LIGHTBOX-I I PËRMIRËSUAR ME RROTULLIM ME INTELLIGJENT CSS */}
       {lightboxIndex !== null && images.length > 0 && (
         <div
           id="lightbox-container"
-          className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent"
+          className="fixed z-[200] bg-black/95 flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent transition-all duration-300 ease-out"
           onClick={closeLightbox}
+          style={
+            shouldRotateSideways
+              ? {
+                  top: "50%",
+                  left: "50%",
+                  width: "100vh",
+                  height: "100vw",
+                  transform: "translate(-50%, -50%) rotate(90deg)",
+                }
+              : {
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                }
+          }
         >
           {/* Butoni Sipër për mbyllje */}
           <button
@@ -865,17 +917,15 @@ export default function ProjectDetails() {
                     className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative p-4 overflow-hidden"
                     ref={(node) => {
                       if (!node) return;
-                      // Sigurohemi që eventet të mos shtohen dy herë
                       if (node.hasAttribute('data-zoom-attached')) return;
                       node.setAttribute('data-zoom-attached', 'true');
 
                       let startDist = 0;
 
                       node.addEventListener('touchstart', (e) => {
-                        // Kur përdoren 2 gishta, nisim Zoom-in
                         if (e.touches.length === 2) {
-                          e.preventDefault(); // Ndalon zoom-in native të telefonit
-                          e.stopPropagation(); // Ndalon Embla-n të bëjë swipe
+                          e.preventDefault();
+                          e.stopPropagation();
                           
                           startDist = Math.hypot(
                             e.touches[0].pageX - e.touches[1].pageX,
@@ -884,11 +934,10 @@ export default function ProjectDetails() {
                           
                           const imgEl = node.querySelector('img');
                           if (imgEl) {
-                            imgEl.style.transition = 'none'; // Heqim animacionin për zoom në kohë reale
+                            imgEl.style.transition = 'none';
                             imgEl.style.position = 'relative';
-                            imgEl.style.zIndex = '9999'; // E nxjerrim foton sipër UI-t
+                            imgEl.style.zIndex = '9999';
 
-                            // Llogarisim qendrën mes dy gishtave për të bërë zoom fiks aty ku prekim
                             const rect = imgEl.getBoundingClientRect();
                             const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                             const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -909,7 +958,6 @@ export default function ProjectDetails() {
                             e.touches[0].pageY - e.touches[1].pageY
                           );
                           
-                          // Llogaritja e scale (Maksimumi 4x zoom)
                           const currentScale = Math.min(Math.max(1, dist / startDist), 4); 
                           
                           const imgEl = node.querySelector('img');
@@ -920,15 +968,12 @@ export default function ProjectDetails() {
                       }, { passive: false });
 
                       node.addEventListener('touchend', (e) => {
-                        // Kur lëshohen gishtat, ktheje foton në vend (Instagram Style)
                         if (e.touches.length < 2) {
                           startDist = 0;
                           const imgEl = node.querySelector('img');
                           if (imgEl) {
                             imgEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
                             imgEl.style.transform = 'scale(1)';
-                            
-                            // Ktheje Z-index në normalitet pasi mbaron animacioni
                             setTimeout(() => {
                               imgEl.style.zIndex = '1';
                             }, 300);
@@ -941,7 +986,6 @@ export default function ProjectDetails() {
                       src={getLightboxImageUrl(img, idx)}
                       alt={img.caption || `${project.title} - Foto ${idx + 1}`}
                       onLoad={(e) => {
-                        // Zbulon automatikisht gjerësinë dhe lartësinë origjinale të fotos
                         const { naturalWidth, naturalHeight } = e.currentTarget;
                         const orientation = naturalWidth >= naturalHeight ? 'landscape' : 'portrait';
                         setImageOrientations(prev => {
@@ -982,9 +1026,9 @@ export default function ProjectDetails() {
 
               try {
                 const doc = document as any;
-                const isFullscreen = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+                const isFullscreenActive = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
 
-                if (!isFullscreen) {
+                if (!isFullscreenActive) {
                   if (container.requestFullscreen) {
                     await container.requestFullscreen();
                   } else if ((container as any).webkitRequestFullscreen) {
@@ -993,10 +1037,10 @@ export default function ProjectDetails() {
                     await (container as any).msRequestFullscreen();
                   }
 
-                  // Kthe ekzaktësisht telefonin sipas formatit të fotos aktuale
+                  // Provon gjithashtu rrotullimin e sistemit nëse pajisja e suporton (p.sh. Android)
                   if (window.screen && screen.orientation && screen.orientation.lock) {
-                    const currentImgOrientation = imageOrientations[lightboxIndex] || 'landscape';
-                    try { await screen.orientation.lock(currentImgOrientation); } catch (err) { /* Injorohet */ }
+                    const nextOrientation = imageOrientations[lightboxIndex] || 'landscape';
+                    try { await screen.orientation.lock(nextOrientation); } catch (err) { /* Injorohet */ }
                   }
                 } else {
                   if (document.exitFullscreen) {
