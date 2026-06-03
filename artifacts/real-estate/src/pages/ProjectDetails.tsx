@@ -106,10 +106,10 @@ function normalizeProject(raw: any): ProjectType {
     virtualTourEmbedCode:
       raw?.virtualTourEmbedCode ?? raw?.virtual_tour_embed_code,
     virtualTourScenes: raw?.virtualTourScenes ?? raw?.virtual_tour_scenes ?? [],
-	virtualTourStatus:
-  raw?.virtualTourStatus ?? raw?.virtual_tour_status ?? "draft",
-virtualTourPublishedAt:
-  raw?.virtualTourPublishedAt ?? raw?.virtual_tour_published_at ?? null,
+    virtualTourStatus:
+      raw?.virtualTourStatus ?? raw?.virtual_tour_status ?? "draft",
+    virtualTourPublishedAt:
+      raw?.virtualTourPublishedAt ?? raw?.virtual_tour_published_at ?? null,
     defaultSceneId: raw?.defaultSceneId ?? raw?.default_scene_id,
     images: Array.isArray(raw?.images) ? raw.images : [],
   };
@@ -148,14 +148,15 @@ export default function ProjectDetails() {
 
   const [hasBuiltInVirtualTour, setHasBuiltInVirtualTour] = useState(false);
 
-const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
-const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [lightboxRef, lightboxApi] = useEmblaCarousel({ loop: false });
   const [showVirtualTour, setShowVirtualTour] = useState(false);
-const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-const lightboxStartIndexRef = useRef(0);
-const [canLightboxPrev, setCanLightboxPrev] = useState(false);
-const [canLightboxNext, setCanLightboxNext] = useState(false);
-const [showContactModal, setShowContactModal] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [imageOrientations, setImageOrientations] = useState<Record<number, 'landscape' | 'portrait'>>({});
+  const lightboxStartIndexRef = useRef(0);
+  const [canLightboxPrev, setCanLightboxPrev] = useState(false);
+  const [canLightboxNext, setCanLightboxNext] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -175,46 +176,45 @@ const [showContactModal, setShowContactModal] = useState(false);
     if (emblaApi) emblaApi.scrollNext();
   }, [emblaApi]);
 
-const openLightbox = (idx: number) => {
-  lightboxStartIndexRef.current = idx;
-  setLightboxIndex(idx);
-};
+  const openLightbox = (idx: number) => {
+    lightboxStartIndexRef.current = idx;
+    setLightboxIndex(idx);
+  };
 
-const closeLightbox = () => setLightboxIndex(null);
+  const closeLightbox = () => setLightboxIndex(null);
 
   const images = project?.images || [];
   
   const getImagePreviewUrl = (img: any) =>
-  img?.thumbnailUrl ||
-  img?.thumbnail_url ||
-  img?.thumbUrl ||
-  img?.thumb_url ||
-  img?.url;
+    img?.thumbnailUrl ||
+    img?.thumbnail_url ||
+    img?.thumbUrl ||
+    img?.thumb_url ||
+    img?.url;
   
   const getLightboxImageUrl = (img: any, idx: number) => {
-  if (lightboxIndex === null || images.length === 0) {
-    return getImagePreviewUrl(img);
-  }
+    if (lightboxIndex === null || images.length === 0) {
+      return getImagePreviewUrl(img);
+    }
 
-  const prevIndex = (lightboxIndex - 1 + images.length) % images.length;
-  const nextIndex = (lightboxIndex + 1) % images.length;
+    const prevIndex = (lightboxIndex - 1 + images.length) % images.length;
+    const nextIndex = (lightboxIndex + 1) % images.length;
 
-  const shouldLoadFullImage =
-    idx === lightboxIndex || idx === prevIndex || idx === nextIndex;
+    const shouldLoadFullImage =
+      idx === lightboxIndex || idx === prevIndex || idx === nextIndex;
 
-  return shouldLoadFullImage ? img.url : getImagePreviewUrl(img);
-};
+    return shouldLoadFullImage ? img.url : getImagePreviewUrl(img);
+  };
   
+  const lightboxPrev = useCallback(() => {
+    if (!images.length || !lightboxApi || !lightboxApi.canScrollPrev()) return;
+    lightboxApi.scrollPrev();
+  }, [lightboxApi, images.length]);
 
-const lightboxPrev = useCallback(() => {
-  if (!images.length || !lightboxApi || !lightboxApi.canScrollPrev()) return;
-  lightboxApi.scrollPrev();
-}, [lightboxApi, images.length]);
-
-const lightboxNext = useCallback(() => {
-  if (!images.length || !lightboxApi || !lightboxApi.canScrollNext()) return;
-  lightboxApi.scrollNext();
-}, [lightboxApi, images.length]);
+  const lightboxNext = useCallback(() => {
+    if (!images.length || !lightboxApi || !lightboxApi.canScrollNext()) return;
+    lightboxApi.scrollNext();
+  }, [lightboxApi, images.length]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -234,111 +234,119 @@ const lightboxNext = useCallback(() => {
     return () => window.removeEventListener("keydown", handleKey);
   }, [lightboxIndex, lightboxPrev, lightboxNext, showContactModal, showVirtualTour]);
 
-  
-  
   useEffect(() => {
-  let isMounted = true;
+    let isMounted = true;
 
-  const fetchProject = async () => {
-    if (!id) {
-      if (isMounted) {
+    const fetchProject = async () => {
+      if (!id) {
+        if (isMounted) {
+          setProject(null);
+          setFetchError(true);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setFetchError(false);
+
+      const { data, error } = await supabase
+        .from("properties")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (!isMounted) return;
+
+      if (error || !data) {
+        console.error("Project details fetch error:", error);
         setProject(null);
+        setHasBuiltInVirtualTour(false);
         setFetchError(true);
         setIsLoading(false);
+        return;
       }
-      return;
-    }
 
-    setIsLoading(true);
-    setFetchError(false);
+      setProject(normalizeProject(data));
 
-    const { data, error } = await supabase
-      .from("properties")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+      const { count, error: scenesError } = await supabase
+        .from("virtual_tour_scenes")
+        .select("id", { count: "exact", head: true })
+        .eq("property_id", data.id);
 
-    if (!isMounted) return;
+      if (scenesError) {
+        console.error("Virtual tour scenes count error:", scenesError);
+        setHasBuiltInVirtualTour(false);
+      } else {
+        setHasBuiltInVirtualTour(
+          data.virtual_tour_status === "published" && (count || 0) > 0
+        );
+      }
 
-    if (error || !data) {
-      console.error("Project details fetch error:", error);
-      setProject(null);
-      setHasBuiltInVirtualTour(false);
-      setFetchError(true);
+      setFetchError(false);
       setIsLoading(false);
-      return;
-    }
+    };
 
-    setProject(normalizeProject(data));
+    fetchProject();
 
-    const { count, error: scenesError } = await supabase
-      .from("virtual_tour_scenes")
-      .select("id", { count: "exact", head: true })
-      .eq("property_id", data.id);
-
-    if (scenesError) {
-      console.error("Virtual tour scenes count error:", scenesError);
-      setHasBuiltInVirtualTour(false);
-    } else {
-      setHasBuiltInVirtualTour(
-        data.virtual_tour_status === "published" && (count || 0) > 0
-      );
-    }
-
-    setFetchError(false);
-    setIsLoading(false);
-  };
-
-  fetchProject();
-
-  return () => {
-    isMounted = false;
-  };
-}, [id]);
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
   
+  useEffect(() => {
+    if (lightboxIndex === null) return;
 
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-useEffect(() => {
-  if (lightboxIndex === null) return;
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [lightboxIndex]);
 
-  const originalOverflow = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
+  // KONTROLLI I NDREPRERJEVE DHE ORIENTIMIT DINAMIK GJATË SCROLL-IT (NEXT/PREV)
+  useEffect(() => {
+    if (!lightboxApi) return;
 
-  return () => {
-    document.body.style.overflow = originalOverflow;
-  };
-}, [lightboxIndex]);
+    const updateLightboxState = () => {
+      const currentIdx = lightboxApi.selectedScrollSnap();
+      setLightboxIndex(currentIdx);
+      setCanLightboxPrev(lightboxApi.canScrollPrev());
+      setCanLightboxNext(lightboxApi.canScrollNext());
 
-useEffect(() => {
-  if (!lightboxApi) return;
+      // Kontrolli nëse jemi në Fullscreen
+      const doc = document as any;
+      const isFullscreen = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+      
+      // Nëse jemi në Fullscreen, ndrysho rrotullimin e ekranit dinamikisht sipas fotos aktuale
+      if (isFullscreen && window.screen && screen.orientation && screen.orientation.lock) {
+        const orientation = imageOrientations[currentIdx] || 'landscape';
+        screen.orientation.lock(orientation).catch(() => {});
+      }
+    };
 
-  const updateLightboxState = () => {
-    setLightboxIndex(lightboxApi.selectedScrollSnap());
-    setCanLightboxPrev(lightboxApi.canScrollPrev());
-    setCanLightboxNext(lightboxApi.canScrollNext());
-  };
+    updateLightboxState();
 
-  updateLightboxState();
+    lightboxApi.on("select", updateLightboxState);
+    lightboxApi.on("reInit", updateLightboxState);
 
-  lightboxApi.on("select", updateLightboxState);
-  lightboxApi.on("reInit", updateLightboxState);
+    return () => {
+      lightboxApi.off("select", updateLightboxState);
+      lightboxApi.off("reInit", updateLightboxState);
+    };
+  }, [lightboxApi, imageOrientations]);
 
-  return () => {
-    lightboxApi.off("select", updateLightboxState);
-    lightboxApi.off("reInit", updateLightboxState);
-  };
-}, [lightboxApi]);
+  const isLightboxOpen = lightboxIndex !== null;
 
-const isLightboxOpen = lightboxIndex !== null;
+  useEffect(() => {
+    if (!isLightboxOpen || !lightboxApi) return;
 
-useEffect(() => {
-  if (!isLightboxOpen || !lightboxApi) return;
-
-  requestAnimationFrame(() => {
-    lightboxApi.reInit();
-    lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
-  });
-}, [isLightboxOpen, lightboxApi]);
+    requestAnimationFrame(() => {
+      lightboxApi.reInit();
+      lightboxApi.scrollTo(lightboxStartIndexRef.current, true);
+    });
+  }, [isLightboxOpen, lightboxApi]);
 
   if (isLoading) {
     return (
@@ -380,14 +388,14 @@ useEffect(() => {
       }).format(project.price)
     : "Çmimi sipas kërkesës";
 
-const hasFallbackVirtualTour = !!(
-  project.virtualTourUrl ||
-  project.virtual_tour_url ||
-  project.virtualTourEmbedCode ||
-  project.virtual_tour_embed_code
-);
+  const hasFallbackVirtualTour = !!(
+    project.virtualTourUrl ||
+    project.virtual_tour_url ||
+    project.virtualTourEmbedCode ||
+    project.virtual_tour_embed_code
+  );
 
-const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
+  const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
   const statusLabels: Record<string, string> = {
     for_sale: "Në Shitje",
@@ -402,7 +410,7 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
 
   return (
     <Layout>
-	<Helmet>
+      <Helmet>
         <title>
           {project
             ? `${project.title ?? "Pronë"}${project.city ? ` — ${project.city}` : ""}${project.country ? `, ${project.country}` : ""} | Aura Estates`
@@ -428,13 +436,13 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
               : "Shiko detajet e pronës."
           }
         />
-<meta
-  property="og:image"
-  content={
-    project?.images?.[0]?.url ||
-    "https://auraks.com/images/hero-bg.png"
-  }
-/>
+        <meta
+          property="og:image"
+          content={
+            project?.images?.[0]?.url ||
+            "https://auraks.com/images/hero-bg.png"
+          }
+        />
         <meta
           property="og:url"
           content={`https://auraks.com/projects/${project?.id ?? ""}`}
@@ -455,14 +463,14 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                     key={img.id || idx}
                     onClick={() => openLightbox(idx)}
                   >
-<img
-  src={idx === 0 ? img.url : getImagePreviewUrl(img)}
-  alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-  loading={idx === 0 ? "eager" : "lazy"}
-  decoding="async"
-  fetchPriority={idx === 0 ? "high" : "low"}
-  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-/>
+                    <img
+                      src={idx === 0 ? img.url : getImagePreviewUrl(img)}
+                      alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+                      loading={idx === 0 ? "eager" : "lazy"}
+                      decoding="async"
+                      fetchPriority={idx === 0 ? "high" : "low"}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                    />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
                       <ZoomIn
                         size={40}
@@ -539,12 +547,12 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                   className="flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors"
                 >
                   <img
-  src={getImagePreviewUrl(img)}
-  alt=""
-  loading="lazy"
-  decoding="async"
-  className="w-full h-full object-cover"
-/>
+                    src={getImagePreviewUrl(img)}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               ))}
             </div>
@@ -555,11 +563,11 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
           <div className="lg:col-span-2 space-y-12">
             <div>
               <div className="flex items-center gap-4 mb-4">
-<span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
-  {project.status
-    ? statusLabels[project.status] || project.status.replaceAll("_", " ")
-    : "Pa status"}
-</span>
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                  {project.status
+                    ? statusLabels[project.status] || project.status.replaceAll("_", " ")
+                    : "Pa status"}
+                </span>
                 {project.propertyType && (
                   <span className="text-primary text-sm font-medium tracking-wide uppercase">
                     {project.propertyType}
@@ -708,12 +716,12 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
                 </div>
 
                 <div className="space-y-4">
-<button
-  onClick={() => (window.location.href = "/Contact")}
-  className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
->
-  Planifiko një Vizitë
-</button>
+                  <button
+                    onClick={() => (window.location.href = "/Contact")}
+                    className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors"
+                  >
+                    Planifiko një Vizitë
+                  </button>
                   <button
                     onClick={() => setShowContactModal(true)}
                     className="w-full py-4 bg-transparent border border-border text-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
@@ -825,214 +833,225 @@ const hasVirtualTour = hasBuiltInVirtualTour || hasFallbackVirtualTour;
       )}
 
       {lightboxIndex !== null && images.length > 0 && (
-  <div
-    id="lightbox-container"
-    className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent"
-    onClick={closeLightbox}
-  >
-    {/* Butoni Sipër për mbyllje */}
-    <button
-      onClick={closeLightbox}
-      className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210]"
-    >
-      <X size={22} />
-    </button>
+        <div
+          id="lightbox-container"
+          className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center overflow-hidden touch-none selection:bg-transparent"
+          onClick={closeLightbox}
+        >
+          {/* Butoni Sipër për mbyllje */}
+          <button
+            onClick={closeLightbox}
+            className="absolute top-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210]"
+          >
+            <X size={22} />
+          </button>
 
-    {/* Numëruesi i fotove */}
-    <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-[210]">
-      {lightboxIndex + 1} / {images.length}
-    </div>
+          {/* Numëruesi i fotove */}
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white text-sm font-medium z-[210]">
+            {lightboxIndex + 1} / {images.length}
+          </div>
 
-    {/* Embla Carousel Slider */}
-    <div
-      className="w-full h-full overflow-hidden flex items-center justify-center"
-      ref={lightboxRef}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex h-full w-full">
-        {images.map((img, idx) => {
-          return (
-            <div
-              key={img.id || idx}
-              className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative p-4 overflow-hidden"
-              ref={(node) => {
-                if (!node) return;
-                // Sigurohemi që eventet të mos shtohen dy herë
-                if (node.hasAttribute('data-zoom-attached')) return;
-                node.setAttribute('data-zoom-attached', 'true');
+          {/* Embla Carousel Slider */}
+          <div
+            className="w-full h-full overflow-hidden flex items-center justify-center"
+            ref={lightboxRef}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-full w-full">
+              {images.map((img, idx) => {
+                return (
+                  <div
+                    key={img.id || idx}
+                    className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center relative p-4 overflow-hidden"
+                    ref={(node) => {
+                      if (!node) return;
+                      // Sigurohemi që eventet të mos shtohen dy herë
+                      if (node.hasAttribute('data-zoom-attached')) return;
+                      node.setAttribute('data-zoom-attached', 'true');
 
-                let startDist = 0;
+                      let startDist = 0;
 
-                node.addEventListener('touchstart', (e) => {
-                  // Kur përdoren 2 gishta, nisim Zoom-in
-                  if (e.touches.length === 2) {
-                    e.preventDefault(); // Ndalon zoom-in native të telefonit
-                    e.stopPropagation(); // Ndalon Embla-n të bëjë swipe
-                    
-                    startDist = Math.hypot(
-                      e.touches[0].pageX - e.touches[1].pageX,
-                      e.touches[0].pageY - e.touches[1].pageY
-                    );
-                    
-                    const imgEl = node.querySelector('img');
-                    if (imgEl) {
-                      imgEl.style.transition = 'none'; // Heqim animacionin për zoom në kohë reale
-                      imgEl.style.position = 'relative';
-                      imgEl.style.zIndex = '9999'; // E nxjerrim foton sipër UI-t
+                      node.addEventListener('touchstart', (e) => {
+                        // Kur përdoren 2 gishta, nisim Zoom-in
+                        if (e.touches.length === 2) {
+                          e.preventDefault(); // Ndalon zoom-in native të telefonit
+                          e.stopPropagation(); // Ndalon Embla-n të bëjë swipe
+                          
+                          startDist = Math.hypot(
+                            e.touches[0].pageX - e.touches[1].pageX,
+                            e.touches[0].pageY - e.touches[1].pageY
+                          );
+                          
+                          const imgEl = node.querySelector('img');
+                          if (imgEl) {
+                            imgEl.style.transition = 'none'; // Heqim animacionin për zoom në kohë reale
+                            imgEl.style.position = 'relative';
+                            imgEl.style.zIndex = '9999'; // E nxjerrim foton sipër UI-t
 
-                      // Llogarisim qendrën mes dy gishtave për të bërë zoom fiks aty ku prekim
-                      const rect = imgEl.getBoundingClientRect();
-                      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                      const originX = ((centerX - rect.left) / rect.width) * 100;
-                      const originY = ((centerY - rect.top) / rect.height) * 100;
-                      imgEl.style.transformOrigin = `${originX}% ${originY}%`;
-                    }
-                  }
-                }, { passive: false }); // PASSIVE: FALSE është çelësi këtu!
+                            // Llogarisim qendrën mes dy gishtave për të bërë zoom fiks aty ku prekim
+                            const rect = imgEl.getBoundingClientRect();
+                            const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                            const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                            const originX = ((centerX - rect.left) / rect.width) * 100;
+                            const originY = ((centerY - rect.top) / rect.height) * 100;
+                            imgEl.style.transformOrigin = `${originX}% ${originY}%`;
+                          }
+                        }
+                      }, { passive: false });
 
-                node.addEventListener('touchmove', (e) => {
-                  if (e.touches.length === 2 && startDist > 0) {
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    
-                    const dist = Math.hypot(
-                      e.touches[0].pageX - e.touches[1].pageX,
-                      e.touches[0].pageY - e.touches[1].pageY
-                    );
-                    
-                    // Llogaritja e scale (Maksimumi 4x zoom)
-                    const currentScale = Math.min(Math.max(1, dist / startDist), 4); 
-                    
-                    const imgEl = node.querySelector('img');
-                    if (imgEl) {
-                      imgEl.style.transform = `scale(${currentScale})`;
-                    }
-                  }
-                }, { passive: false });
+                      node.addEventListener('touchmove', (e) => {
+                        if (e.touches.length === 2 && startDist > 0) {
+                          e.preventDefault(); 
+                          e.stopPropagation();
+                          
+                          const dist = Math.hypot(
+                            e.touches[0].pageX - e.touches[1].pageX,
+                            e.touches[0].pageY - e.touches[1].pageY
+                          );
+                          
+                          // Llogaritja e scale (Maksimumi 4x zoom)
+                          const currentScale = Math.min(Math.max(1, dist / startDist), 4); 
+                          
+                          const imgEl = node.querySelector('img');
+                          if (imgEl) {
+                            imgEl.style.transform = `scale(${currentScale})`;
+                          }
+                        }
+                      }, { passive: false });
 
-                node.addEventListener('touchend', (e) => {
-                  // Kur lëshohen gishtat, ktheje foton në vend (Instagram Style)
-                  if (e.touches.length < 2) {
-                    startDist = 0;
-                    const imgEl = node.querySelector('img');
-                    if (imgEl) {
-                      imgEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
-                      imgEl.style.transform = 'scale(1)';
-                      
-                      // Ktheje Z-index në normalitet pasi mbaron animacioni
-                      setTimeout(() => {
-                        imgEl.style.zIndex = '1';
-                      }, 300);
-                    }
-                  }
-                });
-              }}
-            >
-              <img
-                src={getLightboxImageUrl(img, idx)}
-                alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                loading={
-                  lightboxIndex !== null &&
-                  (idx === lightboxIndex ||
-                    idx === (lightboxIndex - 1 + images.length) % images.length ||
-                    idx === (lightboxIndex + 1) % images.length)
-                    ? "eager"
-                    : "lazy"
-                }
-                decoding="async"
-                className="max-w-full max-h-full md:max-w-[90vw] md:max-h-[90vh] object-contain rounded-xl shadow-2xl origin-center portrait:w-full landscape:h-full"
-              />
+                      node.addEventListener('touchend', (e) => {
+                        // Kur lëshohen gishtat, ktheje foton në vend (Instagram Style)
+                        if (e.touches.length < 2) {
+                          startDist = 0;
+                          const imgEl = node.querySelector('img');
+                          if (imgEl) {
+                            imgEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+                            imgEl.style.transform = 'scale(1)';
+                            
+                            // Ktheje Z-index në normalitet pasi mbaron animacioni
+                            setTimeout(() => {
+                              imgEl.style.zIndex = '1';
+                            }, 300);
+                          }
+                        }
+                      });
+                    }}
+                  >
+                    <img
+                      src={getLightboxImageUrl(img, idx)}
+                      alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+                      onLoad={(e) => {
+                        // Zbulon automatikisht gjerësinë dhe lartësinë origjinale të fotos
+                        const { naturalWidth, naturalHeight } = e.currentTarget;
+                        const orientation = naturalWidth >= naturalHeight ? 'landscape' : 'portrait';
+                        setImageOrientations(prev => {
+                          if (prev[idx] === orientation) return prev;
+                          return { ...prev, [idx]: orientation };
+                        });
+                      }}
+                      loading={
+                        lightboxIndex !== null &&
+                        (idx === lightboxIndex ||
+                          idx === (lightboxIndex - 1 + images.length) % images.length ||
+                          idx === (lightboxIndex + 1) % images.length)
+                          ? "eager"
+                          : "lazy"
+                      }
+                      decoding="async"
+                      className="max-w-full max-h-full md:max-w-[90vw] md:max-h-[90vh] object-contain rounded-xl shadow-2xl origin-center portrait:w-full landscape:h-full"
+                    />
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-    </div>
+          </div>
 
-    {/* Caption i fotos */}
-    {images[lightboxIndex].caption && (
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm z-[210] max-w-[80vw] text-center">
-        {images[lightboxIndex].caption}
-      </div>
-    )}
+          {/* Caption i fotos */}
+          {images[lightboxIndex].caption && (
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-sm z-[210] max-w-[80vw] text-center">
+              {images[lightboxIndex].caption}
+            </div>
+          )}
 
-    {/* Butoni Fullscreen Poshtë Djathtas */}
-    <button
-      onClick={async (e) => {
-        e.stopPropagation();
-        const container = document.getElementById("lightbox-container");
-        if (!container) return;
+          {/* Butoni Fullscreen Poshtë Djathtas */}
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              const container = document.getElementById("lightbox-container");
+              if (!container) return;
 
-        try {
-          const doc = document as any;
-          const isFullscreen = document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+              try {
+                const doc = document as any;
+                const isFullscreen = !!(document.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
 
-          if (!isFullscreen) {
-            if (container.requestFullscreen) {
-              await container.requestFullscreen();
-            } else if ((container as any).webkitRequestFullscreen) {
-              await (container as any).webkitRequestFullscreen();
-            } else if ((container as any).msRequestFullscreen) {
-              await (container as any).msRequestFullscreen();
-            }
+                if (!isFullscreen) {
+                  if (container.requestFullscreen) {
+                    await container.requestFullscreen();
+                  } else if ((container as any).webkitRequestFullscreen) {
+                    await (container as any).webkitRequestFullscreen();
+                  } else if ((container as any).msRequestFullscreen) {
+                    await (container as any).msRequestFullscreen();
+                  }
 
-            if (window.screen && screen.orientation && screen.orientation.lock) {
-              try { await screen.orientation.lock("landscape"); } catch (err) { /* Injorohet */ }
-            }
-          } else {
-            if (document.exitFullscreen) {
-              await document.exitFullscreen();
-            } else if (doc.webkitExitFullscreen) {
-              await doc.webkitExitFullscreen();
-            } else if (doc.msExitFullscreen) {
-              await doc.msExitFullscreen();
-            }
+                  // Kthe ekzaktësisht telefonin sipas formatit të fotos aktuale
+                  if (window.screen && screen.orientation && screen.orientation.lock) {
+                    const currentImgOrientation = imageOrientations[lightboxIndex] || 'landscape';
+                    try { await screen.orientation.lock(currentImgOrientation); } catch (err) { /* Injorohet */ }
+                  }
+                } else {
+                  if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                  } else if (doc.webkitExitFullscreen) {
+                    await doc.webkitExitFullscreen();
+                  } else if (doc.msExitFullscreen) {
+                    await doc.msExitFullscreen();
+                  }
 
-            if (window.screen && screen.orientation && screen.orientation.unlock) {
-              screen.orientation.unlock();
-            }
-          }
-        } catch (error) {
-          console.error("Fullscreen Error:", error);
-        }
-      }}
-      className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/10"
-      title="Full Screen"
-    >
-      <Maximize size={20} />
-    </button>
+                  if (window.screen && screen.orientation && screen.orientation.unlock) {
+                    screen.orientation.unlock();
+                  }
+                }
+              } catch (error) {
+                console.error("Fullscreen Error:", error);
+              }
+            }}
+            className="absolute bottom-5 right-5 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[210] border border-white/10"
+            title="Full Screen"
+          >
+            <Maximize size={20} />
+          </button>
 
-    {/* Shigjetat e navigimit */}
-    {images.length > 1 && (
-      <>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            lightboxPrev();
-          }}
-          disabled={!canLightboxPrev}
-          className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
-            canLightboxPrev ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
-          }`}
-        >
-          <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            lightboxNext();
-          }}
-          disabled={!canLightboxNext}
-          className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
-            canLightboxNext ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
-          }`}
-        >
-          <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
-        </button>
-      </>
-    )}
-  </div>
-)}
+          {/* Shigjetat e navigimit */}
+          {images.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lightboxPrev();
+                }}
+                disabled={!canLightboxPrev}
+                className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
+                  canLightboxPrev ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
+                }`}
+              >
+                <ChevronLeft size={19} strokeWidth={2.2} className="group-hover:-translate-x-0.5 transition-transform" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lightboxNext();
+                }}
+                disabled={!canLightboxNext}
+                className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/10 text-white/90 flex items-center justify-center backdrop-blur-md transition-all duration-300 border border-white/10 group z-[210] ${
+                  canLightboxNext ? "hover:bg-white/20 hover:border-white/20" : "opacity-30 cursor-not-allowed"
+                }`}
+              >
+                <ChevronRight size={19} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {showVirtualTour && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col">
