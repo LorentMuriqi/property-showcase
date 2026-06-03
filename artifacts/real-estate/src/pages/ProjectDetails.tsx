@@ -141,12 +141,34 @@ const formatBathroomLabel = (_value: number | string) => {
 
 type ImageOrientation = "landscape" | "portrait";
 
+type LightboxViewport = {
+  width: number;
+  height: number;
+  offsetTop: number;
+  offsetLeft: number;
+};
+
 const getImageOrientation = (width: number, height: number): ImageOrientation => {
   if (!width || !height) return "portrait";
 
   // Square and near-square images stay in the natural vertical layout.
   // Only clearly horizontal images rotate in mobile fullscreen.
   return width / height > 1.08 ? "landscape" : "portrait";
+};
+
+const getLightboxViewport = (): LightboxViewport => {
+  if (typeof window === "undefined") {
+    return { width: 0, height: 0, offsetTop: 0, offsetLeft: 0 };
+  }
+
+  const visualViewport = window.visualViewport;
+
+  return {
+    width: Math.round(visualViewport?.width ?? window.innerWidth),
+    height: Math.round(visualViewport?.height ?? window.innerHeight),
+    offsetTop: Math.round(visualViewport?.offsetTop ?? 0),
+    offsetLeft: Math.round(visualViewport?.offsetLeft ?? 0),
+  };
 };
 
 export default function ProjectDetails() {
@@ -164,7 +186,11 @@ export default function ProjectDetails() {
   
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [imageOrientations, setImageOrientations] = useState<Record<number, ImageOrientation>>({});
-  const [isScreenPortrait, setIsScreenPortrait] = useState(typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : true);
+  const [lightboxViewport, setLightboxViewport] = useState<LightboxViewport>(() => getLightboxViewport());
+  const [isScreenPortrait, setIsScreenPortrait] = useState(() => {
+    const viewport = getLightboxViewport();
+    return viewport.height >= viewport.width;
+  });
   const [isLightboxFullscreen, setIsLightboxFullscreen] = useState(false);
 
   const lightboxStartIndexRef = useRef(0);
@@ -173,11 +199,31 @@ export default function ProjectDetails() {
   const [showContactModal, setShowContactModal] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsScreenPortrait(window.innerHeight > window.innerWidth);
+    let frame = 0;
+
+    const updateViewport = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const viewport = getLightboxViewport();
+        setLightboxViewport(viewport);
+        setIsScreenPortrait(viewport.height >= viewport.width);
+      });
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+
+    updateViewport();
+
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+    };
   }, []);
 
   useEffect(() => {
@@ -378,7 +424,7 @@ export default function ProjectDetails() {
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isLightboxOpen, lightboxApi, lightboxIndex, isLightboxFullscreen, isScreenPortrait]);
+  }, [isLightboxOpen, lightboxApi, lightboxIndex, isLightboxFullscreen, isScreenPortrait, lightboxViewport.width, lightboxViewport.height]);
 
   if (isLoading) {
     return (
@@ -866,45 +912,47 @@ export default function ProjectDetails() {
 
       {/* Lightbox profesional me orientim dinamik për landscape dhe portrait/square */}
       {lightboxIndex !== null && images.length > 0 && (() => {
+        const fallbackViewportWidth = typeof window !== "undefined" ? window.innerWidth : 1;
+        const fallbackViewportHeight = typeof window !== "undefined" ? window.innerHeight : 1;
+        const viewportWidth = Math.max(1, lightboxViewport.width || fallbackViewportWidth);
+        const viewportHeight = Math.max(1, lightboxViewport.height || fallbackViewportHeight);
         const activeImageOrientation = imageOrientations[lightboxIndex];
         const shouldUseHorizontalFullscreen =
           isLightboxFullscreen && isScreenPortrait && activeImageOrientation === "landscape";
 
-        const fullscreenShellStyle = shouldUseHorizontalFullscreen
-          ? {
-              width: "100dvh",
-              height: "100dvw",
-              maxWidth: "100dvh",
-              maxHeight: "100dvw",
-              transform: "rotate(90deg)",
-            }
-          : {
-              width: "100dvw",
-              height: "100dvh",
-              maxWidth: "100dvw",
-              maxHeight: "100dvh",
-              transform: "none",
-            };
+        // iOS Safari does not provide reliable fullscreen dimensions for normal divs.
+        // This shell is sized with real visualViewport pixels and centered by numeric
+        // margins, so browser toolbars cannot push the rotated content off-screen.
+        const shellWidth = shouldUseHorizontalFullscreen ? viewportHeight : viewportWidth;
+        const shellHeight = shouldUseHorizontalFullscreen ? viewportWidth : viewportHeight;
 
         return (
           <div
             id="lightbox-container"
-            className="fixed inset-0 z-[200] bg-black overflow-hidden touch-none selection:bg-transparent"
+            className="fixed z-[200] bg-black overflow-hidden touch-none selection:bg-transparent"
             onClick={closeLightbox}
             style={{
-              top: 0,
-              left: 0,
-              width: "100dvw",
-              height: "100dvh",
-              maxWidth: "100dvw",
-              maxHeight: "100dvh",
+              top: `${lightboxViewport.offsetTop}px`,
+              left: `${lightboxViewport.offsetLeft}px`,
+              width: `${viewportWidth}px`,
+              height: `${viewportHeight}px`,
+              maxWidth: `${viewportWidth}px`,
+              maxHeight: `${viewportHeight}px`,
             }}
           >
             <div
-              className="absolute left-1/2 top-1/2 flex items-center justify-center overflow-hidden bg-black transition-transform duration-300 ease-out"
+              className="absolute flex items-center justify-center overflow-hidden bg-black transition-transform duration-300 ease-out"
               style={{
-                ...fullscreenShellStyle,
-                transform: `translate(-50%, -50%) ${fullscreenShellStyle.transform}`,
+                left: `${viewportWidth / 2}px`,
+                top: `${viewportHeight / 2}px`,
+                width: `${shellWidth}px`,
+                height: `${shellHeight}px`,
+                marginLeft: `${-shellWidth / 2}px`,
+                marginTop: `${-shellHeight / 2}px`,
+                maxWidth: `${shellWidth}px`,
+                maxHeight: `${shellHeight}px`,
+                transform: shouldUseHorizontalFullscreen ? "rotate(90deg)" : "none",
+                transformOrigin: "center center",
               }}
             >
               <div
