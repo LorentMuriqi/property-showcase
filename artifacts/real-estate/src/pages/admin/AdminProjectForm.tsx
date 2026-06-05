@@ -100,8 +100,7 @@ export default function AdminProjectForm() {
     },
   });
   
-const selectedCountry = watch("country") as CountryName | "";
-const selectedCity = watch("city") as string;
+
 
 const selectedCountry = watch("country") as CountryName | "";
 const selectedCity = watch("city") as string;
