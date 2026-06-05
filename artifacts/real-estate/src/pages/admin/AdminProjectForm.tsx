@@ -103,8 +103,11 @@ export default function AdminProjectForm() {
 const selectedCountry = watch("country") as CountryName | "";
 const selectedCity = watch("city") as string;
 
-const cityOptions = selectedCountry
-  ? [...COUNTRY_CITY_OPTIONS[selectedCountry]]
+const selectedCountry = watch("country") as CountryName | "";
+const selectedCity = watch("city") as string;
+
+const cityOptions: string[] = selectedCountry
+  ? Array.from(COUNTRY_CITY_OPTIONS[selectedCountry])
   : [];
 
 useEffect(() => {
@@ -116,7 +119,7 @@ useEffect(() => {
   if (selectedCity && !cityOptions.includes(selectedCity)) {
     setValue("city", "");
   }
-}, [selectedCountry, selectedCity, cityOptions, setValue]);
+}, [selectedCountry, selectedCity, setValue]);
 
   const {
     fields: imageFields,
