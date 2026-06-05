@@ -3,6 +3,101 @@ import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 
 
+function VirtualTourOrbCard() {
+  const hotspots = [
+    { top: "24%", left: "28%", delay: 0 },
+    { top: "34%", right: "23%", delay: 0.35 },
+    { bottom: "30%", left: "24%", delay: 0.7 },
+    { bottom: "23%", right: "30%", delay: 1.05 },
+  ];
+
+  return (
+    <div className="relative aspect-square bg-card rounded-2xl border border-border overflow-hidden flex items-center justify-center">
+      {/* Soft premium glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.18),transparent_42%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(212,175,55,0.06)_50%,transparent_100%)]" />
+
+      {/* Minimal room/grid perspective */}
+      <div className="absolute inset-10 rounded-2xl border border-primary/10" />
+      <div className="absolute left-10 right-10 top-1/2 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+      <div className="absolute top-10 bottom-10 left-1/2 w-px bg-gradient-to-b from-transparent via-primary/20 to-transparent" />
+
+      <motion.div
+        className="absolute w-[78%] h-[78%] rounded-full border border-primary/15"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+      />
+
+      <motion.div
+        className="absolute w-[58%] h-[58%] rounded-full border border-primary/25 border-dashed"
+        animate={{ rotate: -360 }}
+        transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
+      />
+
+      <motion.div
+        className="absolute w-[38%] h-[38%] rounded-full border border-primary/30"
+        animate={{ scale: [1, 1.05, 1], opacity: [0.45, 0.85, 0.45] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      {/* Radar scan */}
+      <motion.div
+        className="absolute w-[2px] h-[34%] bg-gradient-to-b from-primary/80 via-primary/20 to-transparent origin-bottom"
+        style={{ bottom: "50%" }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+      />
+
+      {/* Hotspots */}
+      {hotspots.map((hotspot, index) => (
+        <motion.div
+          key={index}
+          className="absolute"
+          style={hotspot}
+          animate={{ scale: [1, 1.18, 1], opacity: [0.75, 1, 0.75] }}
+          transition={{
+            duration: 2.4,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: hotspot.delay,
+          }}
+        >
+          <div className="relative w-3 h-3 rounded-full bg-primary shadow-[0_0_18px_rgba(212,175,55,0.75)]">
+            <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping" />
+          </div>
+        </motion.div>
+      ))}
+
+      {/* Main orb */}
+      <motion.div
+        className="relative z-10 w-36 h-36 rounded-full border border-primary/40 bg-background/70 backdrop-blur-xl shadow-[0_24px_80px_rgba(212,175,55,0.18)] flex flex-col items-center justify-center"
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <motion.div
+          className="absolute inset-3 rounded-full border border-primary/15"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+        />
+
+        <span className="text-primary text-5xl font-bold tracking-tight leading-none">
+          360°
+        </span>
+        <span className="mt-3 text-[10px] uppercase tracking-[0.34em] text-foreground">
+          Virtual Tour
+        </span>
+      </motion.div>
+
+      {/* Bottom label */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center">
+        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground">
+          Immersive Preview
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function About() {
   return (
     <Layout>
@@ -58,10 +153,8 @@ The Art of{" "}
                   Ne specializohemi në prezantimin e pronave premium përmes teknologjisë moderne, duke përfshirë ture virtuale 360°, që u mundësojnë klientëve të eksplorojnë çdo detaj nga kudo në botë.
                 </p>
               </div>
-              <div className="aspect-square bg-card rounded-2xl border border-border p-8 flex flex-col justify-center text-center">
-                <span className="font-display text-6xl text-primary block mb-4">15+</span>
-                <span className="text-foreground tracking-widest uppercase text-sm">Vite Ekselencë</span>
-              </div>
+			  
+<VirtualTourOrbCard />
             </div>
 
 <div className="border-t border-border pt-16">
