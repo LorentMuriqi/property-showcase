@@ -135,32 +135,74 @@ function VirtualTourOrbCard() {
       ))}
 
       {/* Main portal orb */}
-      <motion.div
-        className="relative z-10 w-36 h-36 rounded-full border border-primary/40 bg-background/75 backdrop-blur-xl shadow-[0_24px_90px_rgba(212,175,55,0.20)] flex flex-col items-center justify-center will-change-transform"
-        style={{ transform: "translateZ(0)" }}
-        animate={{ y: [0, -5, 0] }}
-        transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <motion.div
-          className="absolute inset-3 rounded-full border border-primary/15"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
-        />
+      {/* Main virtual room portal */}
+<motion.div
+  className="relative z-10 w-40 h-40 rounded-[2rem] border border-primary/30 bg-background/75 backdrop-blur-xl shadow-[0_24px_90px_rgba(212,175,55,0.20)] overflow-hidden will-change-transform"
+  style={{ transform: "translateZ(0)" }}
+  animate={{ y: [0, -5, 0] }}
+  transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut" }}
+>
+  {/* Inner glow */}
+  <motion.div
+    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.16),transparent_62%)]"
+    animate={{ opacity: [0.45, 0.9, 0.45] }}
+    transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+  />
 
-        <motion.div
-          className="absolute inset-6 rounded-full bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.10),transparent_70%)]"
-          animate={{ opacity: [0.45, 0.9, 0.45] }}
-          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
-        />
+  {/* Abstract room perspective */}
+  <div className="absolute inset-6 rounded-2xl border border-primary/20" />
 
-        <span className="relative text-primary text-4xl md:text-5xl font-bold tracking-tight leading-none">
-          360°
-        </span>
+  <motion.div
+    className="absolute left-6 right-6 top-1/2 h-px bg-gradient-to-r from-primary/0 via-primary/30 to-primary/0"
+    animate={{ opacity: [0.25, 0.7, 0.25] }}
+    transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+  />
 
-        <span className="relative mt-3 text-[10px] uppercase tracking-[0.34em] text-foreground">
-          Virtual Tour
-        </span>
-      </motion.div>
+  <motion.div
+    className="absolute top-6 bottom-6 left-1/2 w-px bg-gradient-to-b from-primary/0 via-primary/30 to-primary/0"
+    animate={{ opacity: [0.25, 0.7, 0.25] }}
+    transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+  />
+
+  {/* Perspective floor lines */}
+  <div className="absolute left-1/2 top-1/2 h-[46%] w-px bg-primary/20 origin-top rotate-[28deg]" />
+  <div className="absolute left-1/2 top-1/2 h-[46%] w-px bg-primary/20 origin-top -rotate-[28deg]" />
+  <div className="absolute left-1/2 top-1/2 h-[46%] w-px bg-primary/15 origin-top rotate-[55deg]" />
+  <div className="absolute left-1/2 top-1/2 h-[46%] w-px bg-primary/15 origin-top -rotate-[55deg]" />
+
+  {/* Portal doorway */}
+  <motion.div
+    className="absolute left-1/2 top-1/2 h-16 w-10 -translate-x-1/2 -translate-y-1/2 rounded-t-full border border-primary/45 bg-background/50 shadow-[0_0_35px_rgba(212,175,55,0.18)]"
+    animate={{ scale: [1, 1.04, 1], opacity: [0.78, 1, 0.78] }}
+    transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
+  />
+
+  {/* Center navigation point */}
+  <motion.div
+    className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_20px_rgba(212,175,55,0.75)]"
+    animate={{ scale: [1, 1.18, 1] }}
+    transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+  />
+
+  {/* Small room hotspots */}
+  <motion.div
+    className="absolute left-[28%] top-[34%] h-2 w-2 rounded-full bg-primary/80"
+    animate={{ opacity: [0.45, 1, 0.45] }}
+    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+  />
+  <motion.div
+    className="absolute right-[26%] bottom-[32%] h-2 w-2 rounded-full bg-primary/80"
+    animate={{ opacity: [0.45, 1, 0.45] }}
+    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+  />
+
+  {/* Micro label inside portal */}
+  <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-center">
+    <p className="text-[8px] uppercase tracking-[0.28em] text-foreground/80 whitespace-nowrap">
+      Virtual Space
+    </p>
+  </div>
+</motion.div>
 
       {/* Micro UI details */}
       <div className="absolute left-8 top-8 flex items-center gap-2">
@@ -177,7 +219,7 @@ function VirtualTourOrbCard() {
       {/* Bottom label */}
       <div className="absolute bottom-7 left-1/2 -translate-x-1/2 text-center">
         <p className="text-[9px] uppercase tracking-[0.34em] text-muted-foreground/80 whitespace-nowrap">
-          Explore In 360°
+          Explore The Space
         </p>
       </div>
     </div>
