@@ -2,11 +2,11 @@ import { Layout } from "@/components/Layout";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 
-function VirtualTourHouseCard() {
+function VirtualTourVisionCard() {
   const hotspots = [
-    { top: "40%", left: "38%", delay: 0 },
-    { top: "40%", right: "38%", delay: 0.45 },
-    { top: "56%", left: "50%", delay: 0.9 },
+    { top: "38%", left: "35%", delay: 0 },
+    { top: "38%", right: "35%", delay: 0.45 },
+    { bottom: "36%", left: "50%", delay: 0.9 },
   ];
 
   return (
@@ -18,138 +18,130 @@ function VirtualTourHouseCard() {
       {/* Inner frame */}
       <div className="absolute inset-8 rounded-[1.75rem] border border-primary/10" />
 
-      {/* Subtle radar rings */}
+      {/* Outer soft orbit */}
       <motion.div
-        className="absolute w-[72%] h-[72%] rounded-full border border-primary/10 will-change-transform"
+        className="absolute w-[76%] h-[76%] rounded-full border border-primary/10 will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ rotate: 360 }}
         transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
       />
+
       <motion.div
-        className="absolute w-[52%] h-[52%] rounded-full border border-primary/10 border-dashed will-change-transform"
+        className="absolute w-[58%] h-[58%] rounded-full border border-primary/10 border-dashed will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ rotate: -360 }}
-        transition={{ duration: 65, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 62, repeat: Infinity, ease: "linear" }}
       />
 
-      {/* Scan line */}
+      {/* Main eye / globe block */}
       <motion.div
-        className="absolute w-px h-[26%] bg-gradient-to-b from-primary/70 via-primary/18 to-transparent origin-bottom will-change-transform"
-        style={{
-          bottom: "50%",
-          transform: "translateZ(0)",
-        }}
-        animate={{ rotate: 360 }}
-        transition={{
-          duration: 14,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-      />
-
-      {/* House block */}
-      <motion.div
-        className="relative z-10 w-[56%] h-[56%] flex items-center justify-center will-change-transform"
+        className="relative z-10 w-[70%] h-[52%] flex items-center justify-center will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ y: [0, -3, 0] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       >
-        {/* Soft glow behind house */}
+        {/* Soft glow */}
         <motion.div
-          className="absolute inset-[12%] rounded-full bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.10),transparent_70%)]"
-          animate={{ opacity: [0.35, 0.7, 0.35] }}
+          className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.12),transparent_68%)]"
+          animate={{ opacity: [0.35, 0.72, 0.35] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
 
-        {/* Clear house silhouette */}
+        {/* Eye shape */}
         <svg
-          viewBox="0 0 240 240"
+          viewBox="0 0 320 220"
           className="absolute inset-0 w-full h-full"
           fill="none"
         >
-          {/* Roof */}
+          {/* Eye outer shape */}
           <path
-            d="M58 108 L120 58 L182 108"
-            stroke="rgba(212,175,55,0.55)"
+            d="M28 110C56 68 101 44 160 44C219 44 264 68 292 110C264 152 219 176 160 176C101 176 56 152 28 110Z"
+            stroke="rgba(212,175,55,0.42)"
             strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="rgba(255,255,255,0.03)"
+          />
+
+          {/* Eye inner contour */}
+          <path
+            d="M54 110C76 80 110 63 160 63C210 63 244 80 266 110C244 140 210 157 160 157C110 157 76 140 54 110Z"
+            stroke="rgba(212,175,55,0.14)"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
 
-          {/* Chimney */}
-          <path
-            d="M155 78 L155 62"
-            stroke="rgba(212,175,55,0.40)"
+          {/* Globe outline */}
+          <circle
+            cx="160"
+            cy="110"
+            r="50"
+            stroke="rgba(212,175,55,0.34)"
             strokeWidth="3"
+            fill="rgba(255,255,255,0.06)"
+          />
+
+          {/* Globe meridians */}
+          <ellipse
+            cx="160"
+            cy="110"
+            rx="22"
+            ry="50"
+            stroke="rgba(212,175,55,0.18)"
+            strokeWidth="2"
+          />
+          <ellipse
+            cx="160"
+            cy="110"
+            rx="38"
+            ry="50"
+            stroke="rgba(212,175,55,0.12)"
+            strokeWidth="2"
+          />
+
+          {/* Globe parallels */}
+          <path
+            d="M110 110H210"
+            stroke="rgba(212,175,55,0.18)"
+            strokeWidth="2"
             strokeLinecap="round"
           />
-
-          {/* House body */}
-          <rect
-            x="72"
-            y="106"
-            width="96"
-            height="84"
-            rx="18"
-            stroke="rgba(212,175,55,0.40)"
-            strokeWidth="3"
-            fill="rgba(255,255,255,0.12)"
-          />
-
-          {/* Window left */}
-          <rect
-            x="88"
-            y="122"
-            width="24"
-            height="24"
-            rx="8"
-            stroke="rgba(212,175,55,0.30)"
-            strokeWidth="2"
-            fill="rgba(255,255,255,0.08)"
-          />
-
-          {/* Window right */}
-          <rect
-            x="128"
-            y="122"
-            width="24"
-            height="24"
-            rx="8"
-            stroke="rgba(212,175,55,0.30)"
-            strokeWidth="2"
-            fill="rgba(255,255,255,0.08)"
-          />
-
-          {/* Door */}
           <path
-            d="M110 190 V154 C110 147 114 143 120 143 C126 143 130 147 130 154 V190"
-            stroke="rgba(212,175,55,0.40)"
-            strokeWidth="3"
+            d="M122 92C134 98 146 100 160 100C174 100 186 98 198 92"
+            stroke="rgba(212,175,55,0.12)"
+            strokeWidth="2"
             strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="rgba(255,255,255,0.05)"
           />
-
-          {/* Base line */}
           <path
-            d="M84 190 H156"
-            stroke="rgba(212,175,55,0.25)"
+            d="M122 128C134 122 146 120 160 120C174 120 186 122 198 128"
+            stroke="rgba(212,175,55,0.12)"
             strokeWidth="2"
             strokeLinecap="round"
           />
         </svg>
 
-        {/* Center focus glow */}
+        {/* Rotating scan ring */}
         <motion.div
-          className="absolute left-1/2 top-[56%] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/90 shadow-[0_0_24px_rgba(212,175,55,0.75)]"
-          animate={{ scale: [1, 1.16, 1], opacity: [0.8, 1, 0.8] }}
+          className="absolute w-[42%] h-[42%] rounded-full border border-primary/25 will-change-transform"
+          style={{ transform: "translateZ(0)" }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+        >
+          <div className="absolute left-1/2 top-1/2 h-[54%] w-px -translate-x-1/2 -translate-y-full bg-gradient-to-t from-primary/0 via-primary/35 to-primary/80 origin-bottom" />
+        </motion.div>
+
+        {/* Center lens */}
+        <motion.div
+          className="absolute h-7 w-7 rounded-full bg-primary/90 shadow-[0_0_28px_rgba(212,175,55,0.75)]"
+          animate={{ scale: [1, 1.12, 1], opacity: [0.82, 1, 0.82] }}
           transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
         />
 
         <motion.div
-          className="absolute left-1/2 top-[56%] h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/15"
-          animate={{ scale: [0.8, 1.12, 0.8], opacity: [0.12, 0.4, 0.12] }}
-          transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute h-16 w-16 rounded-full border border-primary/18"
+          animate={{ scale: [0.82, 1.08, 0.82], opacity: [0.12, 0.4, 0.12] }}
+          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
         />
 
         {/* Hotspots */}
@@ -181,22 +173,22 @@ function VirtualTourHouseCard() {
         ))}
       </motion.div>
 
-      {/* Top micro labels */}
+      {/* Micro labels */}
       <div className="absolute left-8 top-8 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
         <span className="text-[8px] uppercase tracking-[0.28em] text-muted-foreground/70">
-          Live Tour
+          Live View
         </span>
       </div>
 
       <div className="absolute right-8 top-8 text-[8px] uppercase tracking-[0.28em] text-muted-foreground/70">
-        Home View
+        Panorama
       </div>
 
       {/* Bottom label */}
       <div className="absolute bottom-7 left-1/2 -translate-x-1/2 text-center">
         <p className="text-[9px] uppercase tracking-[0.34em] text-muted-foreground/80 whitespace-nowrap">
-          Explore The Home
+          See Every Detail
         </p>
       </div>
     </div>
@@ -271,7 +263,7 @@ export default function About() {
                 </p>
               </div>
 
-              <VirtualTourHouseCard />
+              <VirtualTourVisionCard />
             </div>
 
             <div className="border-t border-border pt-16">
