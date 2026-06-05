@@ -537,7 +537,11 @@ useEffect(() => {
     ))}
   </select>
 </div>
-              <Input label="Adresa e Rrugës" {...register("address")} />
+              <Input
+  label="Fshati / Lagjja / Adresa e saktë"
+  {...register("address")}
+  placeholder="P.sh., Vitomiricë, Rr. Kryesore, afër shkollës"
+/>
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
