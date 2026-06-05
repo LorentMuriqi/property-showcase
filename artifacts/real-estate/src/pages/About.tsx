@@ -2,153 +2,173 @@ import { Layout } from "@/components/Layout";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 
-function VirtualTourOrbCard() {
-  const floatingPoints = [
-    { top: "28%", left: "25%", delay: 0 },
-    { top: "42%", right: "23%", delay: 0.45 },
-    { bottom: "29%", left: "30%", delay: 0.9 },
+function VirtualTourHouseCard() {
+  const hotspots = [
+    { top: "42%", left: "36%", delay: 0 },
+    { top: "42%", right: "36%", delay: 0.45 },
+    { bottom: "30%", left: "50%", delay: 0.9 },
   ];
 
   return (
     <div className="relative aspect-square bg-card rounded-2xl border border-border overflow-hidden flex items-center justify-center transform-gpu">
-      {/* Premium ambient background */}
+      {/* Ambient premium background */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(212,175,55,0.16),transparent_46%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(212,175,55,0.07)_48%,transparent_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(212,175,55,0.05)_50%,transparent_100%)]" />
 
-      {/* Soft architectural frame */}
+      {/* Soft frame */}
       <div className="absolute inset-8 rounded-[1.75rem] border border-primary/10" />
-      <div className="absolute left-10 right-10 top-1/2 h-px bg-gradient-to-r from-transparent via-primary/14 to-transparent" />
-      <div className="absolute top-10 bottom-10 left-1/2 w-px bg-gradient-to-b from-transparent via-primary/14 to-transparent" />
+      <div className="absolute left-10 right-10 top-1/2 h-px bg-gradient-to-r from-transparent via-primary/12 to-transparent" />
+      <div className="absolute top-10 bottom-10 left-1/2 w-px bg-gradient-to-b from-transparent via-primary/12 to-transparent" />
 
-      {/* Panoramic virtual window */}
+      {/* Outer radar rings */}
       <motion.div
-        className="relative z-10 w-[72%] h-[52%] rounded-[2rem] border border-primary/25 bg-background/65 backdrop-blur-xl overflow-hidden shadow-[0_28px_90px_rgba(212,175,55,0.18)] will-change-transform"
-        style={{ transform: "translateZ(0)" }}
-        animate={{ y: [0, -4, 0] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-      >
-        {/* Moving panorama glow */}
-        <motion.div
-          className="absolute inset-0 bg-[linear-gradient(110deg,transparent_0%,rgba(212,175,55,0.06)_28%,rgba(212,175,55,0.18)_50%,rgba(212,175,55,0.06)_72%,transparent_100%)]"
-          animate={{ x: ["-45%", "45%", "-45%"] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* Abstract interior layers */}
-        <div className="absolute inset-5 rounded-[1.4rem] border border-primary/12" />
-
-        <motion.div
-          className="absolute left-6 right-6 top-[34%] h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"
-          animate={{ opacity: [0.28, 0.72, 0.28] }}
-          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        <motion.div
-          className="absolute left-8 right-8 bottom-[30%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"
-          animate={{ opacity: [0.18, 0.52, 0.18] }}
-          transition={{ duration: 5.8, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
-        />
-
-        {/* Depth panels */}
-        <motion.div
-          className="absolute left-[16%] top-[28%] h-[42%] w-[24%] rounded-xl border border-primary/18 bg-background/35"
-          animate={{ opacity: [0.45, 0.8, 0.45] }}
-          transition={{ duration: 5.2, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        <motion.div
-          className="absolute right-[15%] top-[22%] h-[52%] w-[28%] rounded-xl border border-primary/16 bg-background/25"
-          animate={{ opacity: [0.35, 0.72, 0.35] }}
-          transition={{ duration: 5.6, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-        />
-
-        {/* Subtle navigation path */}
-        <motion.div
-          className="absolute left-[22%] right-[22%] bottom-[22%] h-px bg-gradient-to-r from-primary/0 via-primary/50 to-primary/0"
-          animate={{ scaleX: [0.55, 1, 0.55], opacity: [0.25, 0.8, 0.25] }}
-          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* Center focus point */}
-        <motion.div
-          className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_26px_rgba(212,175,55,0.75)]"
-          animate={{ scale: [1, 1.18, 1], opacity: [0.75, 1, 0.75] }}
-          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        <motion.div
-          className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/18"
-          animate={{ scale: [0.82, 1.12, 0.82], opacity: [0.12, 0.45, 0.12] }}
-          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* Micro label */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-center">
-          <p className="text-[8px] uppercase tracking-[0.3em] text-foreground/75 whitespace-nowrap">
-            Virtual Preview
-          </p>
-        </div>
-      </motion.div>
-
-      {/* Outer elegant orbit accents */}
-      <motion.div
-        className="absolute w-[82%] h-[82%] rounded-full border border-primary/10 will-change-transform"
+        className="absolute w-[78%] h-[78%] rounded-full border border-primary/10 will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ rotate: 360 }}
-        transition={{ duration: 68, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
       />
 
       <motion.div
-        className="absolute w-[62%] h-[62%] rounded-full border border-primary/12 border-dashed will-change-transform"
+        className="absolute w-[58%] h-[58%] rounded-full border border-primary/12 border-dashed will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ rotate: -360 }}
         transition={{ duration: 56, repeat: Infinity, ease: "linear" }}
       />
 
-      {/* Floating tour points */}
-      {floatingPoints.map((point, index) => (
+      {/* Radar scan line */}
+      <motion.div
+        className="absolute w-px h-[30%] bg-gradient-to-b from-primary/70 via-primary/18 to-transparent origin-bottom will-change-transform"
+        style={{
+          bottom: "50%",
+          transform: "translateZ(0)",
+        }}
+        animate={{ rotate: 360 }}
+        transition={{
+          duration: 16,
+          repeat: Infinity,
+          ease: "linear",
+        }}
+      />
+
+      {/* Main floating house */}
+      <motion.div
+        className="relative z-10 w-[60%] h-[60%] will-change-transform"
+        style={{ transform: "translateZ(0)" }}
+        animate={{ y: [0, -4, 0] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {/* House glow */}
         <motion.div
-          key={index}
-          className="absolute will-change-transform"
-          style={point}
-          animate={{ scale: [1, 1.08, 1], opacity: [0.62, 1, 0.62] }}
-          transition={{
-            duration: 4.2,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: point.delay,
-          }}
-        >
-          <motion.span
-            className="absolute -inset-2 rounded-full bg-primary/16"
-            animate={{ scale: [0.7, 1.4, 0.7], opacity: [0, 0.36, 0] }}
+          className="absolute inset-[18%] bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.12),transparent_70%)]"
+          animate={{ opacity: [0.35, 0.75, 0.35] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* Roof */}
+        <div className="absolute left-1/2 top-[16%] h-[22%] w-[54%] -translate-x-1/2">
+          <div className="absolute left-1/2 top-[2px] h-px w-[58%] -translate-x-[92%] origin-right rotate-[32deg] bg-primary/40" />
+          <div className="absolute right-1/2 top-[2px] h-px w-[58%] translate-x-[92%] origin-left -rotate-[32deg] bg-primary/40" />
+          <div className="absolute left-1/2 top-[34%] -translate-x-1/2 h-[2px] w-[12%] rounded-full bg-primary/35" />
+        </div>
+
+        {/* House body */}
+        <div className="absolute left-1/2 top-[34%] -translate-x-1/2 w-[54%] h-[38%] rounded-[1.6rem] border border-primary/28 bg-background/55 backdrop-blur-md shadow-[0_18px_70px_rgba(212,175,55,0.12)]" />
+
+        {/* Inner body frame */}
+        <div className="absolute left-1/2 top-[38%] -translate-x-1/2 w-[44%] h-[28%] rounded-[1rem] border border-primary/12" />
+
+        {/* Windows */}
+        <motion.div
+          className="absolute left-[31%] top-[43%] w-[10%] h-[10%] rounded-lg border border-primary/25 bg-background/40"
+          animate={{ opacity: [0.45, 0.85, 0.45] }}
+          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute right-[31%] top-[43%] w-[10%] h-[10%] rounded-lg border border-primary/25 bg-background/40"
+          animate={{ opacity: [0.45, 0.85, 0.45] }}
+          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
+        />
+
+        {/* Door */}
+        <motion.div
+          className="absolute left-1/2 top-[53%] -translate-x-1/2 w-[12%] h-[20%] rounded-t-full border border-primary/35 bg-background/45 shadow-[0_0_25px_rgba(212,175,55,0.12)]"
+          animate={{ opacity: [0.6, 1, 0.6] }}
+          transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* Floor line */}
+        <motion.div
+          className="absolute left-[24%] right-[24%] bottom-[20%] h-px bg-gradient-to-r from-primary/0 via-primary/40 to-primary/0"
+          animate={{ scaleX: [0.75, 1, 0.75], opacity: [0.22, 0.72, 0.22] }}
+          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* House center focus */}
+        <motion.div
+          className="absolute left-1/2 top-[55%] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_24px_rgba(212,175,55,0.75)]"
+          animate={{ scale: [1, 1.15, 1], opacity: [0.75, 1, 0.75] }}
+          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* Subtle orbit around house center */}
+        <motion.div
+          className="absolute left-1/2 top-[55%] h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/14"
+          animate={{ scale: [0.85, 1.08, 0.85], opacity: [0.15, 0.42, 0.15] }}
+          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* Hotspots */}
+        {hotspots.map((hotspot, index) => (
+          <motion.div
+            key={index}
+            className="absolute will-change-transform"
+            style={hotspot}
+            animate={{ scale: [1, 1.08, 1], opacity: [0.62, 1, 0.62] }}
             transition={{
-              duration: 4.2,
+              duration: 4,
               repeat: Infinity,
               ease: "easeInOut",
-              delay: point.delay,
+              delay: hotspot.delay,
             }}
-          />
-          <div className="relative h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_18px_rgba(212,175,55,0.62)]" />
-        </motion.div>
-      ))}
+          >
+            <motion.span
+              className="absolute -inset-2 rounded-full bg-primary/18"
+              animate={{ scale: [0.7, 1.35, 0.7], opacity: [0, 0.34, 0] }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: hotspot.delay,
+              }}
+            />
+            <div className="relative h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_18px_rgba(212,175,55,0.62)]" />
+          </motion.div>
+        ))}
 
-      {/* Top micro interface */}
+        {/* Small top accent */}
+        <motion.div
+          className="absolute left-1/2 top-[25%] -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-primary/80"
+          animate={{ opacity: [0.3, 1, 0.3] }}
+          transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </motion.div>
+
+      {/* Micro interface labels */}
       <div className="absolute left-8 top-8 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
         <span className="text-[8px] uppercase tracking-[0.28em] text-muted-foreground/70">
-          Live Walkthrough
+          Live Tour
         </span>
       </div>
 
       <div className="absolute right-8 top-8 text-[8px] uppercase tracking-[0.28em] text-muted-foreground/70">
-        Scene 01
+        Home View
       </div>
 
       {/* Bottom label */}
       <div className="absolute bottom-7 left-1/2 -translate-x-1/2 text-center">
         <p className="text-[9px] uppercase tracking-[0.34em] text-muted-foreground/80 whitespace-nowrap">
-          Step Inside The Space
+          Explore The Home
         </p>
       </div>
     </div>
@@ -223,7 +243,7 @@ export default function About() {
                 </p>
               </div>
 
-              <VirtualTourOrbCard />
+              <VirtualTourHouseCard />
             </div>
 
             <div className="border-t border-border pt-16">
