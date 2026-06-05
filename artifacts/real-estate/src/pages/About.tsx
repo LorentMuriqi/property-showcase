@@ -4,117 +4,152 @@ import { Helmet } from "react-helmet-async";
 
 function VirtualTourHouseCard() {
   const hotspots = [
-    { top: "42%", left: "36%", delay: 0 },
-    { top: "42%", right: "36%", delay: 0.45 },
-    { bottom: "30%", left: "50%", delay: 0.9 },
+    { top: "40%", left: "38%", delay: 0 },
+    { top: "40%", right: "38%", delay: 0.45 },
+    { top: "56%", left: "50%", delay: 0.9 },
   ];
 
   return (
     <div className="relative aspect-square bg-card rounded-2xl border border-border overflow-hidden flex items-center justify-center transform-gpu">
-      {/* Ambient premium background */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(212,175,55,0.16),transparent_46%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(212,175,55,0.05)_50%,transparent_100%)]" />
+      {/* Ambient background */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(212,175,55,0.14),transparent_48%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(212,175,55,0.04)_50%,transparent_100%)]" />
 
-      {/* Soft frame */}
+      {/* Inner frame */}
       <div className="absolute inset-8 rounded-[1.75rem] border border-primary/10" />
-      <div className="absolute left-10 right-10 top-1/2 h-px bg-gradient-to-r from-transparent via-primary/12 to-transparent" />
-      <div className="absolute top-10 bottom-10 left-1/2 w-px bg-gradient-to-b from-transparent via-primary/12 to-transparent" />
 
-      {/* Outer radar rings */}
+      {/* Subtle radar rings */}
       <motion.div
-        className="absolute w-[78%] h-[78%] rounded-full border border-primary/10 will-change-transform"
+        className="absolute w-[72%] h-[72%] rounded-full border border-primary/10 will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ rotate: 360 }}
-        transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
       />
-
       <motion.div
-        className="absolute w-[58%] h-[58%] rounded-full border border-primary/12 border-dashed will-change-transform"
+        className="absolute w-[52%] h-[52%] rounded-full border border-primary/10 border-dashed will-change-transform"
         style={{ transform: "translateZ(0)" }}
         animate={{ rotate: -360 }}
-        transition={{ duration: 56, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 65, repeat: Infinity, ease: "linear" }}
       />
 
-      {/* Radar scan line */}
+      {/* Scan line */}
       <motion.div
-        className="absolute w-px h-[30%] bg-gradient-to-b from-primary/70 via-primary/18 to-transparent origin-bottom will-change-transform"
+        className="absolute w-px h-[26%] bg-gradient-to-b from-primary/70 via-primary/18 to-transparent origin-bottom will-change-transform"
         style={{
           bottom: "50%",
           transform: "translateZ(0)",
         }}
         animate={{ rotate: 360 }}
         transition={{
-          duration: 16,
+          duration: 14,
           repeat: Infinity,
           ease: "linear",
         }}
       />
 
-      {/* Main floating house */}
+      {/* House block */}
       <motion.div
-        className="relative z-10 w-[60%] h-[60%] will-change-transform"
+        className="relative z-10 w-[56%] h-[56%] flex items-center justify-center will-change-transform"
         style={{ transform: "translateZ(0)" }}
-        animate={{ y: [0, -4, 0] }}
+        animate={{ y: [0, -3, 0] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       >
-        {/* House glow */}
+        {/* Soft glow behind house */}
         <motion.div
-          className="absolute inset-[18%] bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.12),transparent_70%)]"
-          animate={{ opacity: [0.35, 0.75, 0.35] }}
-          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute inset-[12%] rounded-full bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.10),transparent_70%)]"
+          animate={{ opacity: [0.35, 0.7, 0.35] }}
+          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
 
-        {/* Roof */}
-        <div className="absolute left-1/2 top-[16%] h-[22%] w-[54%] -translate-x-1/2">
-          <div className="absolute left-1/2 top-[2px] h-px w-[58%] -translate-x-[92%] origin-right rotate-[32deg] bg-primary/40" />
-          <div className="absolute right-1/2 top-[2px] h-px w-[58%] translate-x-[92%] origin-left -rotate-[32deg] bg-primary/40" />
-          <div className="absolute left-1/2 top-[34%] -translate-x-1/2 h-[2px] w-[12%] rounded-full bg-primary/35" />
-        </div>
+        {/* Clear house silhouette */}
+        <svg
+          viewBox="0 0 240 240"
+          className="absolute inset-0 w-full h-full"
+          fill="none"
+        >
+          {/* Roof */}
+          <path
+            d="M58 108 L120 58 L182 108"
+            stroke="rgba(212,175,55,0.55)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
 
-        {/* House body */}
-        <div className="absolute left-1/2 top-[34%] -translate-x-1/2 w-[54%] h-[38%] rounded-[1.6rem] border border-primary/28 bg-background/55 backdrop-blur-md shadow-[0_18px_70px_rgba(212,175,55,0.12)]" />
+          {/* Chimney */}
+          <path
+            d="M155 78 L155 62"
+            stroke="rgba(212,175,55,0.40)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
 
-        {/* Inner body frame */}
-        <div className="absolute left-1/2 top-[38%] -translate-x-1/2 w-[44%] h-[28%] rounded-[1rem] border border-primary/12" />
+          {/* House body */}
+          <rect
+            x="72"
+            y="106"
+            width="96"
+            height="84"
+            rx="18"
+            stroke="rgba(212,175,55,0.40)"
+            strokeWidth="3"
+            fill="rgba(255,255,255,0.12)"
+          />
 
-        {/* Windows */}
+          {/* Window left */}
+          <rect
+            x="88"
+            y="122"
+            width="24"
+            height="24"
+            rx="8"
+            stroke="rgba(212,175,55,0.30)"
+            strokeWidth="2"
+            fill="rgba(255,255,255,0.08)"
+          />
+
+          {/* Window right */}
+          <rect
+            x="128"
+            y="122"
+            width="24"
+            height="24"
+            rx="8"
+            stroke="rgba(212,175,55,0.30)"
+            strokeWidth="2"
+            fill="rgba(255,255,255,0.08)"
+          />
+
+          {/* Door */}
+          <path
+            d="M110 190 V154 C110 147 114 143 120 143 C126 143 130 147 130 154 V190"
+            stroke="rgba(212,175,55,0.40)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="rgba(255,255,255,0.05)"
+          />
+
+          {/* Base line */}
+          <path
+            d="M84 190 H156"
+            stroke="rgba(212,175,55,0.25)"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+
+        {/* Center focus glow */}
         <motion.div
-          className="absolute left-[31%] top-[43%] w-[10%] h-[10%] rounded-lg border border-primary/25 bg-background/40"
-          animate={{ opacity: [0.45, 0.85, 0.45] }}
-          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute left-1/2 top-[56%] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/90 shadow-[0_0_24px_rgba(212,175,55,0.75)]"
+          animate={{ scale: [1, 1.16, 1], opacity: [0.8, 1, 0.8] }}
+          transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
-          className="absolute right-[31%] top-[43%] w-[10%] h-[10%] rounded-lg border border-primary/25 bg-background/40"
-          animate={{ opacity: [0.45, 0.85, 0.45] }}
-          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
-        />
 
-        {/* Door */}
         <motion.div
-          className="absolute left-1/2 top-[53%] -translate-x-1/2 w-[12%] h-[20%] rounded-t-full border border-primary/35 bg-background/45 shadow-[0_0_25px_rgba(212,175,55,0.12)]"
-          animate={{ opacity: [0.6, 1, 0.6] }}
-          transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* Floor line */}
-        <motion.div
-          className="absolute left-[24%] right-[24%] bottom-[20%] h-px bg-gradient-to-r from-primary/0 via-primary/40 to-primary/0"
-          animate={{ scaleX: [0.75, 1, 0.75], opacity: [0.22, 0.72, 0.22] }}
-          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* House center focus */}
-        <motion.div
-          className="absolute left-1/2 top-[55%] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_24px_rgba(212,175,55,0.75)]"
-          animate={{ scale: [1, 1.15, 1], opacity: [0.75, 1, 0.75] }}
-          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        {/* Subtle orbit around house center */}
-        <motion.div
-          className="absolute left-1/2 top-[55%] h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/14"
-          animate={{ scale: [0.85, 1.08, 0.85], opacity: [0.15, 0.42, 0.15] }}
-          transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute left-1/2 top-[56%] h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/15"
+          animate={{ scale: [0.8, 1.12, 0.8], opacity: [0.12, 0.4, 0.12] }}
+          transition={{ duration: 4.6, repeat: Infinity, ease: "easeInOut" }}
         />
 
         {/* Hotspots */}
@@ -123,7 +158,7 @@ function VirtualTourHouseCard() {
             key={index}
             className="absolute will-change-transform"
             style={hotspot}
-            animate={{ scale: [1, 1.08, 1], opacity: [0.62, 1, 0.62] }}
+            animate={{ scale: [1, 1.08, 1], opacity: [0.65, 1, 0.65] }}
             transition={{
               duration: 4,
               repeat: Infinity,
@@ -144,16 +179,9 @@ function VirtualTourHouseCard() {
             <div className="relative h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_18px_rgba(212,175,55,0.62)]" />
           </motion.div>
         ))}
-
-        {/* Small top accent */}
-        <motion.div
-          className="absolute left-1/2 top-[25%] -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-primary/80"
-          animate={{ opacity: [0.3, 1, 0.3] }}
-          transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-        />
       </motion.div>
 
-      {/* Micro interface labels */}
+      {/* Top micro labels */}
       <div className="absolute left-8 top-8 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
         <span className="text-[8px] uppercase tracking-[0.28em] text-muted-foreground/70">
