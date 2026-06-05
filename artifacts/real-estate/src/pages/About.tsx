@@ -12,7 +12,7 @@ function VirtualTourOrbCard() {
   ];
 
   return (
-    <div className="relative aspect-square bg-card rounded-2xl border border-border overflow-hidden flex items-center justify-center">
+    <div className="relative aspect-square bg-card rounded-2xl border border-border overflow-hidden flex items-center justify-center transform-gpu">
       {/* Soft premium glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.18),transparent_42%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(212,175,55,0.06)_50%,transparent_100%)]" />
@@ -22,17 +22,19 @@ function VirtualTourOrbCard() {
       <div className="absolute left-10 right-10 top-1/2 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
       <div className="absolute top-10 bottom-10 left-1/2 w-px bg-gradient-to-b from-transparent via-primary/20 to-transparent" />
 
-      <motion.div
-        className="absolute w-[78%] h-[78%] rounded-full border border-primary/15"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
-      />
+<motion.div
+  className="absolute w-[78%] h-[78%] rounded-full border border-primary/15 will-change-transform"
+  style={{ transform: "translateZ(0)" }}
+  animate={{ rotate: 360 }}
+  transition={{ duration: 48, repeat: Infinity, ease: "linear" }}
+/>
 
-      <motion.div
-        className="absolute w-[58%] h-[58%] rounded-full border border-primary/25 border-dashed"
-        animate={{ rotate: -360 }}
-        transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
-      />
+<motion.div
+  className="absolute w-[58%] h-[58%] rounded-full border border-primary/20 border-dashed will-change-transform"
+  style={{ transform: "translateZ(0)" }}
+  animate={{ rotate: -360 }}
+  transition={{ duration: 42, repeat: Infinity, ease: "linear" }}
+/>
 
       <motion.div
         className="absolute w-[38%] h-[38%] rounded-full border border-primary/30"
@@ -41,59 +43,75 @@ function VirtualTourOrbCard() {
       />
 
       {/* Radar scan */}
-      <motion.div
-        className="absolute w-[2px] h-[34%] bg-gradient-to-b from-primary/80 via-primary/20 to-transparent origin-bottom"
-        style={{ bottom: "50%" }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-      />
+<motion.div
+  className="absolute w-px h-[32%] bg-gradient-to-b from-primary/60 via-primary/20 to-transparent origin-bottom will-change-transform"
+  style={{
+    bottom: "50%",
+    transform: "translateZ(0)",
+  }}
+  animate={{ rotate: 360 }}
+  transition={{
+    duration: 14,
+    repeat: Infinity,
+    ease: "linear",
+  }}
+/>
 
       {/* Hotspots */}
-      {hotspots.map((hotspot, index) => (
-        <motion.div
-          key={index}
-          className="absolute"
-          style={hotspot}
-          animate={{ scale: [1, 1.18, 1], opacity: [0.75, 1, 0.75] }}
-          transition={{
-            duration: 2.4,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: hotspot.delay,
-          }}
-        >
-          <div className="relative w-3 h-3 rounded-full bg-primary shadow-[0_0_18px_rgba(212,175,55,0.75)]">
-            <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping" />
-          </div>
-        </motion.div>
-      ))}
+{hotspots.map((hotspot, index) => (
+  <motion.div
+    key={index}
+    className="absolute will-change-transform"
+    style={hotspot}
+    animate={{ scale: [1, 1.08, 1], opacity: [0.72, 1, 0.72] }}
+    transition={{
+      duration: 3.8,
+      repeat: Infinity,
+      ease: "easeInOut",
+      delay: hotspot.delay,
+    }}
+  >
+    <motion.span
+      className="absolute -inset-2 rounded-full bg-primary/20"
+      animate={{ scale: [0.7, 1.45, 0.7], opacity: [0, 0.42, 0] }}
+      transition={{
+        duration: 3.8,
+        repeat: Infinity,
+        ease: "easeInOut",
+        delay: hotspot.delay,
+      }}
+    />
+    <div className="relative w-3 h-3 rounded-full bg-primary shadow-[0_0_18px_rgba(212,175,55,0.65)]" />
+  </motion.div>
+))}
 
       {/* Main orb */}
-      <motion.div
-        className="relative z-10 w-36 h-36 rounded-full border border-primary/40 bg-background/70 backdrop-blur-xl shadow-[0_24px_80px_rgba(212,175,55,0.18)] flex flex-col items-center justify-center"
-        animate={{ y: [0, -8, 0] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-      >
+<motion.div
+  className="relative z-10 w-36 h-36 rounded-full border border-primary/40 bg-background/70 backdrop-blur-xl shadow-[0_24px_80px_rgba(212,175,55,0.18)] flex flex-col items-center justify-center will-change-transform"
+  style={{ transform: "translateZ(0)" }}
+  animate={{ y: [0, -5, 0] }}
+  transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut" }}
+>
         <motion.div
           className="absolute inset-3 rounded-full border border-primary/15"
           animate={{ rotate: 360 }}
           transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
         />
 
-        <span className="text-primary text-5xl font-bold tracking-tight leading-none">
-          360°
-        </span>
+<span className="text-primary text-4xl md:text-5xl font-bold tracking-tight leading-none">
+  360°
+</span>
         <span className="mt-3 text-[10px] uppercase tracking-[0.34em] text-foreground">
           Virtual Tour
         </span>
       </motion.div>
 
       {/* Bottom label */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center">
-        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground">
-          Immersive Preview
-        </p>
-      </div>
+<div className="absolute bottom-7 left-1/2 -translate-x-1/2 text-center">
+  <p className="text-[9px] uppercase tracking-[0.34em] text-muted-foreground/80 whitespace-nowrap">
+    Immersive Preview
+  </p>
+</div>
     </div>
   );
 }
