@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
+import { COUNTRY_CITY_OPTIONS, type CountryName } from "@/constants/locations";
 import {
   ArrowLeft,
   Save,
@@ -28,6 +29,8 @@ const Input = ({ label, ...props }: any) => (
     />
   </div>
 );
+
+
 
 export default function AdminProjectForm() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
@@ -96,6 +99,24 @@ export default function AdminProjectForm() {
       activeDays: 30,
     },
   });
+  
+const selectedCountry = watch("country") as CountryName | "";
+const selectedCity = watch("city") as string;
+
+const cityOptions = selectedCountry
+  ? [...COUNTRY_CITY_OPTIONS[selectedCountry]]
+  : [];
+
+useEffect(() => {
+  if (!selectedCountry) {
+    setValue("city", "");
+    return;
+  }
+
+  if (selectedCity && !cityOptions.includes(selectedCity)) {
+    setValue("city", "");
+  }
+}, [selectedCountry, selectedCity, cityOptions, setValue]);
 
   const {
     fields: imageFields,
@@ -477,14 +498,43 @@ export default function AdminProjectForm() {
             />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input
-                label="Shteti *"
-                {...register("country", { required: true })}
-              />
-              <Input
-                label="Qyteti *"
-                {...register("city", { required: true })}
-              />
+              <div className="space-y-2">
+  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+    Shteti *
+  </label>
+  <select
+    {...register("country", { required: true })}
+    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors appearance-none cursor-pointer"
+  >
+    <option value="">Zgjidh shtetin</option>
+    {Object.keys(COUNTRY_CITY_OPTIONS).map((country) => (
+      <option key={country} value={country}>
+        {country}
+      </option>
+    ))}
+  </select>
+</div>
+
+<div className="space-y-2">
+  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+    Qyteti *
+  </label>
+  <select
+    {...register("city", { required: true })}
+    disabled={!selectedCountry}
+    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    <option value="">
+      {selectedCountry ? "Zgjidh qytetin" : "Së pari zgjidh shtetin"}
+    </option>
+
+    {cityOptions.map((city) => (
+      <option key={city} value={city}>
+        {city}
+      </option>
+    ))}
+  </select>
+</div>
               <Input label="Adresa e Rrugës" {...register("address")} />
 
               <div className="space-y-2">
