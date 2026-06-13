@@ -50,7 +50,7 @@ type DeviceProfile = {
   isDesktop: boolean;
 };
 
-const INITIAL_LOADING_FALLBACK_MS = 15000;
+const FIRST_LOAD_HINT_MS = 6500;
 const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
 
 const CACHE_TTL_SECONDS = 30 * 60;
@@ -171,6 +171,89 @@ const preloadBrowserImage = (
   });
 };
 
+const addResourceHint = (
+  src?: string | null,
+  options: { rel: "preload" | "prefetch"; as?: string; priority?: PreloadPriority } = {
+    rel: "preload",
+    as: "image",
+    priority: "high",
+  },
+) => {
+  if (!src || typeof document === "undefined") return () => undefined;
+
+  const href = src;
+  const existing = Array.from(
+    document.head.querySelectorAll<HTMLLinkElement>(
+      `link[data-virtual-tour-hint="${options.rel}"]`,
+    ),
+  ).find((item) => item.getAttribute("href") === href || item.href === href);
+
+  if (existing) return () => undefined;
+
+  const link = document.createElement("link");
+  link.rel = options.rel;
+  link.href = href;
+  link.dataset.virtualTourHint = options.rel;
+
+  if (options.as) link.as = options.as;
+  if (options.as === "image") link.crossOrigin = "anonymous";
+
+  try {
+    (link as any).fetchPriority = options.priority || "high";
+  } catch {
+    // fetchPriority is not supported in every browser.
+  }
+
+  document.head.appendChild(link);
+
+  return () => {
+    try {
+      link.remove();
+    } catch {
+      // Ignore cleanup errors.
+    }
+  };
+};
+
+const addPreconnectHint = (src?: string | null) => {
+  if (!src || typeof document === "undefined" || typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(src, window.location.href);
+  } catch {
+    return () => undefined;
+  }
+
+  if (url.origin === window.location.origin) return () => undefined;
+
+  const existing = Array.from(
+    document.head.querySelectorAll<HTMLLinkElement>(
+      'link[data-virtual-tour-preconnect="true"]',
+    ),
+  ).find((item) => item.getAttribute("href") === url.origin || item.href === url.origin);
+
+  if (existing) return () => undefined;
+
+  const link = document.createElement("link");
+  link.rel = "preconnect";
+  link.href = url.origin;
+  link.crossOrigin = "anonymous";
+  link.dataset.virtualTourPreconnect = "true";
+  document.head.appendChild(link);
+
+  return () => {
+    try {
+      link.remove();
+    } catch {
+      // Ignore cleanup errors.
+    }
+  };
+};
+
 const scheduleIdleTask = (callback: () => void, delay = 80) => {
   if (typeof window === "undefined") return () => undefined;
 
@@ -238,6 +321,7 @@ export function VirtualTour360({
   const [isSceneLoading, setIsSceneLoading] = useState(false);
   const [loadingSceneTitle, setLoadingSceneTitle] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showFirstLoadHint, setShowFirstLoadHint] = useState(false);
   const [canUseFullscreen, setCanUseFullscreen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
@@ -603,8 +687,45 @@ export function VirtualTour360({
   useEffect(() => {
     if (!resolvedStartScene) return;
 
+    const cleanups = [
+      addPreconnectHint(resolvedStartScene.imageUrl),
+      addResourceHint(resolvedStartScene.thumbnailUrl, {
+        rel: "preload",
+        as: "image",
+        priority: "high",
+      }),
+      addResourceHint(resolvedStartScene.imageUrl, {
+        rel: "preload",
+        as: "image",
+        priority: "high",
+      }),
+    ];
+
+    void preloadBrowserImageOnce(resolvedStartScene.thumbnailUrl, "high");
     void preloadBrowserImageOnce(resolvedStartScene.imageUrl, "high");
-  }, [resolvedStartScene, preloadBrowserImageOnce]);
+
+    const firstNeighborId = linkedSceneIdsBySceneId.get(Number(resolvedStartScene.id))?.[0];
+    const firstNeighbor = firstNeighborId ? scenesById.get(firstNeighborId) : null;
+
+    if (firstNeighbor?.imageUrl) {
+      cleanups.push(
+        addResourceHint(firstNeighbor.imageUrl, {
+          rel: "prefetch",
+          as: "image",
+          priority: "low",
+        }),
+      );
+    }
+
+    return () => {
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [
+    resolvedStartScene,
+    preloadBrowserImageOnce,
+    linkedSceneIdsBySceneId,
+    scenesById,
+  ]);
 
   useEffect(() => {
     if (!containerRef.current || !resolvedStartScene || nodes.length === 0) return;
@@ -617,13 +738,25 @@ export function VirtualTour360({
     setIsInitialLoading(true);
     setIsViewerVisible(false);
     setLoadError(null);
+    setShowFirstLoadHint(false);
 
     const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
     let didFinishInitialLoad = false;
+    let firstLoadHintTimer: number | null = window.setTimeout(() => {
+      if (!didFinishInitialLoad) setShowFirstLoadHint(true);
+    }, FIRST_LOAD_HINT_MS);
+
+    const clearFirstLoadHintTimer = () => {
+      if (firstLoadHintTimer !== null) {
+        window.clearTimeout(firstLoadHintTimer);
+        firstLoadHintTimer = null;
+      }
+    };
 
     const finishInitialLoad = () => {
       if (didFinishInitialLoad) return;
       didFinishInitialLoad = true;
+      clearFirstLoadHintTimer();
 
       currentSceneRef.current = resolvedStartScene;
       setCurrentSceneId(resolvedStartScene.id);
@@ -632,6 +765,7 @@ export function VirtualTour360({
       requestAnimationFrame(() => {
         setIsViewerVisible(true);
         setIsInitialLoading(false);
+        setShowFirstLoadHint(false);
         warmSceneNeighborhood(resolvedStartScene.id);
       });
     };
@@ -689,6 +823,7 @@ export function VirtualTour360({
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
 
     viewer.addEventListener("panorama-loaded", () => {
+      setLoadError(null);
       const currentScene = currentSceneRef.current || resolvedStartScene;
       if (currentScene?.imageUrl) {
         psvReadyPanoramasRef.current.add(currentScene.imageUrl);
@@ -737,6 +872,7 @@ export function VirtualTour360({
 
       currentSceneRef.current = nextScene;
       setCurrentSceneId(nextId);
+      setLoadError(null);
 
       if (nextScene?.imageUrl) {
         psvReadyPanoramasRef.current.add(nextScene.imageUrl);
@@ -749,14 +885,8 @@ export function VirtualTour360({
       hideNavigationLoader();
     });
 
-    const fallbackTimer = window.setTimeout(() => {
-      if (!didFinishInitialLoad) {
-        setLoadError("Ngarkimi po zgjat më shumë se zakonisht. Kontrolloni lidhjen ose madhësinë e panoramës.");
-      }
-    }, INITIAL_LOADING_FALLBACK_MS);
-
     return () => {
-      window.clearTimeout(fallbackTimer);
+      clearFirstLoadHintTimer();
       clearLoaderTimer();
       cleanupTasksRef.current.forEach((cleanup) => cleanup());
       cleanupTasksRef.current = [];
@@ -860,14 +990,28 @@ export function VirtualTour360({
         />
 
         {(isInitialLoading || isSceneLoading) && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/85 md:backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-4">
+          <div className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black">
+            {isInitialLoading && resolvedStartScene?.thumbnailUrl && (
+              <div
+                className="absolute inset-0 scale-110 bg-cover bg-center opacity-35 blur-2xl"
+                style={{ backgroundImage: `url(${resolvedStartScene.thumbnailUrl})` }}
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/80 to-black/95" />
+            <div className="relative flex w-[min(90vw,360px)] flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-7 text-center shadow-2xl md:backdrop-blur-xl">
+              <div className="h-1.5 w-40 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/90" />
+              </div>
               <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
               <p className="text-white/90 text-sm tracking-wide font-medium">
-                {isInitialLoading ? "Duke hapur turin virtual" : "Duke hapur skenën"}
+                {isInitialLoading ? "Duke përgatitur turin virtual" : "Duke hapur skenën"}
               </p>
-              <span className="text-primary text-xs uppercase tracking-[0.2em] font-semibold max-w-[260px] truncate">
-                {loadingSceneTitle || "Ju lutem prisni"}
+              <span className="min-h-[32px] text-xs leading-5 text-white/58">
+                {isInitialLoading
+                  ? showFirstLoadHint
+                    ? "Hapja e parë mund të zgjasë pak më shumë. Pamjet pasuese do të hapen më shpejt."
+                    : "Po ngarkohet pamja 360° me cilësi të lartë."
+                  : loadingSceneTitle || "Ju lutem prisni"}
               </span>
             </div>
           </div>
