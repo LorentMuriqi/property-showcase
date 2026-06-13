@@ -1611,7 +1611,7 @@ const editorViewerLoadIdRef = useRef(0);
         toast({
           title: "Hotspot u ruajt",
           description:
-            "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
+            "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto",
         });
       }
     } catch (error: any) {
