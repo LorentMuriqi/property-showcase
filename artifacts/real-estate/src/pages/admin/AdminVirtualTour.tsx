@@ -61,6 +61,16 @@ type Hotspot = {
   label: string | null;
 };
 
+type Orientation = { yaw: number; pitch: number };
+
+type TargetViewCapture = {
+  hotspotId: number;
+  sourceSceneId: number;
+  targetSceneId: number;
+  sourceTitle: string;
+  targetTitle: string;
+};
+
 type Project = {
   id: string;
   title: string;
@@ -215,6 +225,66 @@ const toNullableNumber = (value: any) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const TWO_PI = Math.PI * 2;
+const MIN_SAFE_PITCH = -Math.PI / 2 + 0.02;
+const MAX_SAFE_PITCH = Math.PI / 2 - 0.02;
+
+const normalizeYaw = (yaw: number) => {
+  if (!Number.isFinite(yaw)) return 0;
+  let normalized = ((yaw + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+  if (Math.abs(normalized + Math.PI) < 1e-10) normalized = Math.PI;
+  return normalized;
+};
+
+const clampPitch = (pitch: number) => {
+  if (!Number.isFinite(pitch)) return 0;
+  return Math.max(MIN_SAFE_PITCH, Math.min(MAX_SAFE_PITCH, pitch));
+};
+
+const isFiniteOrientation = (orientation: Orientation | null): orientation is Orientation => {
+  return (
+    !!orientation &&
+    Number.isFinite(orientation.yaw) &&
+    Number.isFinite(orientation.pitch)
+  );
+};
+
+const circularMean = (angles: number[]) => {
+  const validAngles = angles.filter(Number.isFinite);
+  if (validAngles.length === 0) return null;
+
+  const sin = validAngles.reduce((sum, angle) => sum + Math.sin(angle), 0);
+  const cos = validAngles.reduce((sum, angle) => sum + Math.cos(angle), 0);
+
+  if (Math.abs(sin) < 1e-9 && Math.abs(cos) < 1e-9) return null;
+  return normalizeYaw(Math.atan2(sin, cos));
+};
+
+const getFloorPlanBearing = (
+  fromScene: Pick<Scene, "position_x" | "position_y">,
+  toScene: Pick<Scene, "position_x" | "position_y">,
+) => {
+  if (
+    typeof fromScene.position_x !== "number" ||
+    typeof fromScene.position_y !== "number" ||
+    typeof toScene.position_x !== "number" ||
+    typeof toScene.position_y !== "number" ||
+    !Number.isFinite(fromScene.position_x) ||
+    !Number.isFinite(fromScene.position_y) ||
+    !Number.isFinite(toScene.position_x) ||
+    !Number.isFinite(toScene.position_y)
+  ) {
+    return null;
+  }
+
+  const dx = toScene.position_x - fromScene.position_x;
+  const dy = toScene.position_y - fromScene.position_y;
+
+  if (Math.hypot(dx, dy) < 0.001) return null;
+
+  return normalizeYaw(Math.atan2(dx, -dy));
+};
+
 export default function AdminVirtualTour() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
   const [location, setLocation] = useLocation();
@@ -259,6 +329,35 @@ export default function AdminVirtualTour() {
   return index >= 0 ? index + 1 : null;
 }, [scenes, selectedScene]);
 
+  const sceneHeadingOffsetsById = useMemo(() => {
+    const scenesById = new Map<number, Scene>(
+      scenes.map((scene) => [Number(scene.id), scene]),
+    );
+    const samplesBySceneId = new Map<number, number[]>();
+
+    scenes.forEach((scene) => {
+      scene.hotspots.forEach((hotspot) => {
+        const targetScene = scenesById.get(Number(hotspot.to_scene_id));
+        if (!targetScene || !Number.isFinite(hotspot.yaw)) return;
+
+        const floorBearing = getFloorPlanBearing(scene, targetScene);
+        if (floorBearing === null) return;
+
+        const currentSamples = samplesBySceneId.get(Number(scene.id)) || [];
+        currentSamples.push(normalizeYaw(floorBearing - hotspot.yaw));
+        samplesBySceneId.set(Number(scene.id), currentSamples);
+      });
+    });
+
+    const offsets = new Map<number, number>();
+    samplesBySceneId.forEach((samples, sceneId) => {
+      const meanOffset = circularMean(samples);
+      if (meanOffset !== null) offsets.set(sceneId, meanOffset);
+    });
+
+    return offsets;
+  }, [scenes]);
+
   const [viewerError, setViewerError] = useState("");
   const [isPlacementMode, setIsPlacementMode] = useState(false);
   const [draft, setDraft] = useState<PlacementDraft>({
@@ -272,6 +371,9 @@ export default function AdminVirtualTour() {
     yaw: number;
     pitch: number;
   } | null>(null);
+
+  const [targetViewCapture, setTargetViewCapture] =
+    useState<TargetViewCapture | null>(null);
 
   const [expiresAtInput, setExpiresAtInput] = useState<string>("");
 
@@ -1142,26 +1244,98 @@ const editorViewerLoadIdRef = useRef(0);
     });
   };
 
-  const handleSaveHotspotTargetView = async (hotspotId: number) => {
-    const livePosition = getLiveViewerPosition();
+  const startTargetViewCapture = useCallback(
+    (hotspot: Hotspot) => {
+      const sourceScene = scenes.find(
+        (scene) => Number(scene.id) === Number(hotspot.scene_id),
+      );
+      const targetScene = scenes.find(
+        (scene) => Number(scene.id) === Number(hotspot.to_scene_id),
+      );
 
-    if (!livePosition) {
+      if (!sourceScene || !targetScene) {
+        toast({
+          title: "Gabim",
+          description: "Skena burim ose destinacion nuk u gjet.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setTargetViewCapture({
+        hotspotId: hotspot.id,
+        sourceSceneId: sourceScene.id,
+        targetSceneId: targetScene.id,
+        sourceTitle: sourceScene.title,
+        targetTitle: targetScene.title,
+      });
+
+      setIsPlacementMode(false);
+      setIsEditingHotspotPlacement(false);
+      setIsEditHotspotModalOpen(false);
+      setEditingHotspot(null);
+      setSelectedSceneId(targetScene.id);
+
+      toast({
+        title: "Kalibrimi i drejtimit aktiv",
+        description:
+          "Tani je në skenën destinacion. Rrotullo pamjen në drejtimin e hyrjes dhe kliko “Ruaj këtë drejtim”.",
+      });
+    },
+    [scenes, toast],
+  );
+
+  const handleSaveHotspotTargetView = (hotspotId: number) => {
+    const hotspot = scenes
+      .flatMap((scene) => scene.hotspots)
+      .find((item) => Number(item.id) === Number(hotspotId));
+
+    if (!hotspot) {
       toast({
         title: "Gabim",
-        description: "Pozicioni aktual i kamerës nuk u lexua.",
+        description: "Hotspot-i nuk u gjet.",
         variant: "destructive",
       });
       return;
     }
 
+    startTargetViewCapture(hotspot);
+  };
+
+  const handleCancelTargetViewCapture = () => {
+    const sourceSceneId = targetViewCapture?.sourceSceneId ?? null;
+    setTargetViewCapture(null);
+
+    if (sourceSceneId !== null) {
+      setSelectedSceneId(sourceSceneId);
+    }
+  };
+
+  const handleSaveTargetViewCapture = async () => {
+    if (!targetViewCapture) return;
+
+    const livePosition = getLiveViewerPosition();
+
+    if (!livePosition) {
+      toast({
+        title: "Gabim",
+        description: "Pozicioni aktual i kamerës në skenën destinacion nuk u lexua.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const normalizedTargetYaw = normalizeYaw(livePosition.yaw);
+    const normalizedTargetPitch = clampPitch(livePosition.pitch);
+
     try {
       const { error } = await supabase
         .from("virtual_tour_hotspots")
         .update({
-          target_yaw: livePosition.yaw,
-          target_pitch: livePosition.pitch,
+          target_yaw: normalizedTargetYaw,
+          target_pitch: normalizedTargetPitch,
         })
-        .eq("id", hotspotId);
+        .eq("id", targetViewCapture.hotspotId);
 
       if (error) throw error;
 
@@ -1169,37 +1343,29 @@ const editorViewerLoadIdRef = useRef(0);
         prev.map((scene) => ({
           ...scene,
           hotspots: scene.hotspots.map((hotspot) =>
-            hotspot.id === hotspotId
+            Number(hotspot.id) === Number(targetViewCapture.hotspotId)
               ? {
                   ...hotspot,
-                  target_yaw: livePosition.yaw,
-                  target_pitch: livePosition.pitch,
+                  target_yaw: normalizedTargetYaw,
+                  target_pitch: normalizedTargetPitch,
                 }
               : hotspot,
           ),
         })),
       );
 
-      if (editingHotspot?.id === hotspotId) {
-        setEditingHotspot((prev) =>
-          prev
-            ? {
-                ...prev,
-                target_yaw: livePosition.yaw,
-                target_pitch: livePosition.pitch,
-              }
-            : prev,
-        );
-      }
-
       toast({
-        title: "Sukses",
-        description: "Target view i hotspot-it u ruajt.",
+        title: "Drejtimi u ruajt",
+        description: `Hyrja nga “${targetViewCapture.sourceTitle}” në “${targetViewCapture.targetTitle}” u kalibrua.`,
       });
+
+      const sourceSceneId = targetViewCapture.sourceSceneId;
+      setTargetViewCapture(null);
+      setSelectedSceneId(sourceSceneId);
     } catch (error: any) {
       toast({
         title: "Gabim",
-        description: error.message || "Ruajtja e target view dështoi.",
+        description: error.message || "Ruajtja e drejtimit të hyrjes dështoi.",
         variant: "destructive",
       });
     }
@@ -1240,12 +1406,11 @@ const editorViewerLoadIdRef = useRef(0);
           to_scene_id: Number(draft.to_scene_id),
           yaw: draft.yaw,
           pitch: draft.pitch,
-          target_yaw:
-            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
-              ?.initial_yaw ?? null,
-          target_pitch:
-            scenes.find((scene) => scene.id === Number(draft.to_scene_id))
-              ?.initial_pitch ?? null,
+          // Target view duhet të kalibrohet në skenën destinacion.
+          // Mos e mbushim automatikisht me initial_yaw, sepse pastaj duket sikur
+          // është drejtim i saktë për këtë hotspot edhe kur nuk është kalibruar.
+          target_yaw: null,
+          target_pitch: null,
           label: draft.label.trim() || null,
         })
         .select("*")
@@ -1637,6 +1802,42 @@ return () => {
     }));
   }, [scenes]);
 
+  const getPreviewFallbackOrientation = useCallback(
+    (targetSceneId: number, link: any | null): Orientation | null => {
+      const targetYaw = link?.data?.targetYaw;
+      const targetPitch = link?.data?.targetPitch;
+
+      if (
+        typeof targetYaw === "number" &&
+        typeof targetPitch === "number" &&
+        Number.isFinite(targetYaw) &&
+        Number.isFinite(targetPitch)
+      ) {
+        return { yaw: normalizeYaw(targetYaw), pitch: clampPitch(targetPitch) };
+      }
+
+      const targetScene = scenes.find(
+        (scene) => Number(scene.id) === Number(targetSceneId),
+      );
+
+      if (
+        targetScene &&
+        typeof targetScene.initial_yaw === "number" &&
+        typeof targetScene.initial_pitch === "number" &&
+        Number.isFinite(targetScene.initial_yaw) &&
+        Number.isFinite(targetScene.initial_pitch)
+      ) {
+        return {
+          yaw: normalizeYaw(targetScene.initial_yaw),
+          pitch: clampPitch(targetScene.initial_pitch),
+        };
+      }
+
+      return null;
+    },
+    [scenes],
+  );
+
   useEffect(() => {
     if (!previewContainerRef.current || virtualTourNodes.length === 0) return;
 
@@ -1684,6 +1885,55 @@ return () => {
       });
 
       previewViewerRef.current = viewer;
+
+      const previewVtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
+      let currentPreviewSceneId = Number(defaultScene.id);
+      let pendingPreviewOrientation: Orientation | null = null;
+
+      const getPreviewPreservedOrientation = (targetSceneId: number) => {
+        const position = viewer?.getPosition?.();
+        if (!position || !Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
+          return null;
+        }
+
+        const sourceOffset = sceneHeadingOffsetsById.get(Number(currentPreviewSceneId));
+        const targetOffset = sceneHeadingOffsetsById.get(Number(targetSceneId));
+
+        if (!Number.isFinite(sourceOffset) || !Number.isFinite(targetOffset)) {
+          return null;
+        }
+
+        return {
+          yaw: normalizeYaw(position.yaw + sourceOffset! - targetOffset!),
+          pitch: clampPitch(position.pitch),
+        };
+      };
+
+      previewVtPlugin.addEventListener("select-link", ({ link }: any) => {
+        const targetSceneId = Number(link?.nodeId);
+        if (!Number.isFinite(targetSceneId)) return;
+
+        pendingPreviewOrientation =
+          getPreviewPreservedOrientation(targetSceneId) ||
+          getPreviewFallbackOrientation(targetSceneId, link);
+      });
+
+      previewVtPlugin.addEventListener("node-changed", ({ node }: any) => {
+        const nextSceneId = Number(node?.id);
+        if (Number.isFinite(nextSceneId)) currentPreviewSceneId = nextSceneId;
+
+        const orientation = pendingPreviewOrientation;
+        pendingPreviewOrientation = null;
+
+        if (isFiniteOrientation(orientation)) {
+          requestAnimationFrame(() => {
+            viewer?.rotate({
+              yaw: normalizeYaw(orientation.yaw),
+              pitch: clampPitch(orientation.pitch),
+            });
+          });
+        }
+      });
     } catch (error) {
       console.error("Preview viewer init error:", error);
     }
@@ -1695,7 +1945,12 @@ return () => {
 
       previewViewerRef.current = null;
     };
-  }, [virtualTourNodes, scenes]);
+  }, [
+    virtualTourNodes,
+    scenes,
+    sceneHeadingOffsetsById,
+    getPreviewFallbackOrientation,
+  ]);
 
   if (authLoading) {
     return <div className="min-h-screen bg-background" />;
@@ -2074,6 +2329,41 @@ return () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
+                {targetViewCapture && selectedScene.id === targetViewCapture.targetSceneId && (
+                  <div className="rounded-2xl border border-primary/30 bg-primary/10 p-4 text-sm text-foreground space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-primary">
+                        Kalibrimi i drejtimit të hyrjes
+                      </h3>
+                      <p className="text-muted-foreground mt-1">
+                        Po rregullon hyrjen nga “{targetViewCapture.sourceTitle}” në
+                        “{targetViewCapture.targetTitle}”. Rrotullo këtë skenë në
+                        drejtimin ku duhet të shikojë klienti menjëherë pas kalimit,
+                        pastaj ruaje.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveTargetViewCapture}
+                        className="px-4 py-2 rounded-xl bg-primary text-black font-semibold inline-flex items-center gap-2"
+                      >
+                        <LocateFixed size={16} />
+                        Ruaj këtë drejtim
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCancelTargetViewCapture}
+                        className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
+                      >
+                        Anulo
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {viewerError && (
                   <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
                     {viewerError}
@@ -2311,6 +2601,18 @@ return () => {
                                 yaw {hotspot.yaw.toFixed(3)} / pitch{" "}
                                 {hotspot.pitch.toFixed(3)}
                               </div>
+                              <div className="text-[11px] mt-1">
+                                {hotspot.target_yaw != null && hotspot.target_pitch != null ? (
+                                  <span className="text-emerald-400">
+                                    Drejtimi i hyrjes: {hotspot.target_yaw.toFixed(3)} /{" "}
+                                    {hotspot.target_pitch.toFixed(3)}
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-300">
+                                    Drejtimi i hyrjes: jo i kalibruar
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -2324,8 +2626,12 @@ return () => {
 
                               <button
                                 onClick={() => handleSaveHotspotTargetView(hotspot.id)}
-                                className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground"
-                                title="Ruaj drejtimin e hyrjes"
+                                className={`p-2 rounded-lg hover:bg-muted/80 ${
+                                  hotspot.target_yaw != null && hotspot.target_pitch != null
+                                    ? "bg-emerald-500/10 text-emerald-500"
+                                    : "bg-muted text-foreground"
+                                }`}
+                                title="Rregullo drejtimin e hyrjes"
                               >
                                 <LocateFixed size={14} />
                               </button>
@@ -2642,16 +2948,22 @@ return () => {
                   className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
                   value={editingHotspot.to_scene_id}
                   onChange={(e) =>
-                    setEditingHotspot((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            to_scene_id: e.target.value
-                              ? Number(e.target.value)
-                              : "",
-                          }
-                        : prev,
-                    )
+                    setEditingHotspot((prev) => {
+                      if (!prev) return prev;
+
+                      const nextTargetId = e.target.value
+                        ? Number(e.target.value)
+                        : "";
+                      const didTargetChange =
+                        Number(prev.to_scene_id) !== Number(nextTargetId);
+
+                      return {
+                        ...prev,
+                        to_scene_id: nextTargetId,
+                        target_yaw: didTargetChange ? null : prev.target_yaw,
+                        target_pitch: didTargetChange ? null : prev.target_pitch,
+                      };
+                    })
                   }
                 >
                   {scenes
@@ -2718,7 +3030,7 @@ return () => {
                   onClick={() => handleSaveHotspotTargetView(editingHotspot.id)}
                   className="px-4 py-2 rounded-xl bg-muted text-foreground hover:bg-muted/80"
                 >
-                  Ruaj drejtimin e hyrjes për këtë hotspot
+                  Rregullo drejtimin e hyrjes për këtë hotspot
                 </button>
 
                 <button

@@ -135,6 +135,61 @@ const isFiniteOrientation = (orientation: Orientation | null): orientation is Or
   );
 };
 
+const TWO_PI = Math.PI * 2;
+const MIN_SAFE_PITCH = -Math.PI / 2 + 0.02;
+const MAX_SAFE_PITCH = Math.PI / 2 - 0.02;
+
+const normalizeYaw = (yaw: number) => {
+  if (!Number.isFinite(yaw)) return 0;
+
+  let normalized = ((yaw + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+
+  if (Math.abs(normalized + Math.PI) < 1e-10) normalized = Math.PI;
+
+  return normalized;
+};
+
+const clampPitch = (pitch: number) => {
+  if (!Number.isFinite(pitch)) return 0;
+  return Math.max(MIN_SAFE_PITCH, Math.min(MAX_SAFE_PITCH, pitch));
+};
+
+const circularMean = (angles: number[]) => {
+  const validAngles = angles.filter(Number.isFinite);
+  if (validAngles.length === 0) return null;
+
+  const sin = validAngles.reduce((sum, angle) => sum + Math.sin(angle), 0);
+  const cos = validAngles.reduce((sum, angle) => sum + Math.cos(angle), 0);
+
+  if (Math.abs(sin) < 1e-9 && Math.abs(cos) < 1e-9) return null;
+  return normalizeYaw(Math.atan2(sin, cos));
+};
+
+const getFloorPlanBearing = (
+  fromScene: Pick<SceneType, "positionX" | "positionY">,
+  toScene: Pick<SceneType, "positionX" | "positionY">,
+) => {
+  if (
+    typeof fromScene.positionX !== "number" ||
+    typeof fromScene.positionY !== "number" ||
+    typeof toScene.positionX !== "number" ||
+    typeof toScene.positionY !== "number" ||
+    !Number.isFinite(fromScene.positionX) ||
+    !Number.isFinite(fromScene.positionY) ||
+    !Number.isFinite(toScene.positionX) ||
+    !Number.isFinite(toScene.positionY)
+  ) {
+    return null;
+  }
+
+  const dx = toScene.positionX - fromScene.positionX;
+  const dy = toScene.positionY - fromScene.positionY;
+
+  if (Math.hypot(dx, dy) < 0.001) return null;
+
+  return normalizeYaw(Math.atan2(dx, -dy));
+};
+
 const uniqueNumbers = (items: number[]) => {
   return items.filter((id, index, arr) => arr.indexOf(id) === index);
 };
@@ -350,6 +405,34 @@ export function VirtualTour360({
     return map;
   }, [sortedScenes, scenesById]);
 
+  const sceneHeadingOffsetsById = useMemo(() => {
+    const samplesBySceneId = new Map<number, number[]>();
+
+    sortedScenes.forEach((scene) => {
+      scene.hotspots.forEach((hotspot) => {
+        const targetScene = scenesById.get(Number(hotspot.toSceneId));
+        if (!targetScene || !Number.isFinite(hotspot.yaw)) return;
+
+        const floorBearing = getFloorPlanBearing(scene, targetScene);
+        if (floorBearing === null) return;
+
+        const sceneId = Number(scene.id);
+        const currentSamples = samplesBySceneId.get(sceneId) || [];
+        currentSamples.push(normalizeYaw(floorBearing - hotspot.yaw));
+        samplesBySceneId.set(sceneId, currentSamples);
+      });
+    });
+
+    const offsets = new Map<number, number>();
+
+    samplesBySceneId.forEach((samples, sceneId) => {
+      const meanOffset = circularMean(samples);
+      if (meanOffset !== null) offsets.set(sceneId, meanOffset);
+    });
+
+    return offsets;
+  }, [sortedScenes, scenesById]);
+
   const nodes = useMemo(() => {
     return sortedScenes.map((scene) => ({
       id: String(scene.id),
@@ -435,12 +518,71 @@ export function VirtualTour360({
         Number.isFinite(targetYaw) &&
         Number.isFinite(targetPitch)
       ) {
-        return { yaw: targetYaw, pitch: targetPitch };
+        return { yaw: normalizeYaw(targetYaw), pitch: clampPitch(targetPitch) };
       }
 
       return getSceneStartOrientation(targetSceneId);
     },
     [getSceneStartOrientation],
+  );
+
+  const getCurrentViewerOrientation = useCallback((): Orientation | null => {
+    const viewer = viewerRef.current;
+    if (!viewer) return null;
+
+    try {
+      const position = viewer.getPosition?.();
+      if (!position) return null;
+
+      if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
+        return null;
+      }
+
+      return {
+        yaw: normalizeYaw(position.yaw),
+        pitch: clampPitch(position.pitch),
+      };
+    } catch (error) {
+      console.error("Viewer orientation read error:", error);
+      return null;
+    }
+  }, []);
+
+  const getPreservedWorldOrientation = useCallback(
+    (targetSceneId: number, sourceOrientation?: Orientation | null): Orientation | null => {
+      const sourceScene = currentSceneRef.current;
+      if (!sourceScene) return null;
+
+      const fromSceneId = Number(sourceScene.id);
+      const toSceneId = Number(targetSceneId);
+      if (fromSceneId === toSceneId) return null;
+
+      const sourceOffset = sceneHeadingOffsetsById.get(fromSceneId);
+      const targetOffset = sceneHeadingOffsetsById.get(toSceneId);
+
+      if (!Number.isFinite(sourceOffset) || !Number.isFinite(targetOffset)) {
+        return null;
+      }
+
+      const currentOrientation = sourceOrientation || getCurrentViewerOrientation();
+      if (!isFiniteOrientation(currentOrientation)) return null;
+
+      return {
+        yaw: normalizeYaw(currentOrientation.yaw + sourceOffset! - targetOffset!),
+        pitch: clampPitch(currentOrientation.pitch),
+      };
+    },
+    [getCurrentViewerOrientation, sceneHeadingOffsetsById],
+  );
+
+  const getNavigationEntryOrientation = useCallback(
+    (targetSceneId: number, link: any | null): Orientation | null => {
+      const preservedOrientation = getPreservedWorldOrientation(targetSceneId);
+      if (preservedOrientation) return preservedOrientation;
+
+      return getHotspotEntryOrientation(targetSceneId, link);
+    },
+    [getPreservedWorldOrientation, getHotspotEntryOrientation],
   );
 
   const clearLoaderTimer = useCallback(() => {
@@ -579,7 +721,7 @@ export function VirtualTour360({
     if (!viewer || !isFiniteOrientation(orientation)) return;
 
     requestAnimationFrame(() => {
-      viewer.rotate({ yaw: orientation.yaw, pitch: orientation.pitch });
+      viewer.rotate({ yaw: normalizeYaw(orientation.yaw), pitch: clampPitch(orientation.pitch) });
     });
   }, []);
 
@@ -597,7 +739,7 @@ export function VirtualTour360({
       isNavigatingRef.current = true;
       setLoadError(null);
 
-      const entryOrientation = forcedOrientation ?? getSceneStartOrientation(targetSceneId);
+      const entryOrientation = forcedOrientation ?? getNavigationEntryOrientation(targetSceneId, null);
       pendingEntryOrientationRef.current = entryOrientation;
       showNavigationLoader(targetScene.title);
 
@@ -626,7 +768,7 @@ export function VirtualTour360({
     },
     [
       getSceneById,
-      getSceneStartOrientation,
+      getNavigationEntryOrientation,
       showNavigationLoader,
       updateTargetNodeOrientation,
       preloadScenePanoramaOnce,
@@ -852,7 +994,7 @@ export function VirtualTour360({
       const targetScene = getSceneById(targetSceneId);
       if (!targetScene) return;
 
-      const entryOrientation = getHotspotEntryOrientation(targetSceneId, link);
+      const entryOrientation = getNavigationEntryOrientation(targetSceneId, link);
       pendingEntryOrientationRef.current = entryOrientation;
       setLoadError(null);
       showNavigationLoader(targetScene.title);
@@ -900,7 +1042,7 @@ export function VirtualTour360({
     nodes,
     getSceneById,
     getSceneStartOrientation,
-    getHotspotEntryOrientation,
+    getNavigationEntryOrientation,
     updateTargetNodeOrientation,
     preloadScenePanoramaOnce,
     applyManualSceneOrientation,
