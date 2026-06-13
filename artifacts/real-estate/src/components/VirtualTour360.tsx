@@ -194,6 +194,109 @@ const uniqueNumbers = (items: number[]) => {
   return items.filter((id, index, arr) => arr.indexOf(id) === index);
 };
 
+
+type HotspotLike = {
+  id: number;
+  yaw: number;
+  pitch: number;
+};
+
+type ClusteredHotspotPosition = {
+  yaw: number;
+  pitch: number;
+  rawYaw: number;
+  rawPitch: number;
+  clusterIndex: number;
+  clusterSize: number;
+  isClustered: boolean;
+};
+
+const HOTSPOT_CLUSTER_RADIUS = 0.04;
+const HOTSPOT_FAN_YAW_STEP = 0.052;
+const HOTSPOT_FAN_PITCH_STEP = 0.018;
+
+const getYawDistance = (a: number, b: number) => {
+  return Math.abs(normalizeYaw(a - b));
+};
+
+const getHotspotDistance = (a: HotspotLike, b: HotspotLike) => {
+  const dyaw = getYawDistance(a.yaw, b.yaw);
+  const dpitch = Math.abs(a.pitch - b.pitch);
+  return Math.sqrt(dyaw * dyaw + dpitch * dpitch);
+};
+
+const getHotspotClusterKey = (hotspot: HotspotLike) => {
+  return `${Math.round(normalizeYaw(hotspot.yaw) / HOTSPOT_CLUSTER_RADIUS)}:${Math.round(
+    clampPitch(hotspot.pitch) / HOTSPOT_CLUSTER_RADIUS,
+  )}`;
+};
+
+const getClusteredHotspotPositions = <T extends HotspotLike>(
+  hotspots: T[],
+): Map<number, ClusteredHotspotPosition> => {
+  const clusters: T[][] = [];
+
+  hotspots.forEach((hotspot) => {
+    const existingCluster = clusters.find((cluster) => {
+      return cluster.some(
+        (clusterHotspot) => getHotspotDistance(clusterHotspot, hotspot) <= HOTSPOT_CLUSTER_RADIUS,
+      );
+    });
+
+    if (existingCluster) {
+      existingCluster.push(hotspot);
+    } else {
+      clusters.push([hotspot]);
+    }
+  });
+
+  const positions = new Map<number, ClusteredHotspotPosition>();
+
+  clusters.forEach((cluster) => {
+    const orderedCluster = [...cluster].sort((a, b) => {
+      const keyA = getHotspotClusterKey(a);
+      const keyB = getHotspotClusterKey(b);
+      if (keyA !== keyB) return keyA.localeCompare(keyB);
+      return Number(a.id) - Number(b.id);
+    });
+
+    if (orderedCluster.length === 1) {
+      const hotspot = orderedCluster[0];
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw),
+        pitch: clampPitch(hotspot.pitch),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: 0,
+        clusterSize: 1,
+        isClustered: false,
+      });
+      return;
+    }
+
+    const centerIndex = (orderedCluster.length - 1) / 2;
+
+    orderedCluster.forEach((hotspot, index) => {
+      const offset = index - centerIndex;
+      const verticalDirection = index % 2 === 0 ? 1 : -1;
+
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw + offset * HOTSPOT_FAN_YAW_STEP),
+        pitch: clampPitch(
+          hotspot.pitch + Math.abs(offset) * HOTSPOT_FAN_PITCH_STEP * verticalDirection,
+        ),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: index,
+        clusterSize: orderedCluster.length,
+        isClustered: true,
+      });
+    });
+  });
+
+  return positions;
+};
+
 const preloadBrowserImage = (
   src?: string | null,
   priority: PreloadPriority = "low",
@@ -434,34 +537,54 @@ export function VirtualTour360({
   }, [sortedScenes, scenesById]);
 
   const nodes = useMemo(() => {
-    return sortedScenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.imageUrl,
-      thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
-      name: scene.title,
-      caption: scene.title,
-      data: {
-        initialYaw: scene.initialYaw ?? null,
-        initialPitch: scene.initialPitch ?? null,
-      },
-      links: scene.hotspots
-        .filter((hotspot) => scenesById.has(Number(hotspot.toSceneId)))
-        .map((hotspot) => ({
-          nodeId: String(hotspot.toSceneId),
-          position: {
-            yaw: hotspot.yaw,
-            pitch: hotspot.pitch,
-          },
-          name: hotspot.label || scenesById.get(Number(hotspot.toSceneId))?.title,
-          data: {
-            hotspotId: hotspot.id,
-            fromSceneId: hotspot.fromSceneId,
-            toSceneId: hotspot.toSceneId,
-            targetYaw: hotspot.targetYaw ?? null,
-            targetPitch: hotspot.targetPitch ?? null,
-          },
-        })),
-    }));
+    return sortedScenes.map((scene) => {
+      const validHotspots = scene.hotspots.filter((hotspot) =>
+        scenesById.has(Number(hotspot.toSceneId)),
+      );
+      const clusteredPositions = getClusteredHotspotPositions(validHotspots);
+
+      return {
+        id: String(scene.id),
+        panorama: scene.imageUrl,
+        thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
+        name: scene.title,
+        caption: scene.title,
+        data: {
+          initialYaw: scene.initialYaw ?? null,
+          initialPitch: scene.initialPitch ?? null,
+        },
+        links: validHotspots.map((hotspot) => {
+          const visualPosition = clusteredPositions.get(Number(hotspot.id));
+          const targetTitle = scenesById.get(Number(hotspot.toSceneId))?.title;
+          const baseName = hotspot.label || targetTitle || "Lidhje";
+
+          return {
+            nodeId: String(hotspot.toSceneId),
+            position: {
+              yaw: visualPosition?.yaw ?? hotspot.yaw,
+              pitch: visualPosition?.pitch ?? hotspot.pitch,
+            },
+            name: visualPosition?.isClustered
+              ? `${baseName} · ${Number(visualPosition.clusterIndex) + 1}/${visualPosition.clusterSize}`
+              : baseName,
+            data: {
+              hotspotId: hotspot.id,
+              fromSceneId: hotspot.fromSceneId,
+              toSceneId: hotspot.toSceneId,
+              targetYaw: hotspot.targetYaw ?? null,
+              targetPitch: hotspot.targetPitch ?? null,
+              rawYaw: visualPosition?.rawYaw ?? hotspot.yaw,
+              rawPitch: visualPosition?.rawPitch ?? hotspot.pitch,
+              displayYaw: visualPosition?.yaw ?? hotspot.yaw,
+              displayPitch: visualPosition?.pitch ?? hotspot.pitch,
+              isClustered: !!visualPosition?.isClustered,
+              clusterIndex: visualPosition?.clusterIndex ?? 0,
+              clusterSize: visualPosition?.clusterSize ?? 1,
+            },
+          };
+        }),
+      };
+    });
   }, [sortedScenes, scenesById]);
 
   const hasMap = useMemo(

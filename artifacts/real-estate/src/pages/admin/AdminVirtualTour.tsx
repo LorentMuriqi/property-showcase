@@ -285,6 +285,118 @@ const getFloorPlanBearing = (
   return normalizeYaw(Math.atan2(dx, -dy));
 };
 
+
+type HotspotLike = {
+  id: number;
+  yaw: number;
+  pitch: number;
+};
+
+type ClusteredHotspotPosition = {
+  yaw: number;
+  pitch: number;
+  rawYaw: number;
+  rawPitch: number;
+  clusterIndex: number;
+  clusterSize: number;
+  isClustered: boolean;
+};
+
+const HOTSPOT_CLUSTER_RADIUS = 0.04;
+const HOTSPOT_FAN_YAW_STEP = 0.052;
+const HOTSPOT_FAN_PITCH_STEP = 0.018;
+
+const getYawDistance = (a: number, b: number) => {
+  return Math.abs(normalizeYaw(a - b));
+};
+
+const getHotspotDistance = (a: HotspotLike, b: HotspotLike) => {
+  const dyaw = getYawDistance(a.yaw, b.yaw);
+  const dpitch = Math.abs(a.pitch - b.pitch);
+  return Math.sqrt(dyaw * dyaw + dpitch * dpitch);
+};
+
+const getHotspotClusterKey = (hotspot: HotspotLike) => {
+  return `${Math.round(normalizeYaw(hotspot.yaw) / HOTSPOT_CLUSTER_RADIUS)}:${Math.round(
+    clampPitch(hotspot.pitch) / HOTSPOT_CLUSTER_RADIUS,
+  )}`;
+};
+
+const getHotspotClusters = <T extends HotspotLike>(hotspots: T[]): T[][] => {
+  const clusters: T[][] = [];
+
+  hotspots.forEach((hotspot) => {
+    const existingCluster = clusters.find((cluster) =>
+      cluster.some(
+        (clusterHotspot) => getHotspotDistance(clusterHotspot, hotspot) <= HOTSPOT_CLUSTER_RADIUS,
+      ),
+    );
+
+    if (existingCluster) {
+      existingCluster.push(hotspot);
+    } else {
+      clusters.push([hotspot]);
+    }
+  });
+
+  return clusters.map((cluster) =>
+    [...cluster].sort((a, b) => {
+      const keyA = getHotspotClusterKey(a);
+      const keyB = getHotspotClusterKey(b);
+      if (keyA !== keyB) return keyA.localeCompare(keyB);
+      return Number(a.id) - Number(b.id);
+    }),
+  );
+};
+
+const getClusteredHotspotPositions = <T extends HotspotLike>(
+  hotspots: T[],
+): Map<number, ClusteredHotspotPosition> => {
+  const positions = new Map<number, ClusteredHotspotPosition>();
+
+  getHotspotClusters(hotspots).forEach((cluster) => {
+    if (cluster.length === 1) {
+      const hotspot = cluster[0];
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw),
+        pitch: clampPitch(hotspot.pitch),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: 0,
+        clusterSize: 1,
+        isClustered: false,
+      });
+      return;
+    }
+
+    const centerIndex = (cluster.length - 1) / 2;
+
+    cluster.forEach((hotspot, index) => {
+      const offset = index - centerIndex;
+      const verticalDirection = index % 2 === 0 ? 1 : -1;
+
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw + offset * HOTSPOT_FAN_YAW_STEP),
+        pitch: clampPitch(
+          hotspot.pitch + Math.abs(offset) * HOTSPOT_FAN_PITCH_STEP * verticalDirection,
+        ),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: index,
+        clusterSize: cluster.length,
+        isClustered: true,
+      });
+    });
+  });
+
+  return positions;
+};
+
+const getSmartHotspotLabel = (targetTitle?: string | null) => {
+  const cleanTitle = String(targetTitle || "").trim();
+  return cleanTitle ? `Shko në ${cleanTitle}` : "Shko në skenën tjetër";
+};
+
 export default function AdminVirtualTour() {
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
   const [location, setLocation] = useLocation();
@@ -366,6 +478,7 @@ export default function AdminVirtualTour() {
     yaw: null,
     pitch: null,
   });
+  const [autoCalibrateAfterAdd, setAutoCalibrateAfterAdd] = useState(true);
 
   const [cameraCenter, setCameraCenter] = useState<{
     yaw: number;
@@ -475,14 +588,39 @@ const editorViewerLoadIdRef = useRef(0);
     );
   }, [selectedScene, editingHotspot]);
 
+  const targetUsageCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    if (!selectedScene) return counts;
+
+    selectedScene.hotspots.forEach((hotspot) => {
+      const targetId = Number(hotspot.to_scene_id);
+      counts.set(targetId, (counts.get(targetId) || 0) + 1);
+    });
+
+    return counts;
+  }, [selectedScene]);
+
   const availableTargetScenes = useMemo(() => {
     return scenes.filter((scene) => {
       if (!selectedScene) return false;
-      if (scene.id === selectedScene.id) return false;
-      if (usedTargetSceneIds.has(Number(scene.id))) return false;
-      return true;
+      return Number(scene.id) !== Number(selectedScene.id);
     });
-  }, [scenes, selectedScene, usedTargetSceneIds]);
+  }, [scenes, selectedScene]);
+
+  const selectedSceneClusterGroups = useMemo(() => {
+    if (!selectedScene) return [];
+    return getHotspotClusters(selectedScene.hotspots).filter(
+      (cluster) => cluster.length > 1,
+    );
+  }, [selectedScene]);
+
+  const missingTargetViewHotspots = useMemo(() => {
+    return scenes.flatMap((scene) =>
+      scene.hotspots
+        .filter((hotspot) => hotspot.target_yaw == null || hotspot.target_pitch == null)
+        .map((hotspot) => ({ hotspot, sourceScene: scene })),
+    );
+  }, [scenes]);
 
   const refreshTour = useCallback(async () => {
     if (!recordId) return;
@@ -1371,6 +1509,20 @@ const editorViewerLoadIdRef = useRef(0);
     }
   };
 
+  const handleCalibrateNextMissingTargetView = () => {
+    const nextMissing = missingTargetViewHotspots[0];
+
+    if (!nextMissing) {
+      toast({
+        title: "Gjithçka është në rregull",
+        description: "Të gjitha hotspot-et kanë drejtim hyrjeje të kalibruar.",
+      });
+      return;
+    }
+
+    startTargetViewCapture(nextMissing.hotspot);
+  };
+
   const nudgeEditingHotspotPosition = (yawDelta: number, pitchDelta: number) => {
     setEditingHotspot((prev) => {
       if (!prev) return prev;
@@ -1446,11 +1598,22 @@ const editorViewerLoadIdRef = useRef(0);
         pitch: null,
       }));
 
-      toast({
-        title: "Hotspot u ruajt",
-        description:
-          "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
-      });
+      if (autoCalibrateAfterAdd) {
+        toast({
+          title: "Hotspot u ruajt",
+          description: "Tani kalibro drejtimin e hyrjes në skenën destinacion.",
+        });
+
+        window.setTimeout(() => {
+          startTargetViewCapture(normalizedInsertedHotspot);
+        }, 80);
+      } else {
+        toast({
+          title: "Hotspot u ruajt",
+          description:
+            "Mund të vazhdosh menjëherë me hotspot tjetër në të njëjtën foto.",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Gabim",
@@ -1635,36 +1798,75 @@ let cameraInterval: number | null = null;
         markersPlugin.removeMarker(marker.id);
       });
 
+      const markerHotspots = selectedScene.hotspots.map((hotspot) => {
+        const isEditingThis = editingHotspot?.id === hotspot.id;
+
+        return isEditingThis
+          ? {
+              ...hotspot,
+              yaw: normalizeYaw(editingHotspot!.yaw),
+              pitch: clampPitch(editingHotspot!.pitch),
+            }
+          : hotspot;
+      });
+      const tempDraftMarker =
+        isPlacementMode && draft.yaw !== null && draft.pitch !== null
+          ? {
+              id: -1,
+              yaw: normalizeYaw(draft.yaw),
+              pitch: clampPitch(draft.pitch),
+            }
+          : null;
+      const tempEditMarker =
+        isEditingHotspotPlacement && editingHotspot
+          ? {
+              id: -2,
+              yaw: normalizeYaw(editingHotspot.yaw),
+              pitch: clampPitch(editingHotspot.pitch),
+            }
+          : null;
+      const clusteredMarkerPositions = getClusteredHotspotPositions([
+        ...markerHotspots,
+        ...(tempDraftMarker ? [tempDraftMarker] : []),
+        ...(tempEditMarker ? [tempEditMarker] : []),
+      ]);
+
       selectedScene.hotspots.forEach((hotspot) => {
         const target = scenes.find(
           (scene) => Number(scene.id) === Number(hotspot.to_scene_id),
         );
         const isEditingThis = editingHotspot?.id === hotspot.id;
+        const displayPosition = clusteredMarkerPositions.get(Number(hotspot.id));
+        const clusterSuffix = displayPosition?.isClustered
+          ? ` · Grup ${displayPosition.clusterIndex + 1}/${displayPosition.clusterSize}`
+          : "";
 
         markersPlugin.addMarker({
           id: `hs-${hotspot.id}`,
-          longitude: isEditingThis ? editingHotspot!.yaw : hotspot.yaw,
-          latitude: isEditingThis ? editingHotspot!.pitch : hotspot.pitch,
+          longitude: displayPosition?.yaw ?? (isEditingThis ? editingHotspot!.yaw : hotspot.yaw),
+          latitude: displayPosition?.pitch ?? (isEditingThis ? editingHotspot!.pitch : hotspot.pitch),
           html: isEditingThis ? EDITING_HOTSPOT_HTML : NORMAL_HOTSPOT_HTML,
-          tooltip: hotspot.label || target?.title || "Lidhje",
+          tooltip: `${hotspot.label || target?.title || "Lidhje"}${clusterSuffix}`,
         });
       });
 
-      if (isPlacementMode && draft.yaw !== null && draft.pitch !== null) {
+      if (tempDraftMarker) {
+        const displayPosition = clusteredMarkerPositions.get(tempDraftMarker.id);
         markersPlugin.addMarker({
           id: "temp-new-hotspot",
-          longitude: draft.yaw,
-          latitude: draft.pitch,
+          longitude: displayPosition?.yaw ?? tempDraftMarker.yaw,
+          latitude: displayPosition?.pitch ?? tempDraftMarker.pitch,
           html: TEMP_HOTSPOT_HTML,
           tooltip: "Pozicioni i hotspot-it të ri",
         });
       }
 
-      if (isEditingHotspotPlacement && editingHotspot) {
+      if (tempEditMarker) {
+        const displayPosition = clusteredMarkerPositions.get(tempEditMarker.id);
         markersPlugin.addMarker({
           id: "temp-edit-hotspot",
-          longitude: editingHotspot.yaw,
-          latitude: editingHotspot.pitch,
+          longitude: displayPosition?.yaw ?? tempEditMarker.yaw,
+          latitude: displayPosition?.pitch ?? tempEditMarker.pitch,
           html: TEMP_HOTSPOT_HTML,
           tooltip: "Pozicioni i ri i hotspot-it",
         });
@@ -1770,36 +1972,54 @@ return () => {
     );
 
     const validSceneIds = new Set(validScenes.map((scene) => Number(scene.id)));
+    const validScenesById = new Map(
+      validScenes.map((scene) => [Number(scene.id), scene]),
+    );
 
-    return validScenes.map((scene) => ({
-      id: String(scene.id),
-      panorama: scene.image_url,
-      name: scene.title,
-      thumbnail: scene.thumbnail_url || scene.image_url,
-      data: {
-        initialYaw: scene.initial_yaw ?? null,
-        initialPitch: scene.initial_pitch ?? null,
-      },
-      links: scene.hotspots
-        .filter((hotspot) => validSceneIds.has(Number(hotspot.to_scene_id)))
-        .map((hotspot) => ({
-          nodeId: String(hotspot.to_scene_id),
-          position: {
-            yaw: hotspot.yaw,
-            pitch: hotspot.pitch,
-          },
-          name:
-            hotspot.label ||
-            validScenes.find(
-              (target) => Number(target.id) === Number(hotspot.to_scene_id),
-            )?.title ||
-            "Lidhje",
-          data: {
-            targetYaw: hotspot.target_yaw ?? null,
-            targetPitch: hotspot.target_pitch ?? null,
-          },
-        })),
-    }));
+    return validScenes.map((scene) => {
+      const validHotspots = scene.hotspots.filter((hotspot) =>
+        validSceneIds.has(Number(hotspot.to_scene_id)),
+      );
+      const clusteredPositions = getClusteredHotspotPositions(validHotspots);
+
+      return {
+        id: String(scene.id),
+        panorama: scene.image_url,
+        name: scene.title,
+        thumbnail: scene.thumbnail_url || scene.image_url,
+        data: {
+          initialYaw: scene.initial_yaw ?? null,
+          initialPitch: scene.initial_pitch ?? null,
+        },
+        links: validHotspots.map((hotspot) => {
+          const displayPosition = clusteredPositions.get(Number(hotspot.id));
+          const targetTitle = validScenesById.get(Number(hotspot.to_scene_id))?.title;
+          const baseName = hotspot.label || targetTitle || "Lidhje";
+
+          return {
+            nodeId: String(hotspot.to_scene_id),
+            position: {
+              yaw: displayPosition?.yaw ?? hotspot.yaw,
+              pitch: displayPosition?.pitch ?? hotspot.pitch,
+            },
+            name: displayPosition?.isClustered
+              ? `${baseName} · ${displayPosition.clusterIndex + 1}/${displayPosition.clusterSize}`
+              : baseName,
+            data: {
+              targetYaw: hotspot.target_yaw ?? null,
+              targetPitch: hotspot.target_pitch ?? null,
+              rawYaw: displayPosition?.rawYaw ?? hotspot.yaw,
+              rawPitch: displayPosition?.rawPitch ?? hotspot.pitch,
+              displayYaw: displayPosition?.yaw ?? hotspot.yaw,
+              displayPitch: displayPosition?.pitch ?? hotspot.pitch,
+              isClustered: !!displayPosition?.isClustered,
+              clusterIndex: displayPosition?.clusterIndex ?? 0,
+              clusterSize: displayPosition?.clusterSize ?? 1,
+            },
+          };
+        }),
+      };
+    });
   }, [scenes]);
 
   const getPreviewFallbackOrientation = useCallback(
@@ -2325,7 +2545,34 @@ return () => {
                   {selectedScene.initial_pitch.toFixed(3)}
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={handleCalibrateNextMissingTargetView}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold ${
+                  missingTargetViewHotspots.length > 0
+                    ? "bg-primary text-black"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                Kalibro hyrjen e radhës
+                {missingTargetViewHotspots.length > 0
+                  ? ` (${missingTargetViewHotspots.length})`
+                  : ""}
+              </button>
+
+              <div className="px-4 py-2 rounded-xl bg-muted text-xs text-muted-foreground border border-border">
+                Target-e unike: {usedTargetSceneIds.size} · Cluster-e: {selectedSceneClusterGroups.length}
+              </div>
             </div>
+
+            {selectedSceneClusterGroups.length > 0 && (
+              <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+                U gjetën {selectedSceneClusterGroups.length} grup(e) hotspot-esh afër njëra-tjetrës.
+                Në editor dhe në turin publik ato shfaqen me fan-out që të mos mbivendosen,
+                ndërsa pozicioni real i hotspot-it mbetet i pandryshuar për kalibrim.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
@@ -2414,26 +2661,54 @@ return () => {
                       <select
                         className="w-full bg-background border border-border rounded-xl px-3 py-3 text-foreground"
                         value={draft.to_scene_id}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const nextTargetId = e.target.value
+                            ? Number(e.target.value)
+                            : "";
+                          const targetScene =
+                            nextTargetId === ""
+                              ? null
+                              : scenes.find(
+                                  (scene) => Number(scene.id) === Number(nextTargetId),
+                                );
+
                           setDraft((prev) => ({
                             ...prev,
-                            to_scene_id: e.target.value ? Number(e.target.value) : "",
-                          }))
-                        }
+                            to_scene_id: nextTargetId,
+                            label:
+                              prev.label.trim() === ""
+                                ? getSmartHotspotLabel(targetScene?.title)
+                                : prev.label,
+                          }));
+                        }}
                       >
                         <option value="">Zgjidh skenën</option>
-                        {availableTargetScenes.map((scene) => (
-                          <option key={String(scene.id)} value={scene.id}>
-                            {scene.title}
-                          </option>
-                        ))}
+                        {availableTargetScenes.map((scene) => {
+                          const usageCount = targetUsageCounts.get(Number(scene.id)) || 0;
+
+                          return (
+                            <option key={String(scene.id)} value={scene.id}>
+                              {scene.title}
+                              {usageCount > 0
+                                ? ` · përdorur ${usageCount} ${usageCount === 1 ? "herë" : "herë"}`
+                                : ""}
+                            </option>
+                          );
+                        })}
                       </select>
+
+                      {draft.to_scene_id !== "" &&
+                        (targetUsageCounts.get(Number(draft.to_scene_id)) || 0) > 0 && (
+                          <p className="mt-2 text-xs text-primary">
+                            Ky target është përdorur më parë në këtë skenë. Sistemi do ta
+                            trajtojë si hyrje të veçantë dhe do ta shfaqë me fan-out nëse
+                            hotspot-et janë afër.
+                          </p>
+                        )}
 
                       {availableTargetScenes.length === 0 && (
                         <p className="mt-2 text-xs text-amber-300">
-                          Të gjitha skenat e tjera janë përdorur tashmë si destinacion
-                          për këtë panoramë. Nëse dëshiron një target tjetër, fshi ose
-                          edito një hotspot ekzistues.
+                          Shto të paktën edhe një skenë tjetër për të krijuar hotspot.
                         </p>
                       )}
                     </div>
@@ -2452,6 +2727,20 @@ return () => {
                       />
                     </div>
                   </div>
+
+                  <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={autoCalibrateAfterAdd}
+                      onChange={(e) => setAutoCalibrateAfterAdd(e.target.checked)}
+                      className="mt-0.5 accent-primary"
+                    />
+                    <span>
+                      <strong className="text-foreground">Smart workflow:</strong>{" "}
+                      pas ruajtjes së hotspot-it më dërgo automatikisht në skenën
+                      destinacion për të ruajtur drejtimin e hyrjes.
+                    </span>
+                  </label>
 
                   <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -2956,10 +3245,20 @@ return () => {
                         : "";
                       const didTargetChange =
                         Number(prev.to_scene_id) !== Number(nextTargetId);
+                      const targetScene =
+                        nextTargetId === ""
+                          ? null
+                          : scenes.find(
+                              (scene) => Number(scene.id) === Number(nextTargetId),
+                            );
 
                       return {
                         ...prev,
                         to_scene_id: nextTargetId,
+                        label:
+                          prev.label.trim() === ""
+                            ? getSmartHotspotLabel(targetScene?.title)
+                            : prev.label,
                         target_yaw: didTargetChange ? null : prev.target_yaw,
                         target_pitch: didTargetChange ? null : prev.target_pitch,
                       };
@@ -2967,21 +3266,19 @@ return () => {
                   }
                 >
                   {scenes
-                    .filter((scene) => {
-                      if (scene.id === selectedSceneId) return false;
+                    .filter((scene) => Number(scene.id) !== Number(selectedSceneId))
+                    .map((scene) => {
+                      const usageCount = targetUsageCounts.get(Number(scene.id)) || 0;
 
-                      const isCurrentTarget =
-                        Number(scene.id) === Number(editingHotspot?.to_scene_id);
-
-                      if (isCurrentTarget) return true;
-
-                      return !usedTargetSceneIds.has(Number(scene.id));
-                    })
-                    .map((scene) => (
-                      <option key={String(scene.id)} value={scene.id}>
-                        {scene.title}
-                      </option>
-                    ))}
+                      return (
+                        <option key={String(scene.id)} value={scene.id}>
+                          {scene.title}
+                          {usageCount > 0 && Number(scene.id) !== Number(editingHotspot?.to_scene_id)
+                            ? ` · përdorur ${usageCount} herë`
+                            : ""}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
