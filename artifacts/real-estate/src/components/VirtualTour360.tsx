@@ -55,13 +55,14 @@ type DeviceProfile = {
   isDesktop: boolean;
 };
 
+const FIRST_LOAD_HINT_MS = 6500;
 const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
 
 const CACHE_TTL_SECONDS = 30 * 60;
 const NAVIGATION_TRANSITION = {
   showLoader: false,
   effect: "fade" as const,
-  speed: 180,
+  speed: 240,
   rotation: false,
 };
 
@@ -112,7 +113,7 @@ const getCacheMaxItems = () => {
   const profile = getDeviceProfile();
 
   if (profile.isSlowConnection || profile.isLowMemory) return 4;
-  if (profile.isMobile) return 6;
+  if (profile.isMobile) return 8;
   return 14;
 };
 
@@ -128,19 +129,23 @@ const getPreloadBudget = () => {
   }
 
   if (profile.isMobile) {
-    return { direct: 2, secondLevel: 0 };
+    return { direct: 3, secondLevel: 0 };
   }
 
   return { direct: 5, secondLevel: 6 };
 };
 
-const getDeferredDirectPreloadLimit = () => {
+const getProgressiveDirectPreloadLimit = () => {
   const profile = getDeviceProfile();
 
-  if (profile.isSlowConnection || profile.isLowMemory) return 0;
+  if (profile.isSlowConnection) return 0;
+  if (profile.isLowMemory) return 1;
   if (profile.isMobile) return 4;
-  return 12;
+  return 10;
 };
+
+const PROGRESSIVE_DIRECT_PRELOAD_START_MS = 180;
+const PROGRESSIVE_DIRECT_PRELOAD_STEP_MS = 280;
 
 const isFiniteOrientation = (orientation: Orientation | null): orientation is Orientation => {
   return (
@@ -455,6 +460,24 @@ const scheduleIdleTask = (callback: () => void, delay = 80) => {
   };
 };
 
+const scheduleDelayedIdleTask = (callback: () => void, delay = 0) => {
+  if (typeof window === "undefined") return () => undefined;
+
+  let cancelled = false;
+  let idleCleanup: (() => void) | null = null;
+
+  const timeoutId = window.setTimeout(() => {
+    if (cancelled) return;
+    idleCleanup = scheduleIdleTask(callback, 0);
+  }, Math.max(0, delay));
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timeoutId);
+    idleCleanup?.();
+  };
+};
+
 const shouldPluginPreloadLink = (node: any, link: any) => {
   const budget = getPreloadBudget();
   if (budget.direct <= 0) return false;
@@ -491,6 +514,7 @@ export function VirtualTour360({
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showFirstLoadHint, setShowFirstLoadHint] = useState(false);
   const [canUseFullscreen, setCanUseFullscreen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
@@ -739,39 +763,83 @@ export function VirtualTour360({
     [getSceneById, preloadBrowserImageOnce],
   );
 
+  const getPrioritizedLinkedSceneIds = useCallback(
+    (sceneId: number | null) => {
+      if (sceneId === null) return [] as number[];
+
+      const fallbackTargetIds = linkedSceneIdsBySceneId.get(Number(sceneId)) || [];
+      const scene = getSceneById(Number(sceneId));
+      if (!scene || fallbackTargetIds.length <= 1) return fallbackTargetIds;
+
+      let viewerYaw: number | null = null;
+
+      try {
+        const position = viewerRef.current?.getPosition?.();
+        if (position && Number.isFinite(position.yaw)) {
+          viewerYaw = normalizeYaw(position.yaw);
+        }
+      } catch {
+        viewerYaw = null;
+      }
+
+      if (viewerYaw === null) return fallbackTargetIds;
+
+      const scoresByTargetId = new Map<number, number>();
+
+      scene.hotspots.forEach((hotspot) => {
+        const runtimeHotspot = hotspot as RuntimeHotspot;
+        const targetId = getRuntimeHotspotTargetSceneId(runtimeHotspot);
+        if (targetId === null || !scenesById.has(targetId)) return;
+
+        const yaw = getRuntimeHotspotYaw(runtimeHotspot);
+        const distance = getYawDistance(yaw, viewerYaw as number);
+        const previousScore = scoresByTargetId.get(targetId);
+
+        if (previousScore === undefined || distance < previousScore) {
+          scoresByTargetId.set(targetId, distance);
+        }
+      });
+
+      return [...fallbackTargetIds].sort((a, b) => {
+        const scoreA = scoresByTargetId.get(a) ?? Number.MAX_SAFE_INTEGER;
+        const scoreB = scoresByTargetId.get(b) ?? Number.MAX_SAFE_INTEGER;
+        return scoreA - scoreB;
+      });
+    },
+    [getSceneById, linkedSceneIdsBySceneId, scenesById],
+  );
+
   const warmSceneNeighborhood = useCallback(
     (sceneId: number | null) => {
       if (sceneId === null) return;
 
       const budget = getPreloadBudget();
-      if (budget.direct <= 0) return;
+      const orderedTargetIds = getPrioritizedLinkedSceneIds(sceneId);
+      if (budget.direct <= 0 || orderedTargetIds.length === 0) return;
 
-      const allDirectTargetIds = linkedSceneIdsBySceneId.get(Number(sceneId)) || [];
-      const directTargetIds = allDirectTargetIds.slice(0, budget.direct);
+      const directTargetIds = orderedTargetIds.slice(0, budget.direct);
 
       directTargetIds.forEach((targetId) => {
         void preloadScenePanoramaOnce(targetId, "high");
       });
 
-      const deferredDirectLimit = getDeferredDirectPreloadLimit();
-      const deferredDirectTargetIds = allDirectTargetIds.slice(
+      const progressiveLimit = getProgressiveDirectPreloadLimit();
+      const deferredDirectTargetIds = orderedTargetIds.slice(
         budget.direct,
-        Math.max(budget.direct, deferredDirectLimit),
+        budget.direct + progressiveLimit,
       );
 
-      if (deferredDirectTargetIds.length > 0) {
-        const cancelDeferredDirect = scheduleIdleTask(() => {
-          deferredDirectTargetIds.forEach((targetId) => {
-            void preloadScenePanoramaOnce(targetId, "low");
-          });
-        }, 450);
+      deferredDirectTargetIds.forEach((targetId, index) => {
+        const cancelIdle = scheduleDelayedIdleTask(() => {
+          void preloadScenePanoramaOnce(targetId, "low");
+        }, PROGRESSIVE_DIRECT_PRELOAD_START_MS + index * PROGRESSIVE_DIRECT_PRELOAD_STEP_MS);
 
-        cleanupTasksRef.current.push(cancelDeferredDirect);
-      }
+        cleanupTasksRef.current.push(cancelIdle);
+      });
 
       if (budget.secondLevel <= 0) return;
 
-      const cancelIdle = scheduleIdleTask(() => {
+      const cancelIdle = scheduleDelayedIdleTask(() => {
         const secondLevelIds = uniqueNumbers(
           directTargetIds.flatMap((targetId) => linkedSceneIdsBySceneId.get(targetId) || []),
         )
@@ -782,11 +850,11 @@ export function VirtualTour360({
         secondLevelIds.forEach((targetId) => {
           void preloadScenePanoramaOnce(targetId, "low");
         });
-      }, 900);
+      }, 700 + deferredDirectTargetIds.length * PROGRESSIVE_DIRECT_PRELOAD_STEP_MS);
 
       cleanupTasksRef.current.push(cancelIdle);
     },
-    [linkedSceneIdsBySceneId, preloadScenePanoramaOnce],
+    [getPrioritizedLinkedSceneIds, linkedSceneIdsBySceneId, preloadScenePanoramaOnce],
   );
 
   const getTransitionWithEntryOrientation = useCallback(
@@ -815,16 +883,9 @@ export function VirtualTour360({
 
       pendingEntryOrientationRef.current = entryOrientation;
 
-      if (targetSceneId !== null && (_fromNode || fromLink)) {
-        setLoadError(null);
-      }
-
       return getTransitionWithEntryOrientation(entryOrientation);
     },
-    [
-      getNavigationEntryOrientation,
-      getTransitionWithEntryOrientation,
-    ],
+    [getNavigationEntryOrientation, getTransitionWithEntryOrientation],
   );
 
   const goToScene = useCallback(
@@ -843,12 +904,9 @@ export function VirtualTour360({
 
       const entryOrientation = forcedOrientation ?? getNavigationEntryOrientation(targetSceneId, null);
       pendingEntryOrientationRef.current = entryOrientation;
+
       try {
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
-
-        if (!psvReadyPanoramasRef.current.has(targetScene.imageUrl)) {
-          await preloadScenePanoramaOnce(targetSceneId, "high");
-        }
 
         await vtPlugin.setCurrentNode(
           String(targetSceneId),
@@ -861,12 +919,7 @@ export function VirtualTour360({
         isNavigatingRef.current = false;
       }
     },
-    [
-      getSceneById,
-      getNavigationEntryOrientation,
-      preloadScenePanoramaOnce,
-      getTransitionWithEntryOrientation,
-    ],
+    [getSceneById, getNavigationEntryOrientation, getTransitionWithEntryOrientation],
   );
 
   const handleSceneChange = useCallback(
@@ -972,12 +1025,26 @@ export function VirtualTour360({
     setIsInitialLoading(true);
     setIsViewerVisible(false);
     setLoadError(null);
+    setShowFirstLoadHint(false);
 
     const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
     let didFinishInitialLoad = false;
+    let firstLoadHintTimer: number | null = window.setTimeout(() => {
+      if (!didFinishInitialLoad) setShowFirstLoadHint(true);
+    }, FIRST_LOAD_HINT_MS);
+
+    const clearFirstLoadHintTimer = () => {
+      if (firstLoadHintTimer !== null) {
+        window.clearTimeout(firstLoadHintTimer);
+        firstLoadHintTimer = null;
+      }
+    };
+
     const finishInitialLoad = () => {
       if (didFinishInitialLoad) return;
       didFinishInitialLoad = true;
+      clearFirstLoadHintTimer();
+
       currentSceneRef.current = resolvedStartScene;
       setCurrentSceneId(resolvedStartScene.id);
       psvReadyPanoramasRef.current.add(resolvedStartScene.imageUrl);
@@ -985,9 +1052,12 @@ export function VirtualTour360({
       requestAnimationFrame(() => {
         setIsViewerVisible(true);
         setIsInitialLoading(false);
+        setShowFirstLoadHint(false);
         warmSceneNeighborhood(resolvedStartScene.id);
       });
     };
+
+    const deviceProfile = getDeviceProfile();
 
     const viewer = new Viewer({
       container: containerRef.current,
@@ -999,9 +1069,9 @@ export function VirtualTour360({
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
       defaultTransition: NAVIGATION_TRANSITION,
-      maxFov: getDeviceProfile().isMobile ? 105 : 100,
+      maxFov: deviceProfile.isMobile ? 108 : 100,
       minFov: 28,
-      defaultZoomLvl: getDeviceProfile().isMobile ? 34 : 38,
+      defaultZoomLvl: deviceProfile.isMobile ? 32 : 38,
       zoomSpeed: 1.05,
       moveSpeed: 1,
       moveInertia: 0.82,
@@ -1009,7 +1079,7 @@ export function VirtualTour360({
       touchmoveTwoFingers: false,
       rendererParameters: {
         alpha: false,
-        antialias: true,
+        antialias: !deviceProfile.isMobile && !deviceProfile.isLowMemory,
         powerPreference: "high-performance",
       },
       plugins: [
@@ -1081,6 +1151,7 @@ export function VirtualTour360({
     });
 
     return () => {
+      clearFirstLoadHintTimer();
       cleanupTasksRef.current.forEach((cleanup) => cleanup());
       cleanupTasksRef.current = [];
       viewer.destroy();
@@ -1178,14 +1249,28 @@ export function VirtualTour360({
         />
 
         {isInitialLoading && (
-          <div className="absolute inset-0 z-30 overflow-hidden bg-black" aria-hidden="true">
+          <div className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black">
             {resolvedStartScene?.thumbnailUrl && (
               <div
-                className="absolute inset-0 scale-110 bg-cover bg-center opacity-45 blur-2xl"
+                className="absolute inset-0 scale-110 bg-cover bg-center opacity-35 blur-2xl"
                 style={{ backgroundImage: `url(${resolvedStartScene.thumbnailUrl})` }}
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/55 to-black/80" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/80 to-black/95" />
+            <div className="relative flex w-[min(90vw,360px)] flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-7 text-center shadow-2xl md:backdrop-blur-xl">
+              <div className="h-1.5 w-40 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/90" />
+              </div>
+              <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
+              <p className="text-white/90 text-sm tracking-wide font-medium">
+                Duke përgatitur turin virtual
+              </p>
+              <span className="min-h-[32px] text-xs leading-5 text-white/58">
+                {showFirstLoadHint
+                  ? "Hapja e parë mund të zgjasë pak më shumë. Pamjet pasuese do të hapen më shpejt."
+                  : "Po ngarkohet pamja 360° me cilësi të lartë."}
+              </span>
+            </div>
           </div>
         )}
 
@@ -1251,6 +1336,7 @@ export function VirtualTour360({
                     onMouseEnter={() => void preloadScenePanoramaOnce(scene.id, "high")}
                     onFocus={() => void preloadScenePanoramaOnce(scene.id, "high")}
                     onTouchStart={() => void preloadScenePanoramaOnce(scene.id, "high")}
+                    onPointerDown={() => void preloadScenePanoramaOnce(scene.id, "high")}
                     onClick={() => void handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
@@ -1277,6 +1363,7 @@ export function VirtualTour360({
                 onMouseEnter={() => void preloadScenePanoramaOnce(scene.id, "high")}
                 onFocus={() => void preloadScenePanoramaOnce(scene.id, "high")}
                 onTouchStart={() => void preloadScenePanoramaOnce(scene.id, "high")}
+                onPointerDown={() => void preloadScenePanoramaOnce(scene.id, "high")}
                 onClick={() => void handleSceneChange(scene.id)}
                 className={`relative shrink-0 w-24 h-14 rounded-xl overflow-hidden border-2 transition-all shadow-lg ${
                   currentSceneId === scene.id
