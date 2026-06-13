@@ -66,6 +66,10 @@ const NAVIGATION_TRANSITION = {
   rotation: false,
 };
 
+type NavigationTransitionOptions = typeof NAVIGATION_TRANSITION & {
+  rotateTo?: Orientation;
+};
+
 const LOADER_DELAY_MS = 120;
 
 const getDeviceProfile = (): DeviceProfile => {
@@ -475,18 +479,6 @@ export function VirtualTour360({
   const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
   const cleanupTasksRef = useRef<Array<() => void>>([]);
   const loaderTimerRef = useRef<number | null>(null);
-  const orientationTimeoutsRef = useRef<number[]>([]);
-  const orientationAnimationFramesRef = useRef<number[]>([]);
-  const activeEntryOrientationRef = useRef<Orientation | null>(null);
-  const lastPointerSpherePositionRef = useRef<
-    (Orientation & { timestamp: number }) | null
-  >(null);
-  const lastHoveredLinkRef = useRef<{
-    sourceSceneId: number | null;
-    targetSceneId: number | null;
-    link: any;
-    timestamp: number;
-  } | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -698,141 +690,6 @@ export function VirtualTour360({
     [getDirectHotspotEntryOrientation, getReverseHotspotEntryOrientation, getSceneStartOrientation],
   );
 
-  const getCurrentViewerOrientation = useCallback((): Orientation | null => {
-    const viewer = viewerRef.current as any;
-    if (!viewer?.getPosition) return null;
-
-    try {
-      const position = viewer.getPosition();
-      if (!position) return null;
-
-      const yaw = toFiniteNumber(position.yaw);
-      const pitch = toFiniteNumber(position.pitch);
-
-      if (yaw === null || pitch === null) return null;
-
-      return { yaw: normalizeYaw(yaw), pitch: clampPitch(pitch) };
-    } catch (error) {
-      console.error("Viewer position read error:", error);
-      return null;
-    }
-  }, []);
-
-  const getPointerSphericalPosition = useCallback((event: PointerEvent): Orientation | null => {
-    const viewer = viewerRef.current as any;
-    const container = containerRef.current;
-
-    if (!viewer?.dataHelper?.viewerCoordsToSphericalCoords || !container) {
-      return getCurrentViewerOrientation();
-    }
-
-    try {
-      const rect = container.getBoundingClientRect();
-      const position = viewer.dataHelper.viewerCoordsToSphericalCoords({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      });
-
-      const yaw = toFiniteNumber(position?.yaw);
-      const pitch = toFiniteNumber(position?.pitch);
-
-      if (yaw === null || pitch === null) return getCurrentViewerOrientation();
-
-      return { yaw: normalizeYaw(yaw), pitch: clampPitch(pitch) };
-    } catch (error) {
-      console.error("Pointer spherical position error:", error);
-      return getCurrentViewerOrientation();
-    }
-  }, [getCurrentViewerOrientation]);
-
-  const getLinkComparisonPosition = useCallback((link: any): Orientation | null => {
-    const yaw = toFiniteNumber(
-      link?.data?.displayYaw ?? link?.position?.yaw ?? link?.data?.rawYaw,
-    );
-    const pitch = toFiniteNumber(
-      link?.data?.displayPitch ?? link?.position?.pitch ?? link?.data?.rawPitch,
-    );
-
-    if (yaw === null || pitch === null) return null;
-
-    return { yaw: normalizeYaw(yaw), pitch: clampPitch(pitch) };
-  }, []);
-
-  const getOrientationDistance = useCallback((a: Orientation, b: Orientation) => {
-    const yawDelta = Math.abs(normalizeYaw(a.yaw - b.yaw));
-    const pitchDelta = Math.abs(a.pitch - b.pitch);
-
-    return Math.sqrt(yawDelta * yawDelta + pitchDelta * pitchDelta);
-  }, []);
-
-  const findClosestLinkToPosition = useCallback(
-    (links: any[], position: Orientation | null) => {
-      if (!links.length) return null;
-      if (!position) return links[0];
-
-      return links.reduce((best, link) => {
-        const linkPosition = getLinkComparisonPosition(link);
-        if (!linkPosition) return best;
-
-        const distance = getOrientationDistance(position, linkPosition);
-        if (!best) return { link, distance };
-
-        return distance < best.distance ? { link, distance } : best;
-      }, null as { link: any; distance: number } | null)?.link ?? links[0];
-    },
-    [getLinkComparisonPosition, getOrientationDistance],
-  );
-
-  const findBestNavigationLink = useCallback(
-    (targetSceneId: number, fromNode?: any | null, fromLink?: any | null): any | null => {
-      if (fromLink && String(fromLink.nodeId) === String(targetSceneId)) {
-        return fromLink;
-      }
-
-      const sourceSceneId = toFiniteNumber(fromNode?.id);
-      const links = Array.isArray(fromNode?.links) ? fromNode.links : [];
-      const candidates = links.filter(
-        (link: any) => String(link?.nodeId) === String(targetSceneId),
-      );
-
-      if (candidates.length === 0) return null;
-      if (candidates.length === 1) return candidates[0];
-
-      const now = Date.now();
-      const hovered = lastHoveredLinkRef.current;
-
-      if (
-        hovered &&
-        now - hovered.timestamp < 2500 &&
-        String(hovered.targetSceneId) === String(targetSceneId) &&
-        (sourceSceneId === null || String(hovered.sourceSceneId) === String(sourceSceneId))
-      ) {
-        return hovered.link;
-      }
-
-      const pointerPosition = lastPointerSpherePositionRef.current;
-      if (pointerPosition && now - pointerPosition.timestamp < 2500) {
-        return findClosestLinkToPosition(candidates, pointerPosition);
-      }
-
-      return findClosestLinkToPosition(candidates, getCurrentViewerOrientation());
-    },
-    [findClosestLinkToPosition, getCurrentViewerOrientation],
-  );
-
-  const getTransitionOptionsForOrientation = useCallback((orientation: Orientation | null) => {
-    const options: any = { ...NAVIGATION_TRANSITION };
-
-    if (isFiniteOrientation(orientation)) {
-      options.rotateTo = {
-        yaw: normalizeYaw(orientation.yaw),
-        pitch: clampPitch(orientation.pitch),
-      };
-    }
-
-    return options;
-  }, []);
-
   const clearLoaderTimer = useCallback(() => {
     if (loaderTimerRef.current !== null && typeof window !== "undefined") {
       window.clearTimeout(loaderTimerRef.current);
@@ -943,58 +800,47 @@ export function VirtualTour360({
     [linkedSceneIdsBySceneId, preloadScenePanoramaOnce],
   );
 
-  const clearOrientationApplyTimers = useCallback(() => {
-    if (typeof window === "undefined") return;
+  const getTransitionWithEntryOrientation = useCallback(
+    (orientation: Orientation | null): NavigationTransitionOptions => {
+      const transition: NavigationTransitionOptions = { ...NAVIGATION_TRANSITION };
 
-    orientationTimeoutsRef.current.forEach((timerId) => {
-      window.clearTimeout(timerId);
-    });
-    orientationTimeoutsRef.current = [];
-
-    orientationAnimationFramesRef.current.forEach((frameId) => {
-      window.cancelAnimationFrame(frameId);
-    });
-    orientationAnimationFramesRef.current = [];
-  }, []);
-
-  const applyManualSceneOrientation = useCallback((orientation: Orientation | null) => {
-    const viewerAtSchedule = viewerRef.current;
-    if (!viewerAtSchedule || !isFiniteOrientation(orientation)) return;
-
-    clearOrientationApplyTimers();
-
-    const yaw = normalizeYaw(orientation.yaw);
-    const pitch = clampPitch(orientation.pitch);
-
-    const rotateNow = () => {
-      const viewer = viewerRef.current;
-      if (!viewer || viewer !== viewerAtSchedule) return;
-
-      try {
-        viewer.rotate({ yaw, pitch });
-      } catch (error) {
-        console.error("Entry orientation apply error:", error);
+      if (isFiniteOrientation(orientation)) {
+        transition.rotateTo = {
+          yaw: normalizeYaw(orientation.yaw),
+          pitch: clampPitch(orientation.pitch),
+        };
       }
-    };
 
-    rotateNow();
+      return transition;
+    },
+    [],
+  );
 
-    if (typeof window === "undefined") return;
+  const getPluginTransitionOptions = useCallback(
+    (toNode: any, _fromNode?: any, fromLink?: any): NavigationTransitionOptions => {
+      const targetSceneId = toFiniteNumber(toNode?.id ?? fromLink?.nodeId);
+      const targetScene = targetSceneId !== null ? getSceneById(targetSceneId) : null;
+      const entryOrientation =
+        targetSceneId !== null
+          ? getNavigationEntryOrientation(targetSceneId, fromLink ?? null)
+          : null;
 
-    const firstFrame = window.requestAnimationFrame(() => {
-      rotateNow();
+      pendingEntryOrientationRef.current = entryOrientation;
 
-      const secondFrame = window.requestAnimationFrame(rotateNow);
-      orientationAnimationFramesRef.current.push(secondFrame);
-    });
+      if (targetScene && (_fromNode || fromLink)) {
+        setLoadError(null);
+        showNavigationLoader(targetScene.title);
+      }
 
-    orientationAnimationFramesRef.current.push(firstFrame);
-
-    [50, 140, 320, 650].forEach((delay) => {
-      const timerId = window.setTimeout(rotateNow, delay);
-      orientationTimeoutsRef.current.push(timerId);
-    });
-  }, [clearOrientationApplyTimers]);
+      return getTransitionWithEntryOrientation(entryOrientation);
+    },
+    [
+      getSceneById,
+      getNavigationEntryOrientation,
+      getTransitionWithEntryOrientation,
+      showNavigationLoader,
+    ],
+  );
 
   const goToScene = useCallback(
     async (targetSceneId: number, forcedOrientation?: Orientation | null) => {
@@ -1012,7 +858,6 @@ export function VirtualTour360({
 
       const entryOrientation = forcedOrientation ?? getNavigationEntryOrientation(targetSceneId, null);
       pendingEntryOrientationRef.current = entryOrientation;
-      activeEntryOrientationRef.current = entryOrientation;
       showNavigationLoader(targetScene.title);
 
       try {
@@ -1024,9 +869,8 @@ export function VirtualTour360({
 
         await vtPlugin.setCurrentNode(
           String(targetSceneId),
-          getTransitionOptionsForOrientation(entryOrientation),
+          getTransitionWithEntryOrientation(entryOrientation),
         );
-        applyManualSceneOrientation(entryOrientation);
       } catch (error) {
         console.error("Scene change error:", error);
         setLoadError("Skena nuk u hap. Provoni edhe një herë.");
@@ -1040,8 +884,7 @@ export function VirtualTour360({
       getNavigationEntryOrientation,
       showNavigationLoader,
       preloadScenePanoramaOnce,
-      getTransitionOptionsForOrientation,
-      applyManualSceneOrientation,
+      getTransitionWithEntryOrientation,
       hideNavigationLoader,
     ],
   );
@@ -1213,37 +1056,7 @@ export function VirtualTour360({
             startNodeId: String(resolvedStartScene.id),
             nodes,
             preload: shouldPluginPreloadLink,
-            transitionOptions: (node: any, fromNode: any, fromLink: any) => {
-              const targetSceneId = toFiniteNumber(node?.id);
-
-              if (targetSceneId === null) {
-                return NAVIGATION_TRANSITION;
-              }
-
-              const navigationLink = findBestNavigationLink(
-                targetSceneId,
-                fromNode,
-                fromLink,
-              );
-              const entryOrientation = getNavigationEntryOrientation(
-                targetSceneId,
-                navigationLink,
-              );
-
-              pendingEntryOrientationRef.current = entryOrientation;
-              activeEntryOrientationRef.current = entryOrientation;
-
-              if (fromNode) {
-                const targetScene = getSceneById(targetSceneId);
-                if (targetScene) {
-                  setLoadError(null);
-                  showNavigationLoader(targetScene.title);
-                  void preloadScenePanoramaOnce(targetSceneId, "high");
-                }
-              }
-
-              return getTransitionOptionsForOrientation(entryOrientation);
-            },
+            transitionOptions: getPluginTransitionOptions,
             showLinkTooltip: true,
             arrowStyle: {
               size: { width: 72, height: 72 },
@@ -1271,7 +1084,6 @@ export function VirtualTour360({
       }
 
       finishInitialLoad();
-      applyManualSceneOrientation(activeEntryOrientationRef.current);
       hideNavigationLoader();
     });
 
@@ -1282,30 +1094,9 @@ export function VirtualTour360({
       hideNavigationLoader();
     });
 
-    const capturePointerIntent = (event: PointerEvent) => {
-      const pointerPosition = getPointerSphericalPosition(event);
-
-      if (pointerPosition) {
-        lastPointerSpherePositionRef.current = {
-          ...pointerPosition,
-          timestamp: Date.now(),
-        };
-      }
-    };
-
-    containerRef.current.addEventListener("pointerdown", capturePointerIntent, true);
-
     vtPlugin.addEventListener("enter-arrow", ({ link }: any) => {
-      const targetSceneId = toFiniteNumber(link?.nodeId);
-
-      if (targetSceneId !== null) {
-        lastHoveredLinkRef.current = {
-          sourceSceneId: currentSceneRef.current ? Number(currentSceneRef.current.id) : null,
-          targetSceneId,
-          link,
-          timestamp: Date.now(),
-        };
-
+      const targetSceneId = Number(link?.nodeId);
+      if (Number.isFinite(targetSceneId)) {
         void preloadScenePanoramaOnce(targetSceneId, "high");
       }
     });
@@ -1322,10 +1113,7 @@ export function VirtualTour360({
         psvReadyPanoramasRef.current.add(nextScene.imageUrl);
       }
 
-      const pending = pendingEntryOrientationRef.current;
       pendingEntryOrientationRef.current = null;
-      activeEntryOrientationRef.current = pending;
-      applyManualSceneOrientation(pending);
       warmSceneNeighborhood(nextId);
       hideNavigationLoader();
     });
@@ -1333,32 +1121,23 @@ export function VirtualTour360({
     return () => {
       clearFirstLoadHintTimer();
       clearLoaderTimer();
-      clearOrientationApplyTimers();
       cleanupTasksRef.current.forEach((cleanup) => cleanup());
       cleanupTasksRef.current = [];
-      containerRef.current?.removeEventListener("pointerdown", capturePointerIntent, true);
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
       pendingEntryOrientationRef.current = null;
-      activeEntryOrientationRef.current = null;
     };
   }, [
     resolvedStartScene,
     nodes,
     getSceneById,
     getSceneStartOrientation,
-    getNavigationEntryOrientation,
-    findBestNavigationLink,
-    getTransitionOptionsForOrientation,
-    getPointerSphericalPosition,
     preloadScenePanoramaOnce,
-    applyManualSceneOrientation,
+    getPluginTransitionOptions,
     warmSceneNeighborhood,
-    showNavigationLoader,
     hideNavigationLoader,
     clearLoaderTimer,
-    clearOrientationApplyTimers,
   ]);
 
   useEffect(() => {

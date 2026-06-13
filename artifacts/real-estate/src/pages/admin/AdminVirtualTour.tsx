@@ -249,6 +249,7 @@ const isFiniteOrientation = (orientation: Orientation | null): orientation is Or
   );
 };
 
+
 type HotspotLike = {
   id: number;
   yaw: number;
@@ -2020,44 +2021,46 @@ return () => {
     if (!defaultScene) return;
 
     let viewer: Viewer | null = null;
-    let pendingPreviewOrientation: Orientation | null = getPreviewFallbackOrientation(
-      Number(defaultScene.id),
-      null,
-    );
 
-    const getPreviewTransitionWithOrientation = (orientation: Orientation | null) => {
-      if (!isFiniteOrientation(orientation)) {
-        return {
-          showLoader: false,
-          effect: "fade" as const,
-          speed: 180,
-          rotation: false,
+    const getPreviewTransitionWithOrientation = (
+      orientation: Orientation | null,
+    ) => {
+      const transition: {
+        showLoader: boolean;
+        effect: "fade";
+        speed: number;
+        rotation: boolean;
+        rotateTo?: Orientation;
+      } = {
+        showLoader: false,
+        effect: "fade",
+        speed: 180,
+        rotation: false,
+      };
+
+      if (isFiniteOrientation(orientation)) {
+        transition.rotateTo = {
+          yaw: normalizeYaw(orientation.yaw),
+          pitch: clampPitch(orientation.pitch),
         };
       }
 
-      return {
-        showLoader: false,
-        effect: "fade" as const,
-        speed: 180,
-        rotation: false,
-        rotateTo: {
-          yaw: normalizeYaw(orientation.yaw),
-          pitch: clampPitch(orientation.pitch),
-        },
-      };
+      return transition;
+    };
+
+    const getPreviewTransitionOptions = (toNode: any, _fromNode?: any, fromLink?: any) => {
+      const targetSceneId = Number(toNode?.id ?? fromLink?.nodeId);
+      const orientation = Number.isFinite(targetSceneId)
+        ? getPreviewFallbackOrientation(targetSceneId, fromLink ?? null)
+        : null;
+
+      return getPreviewTransitionWithOrientation(orientation);
     };
 
     try {
-      const defaultPreviewOrientation = getPreviewFallbackOrientation(
-        Number(defaultScene.id),
-        null,
-      );
-
       viewer = new Viewer({
         container: previewContainerRef.current,
         navbar: ["zoom", "move", "fullscreen"],
-        defaultYaw: defaultPreviewOrientation?.yaw ?? 0,
-        defaultPitch: defaultPreviewOrientation?.pitch ?? 0,
         plugins: [
           [
             VirtualTourPlugin,
@@ -2066,43 +2069,13 @@ return () => {
               renderMode: "3d",
               startNodeId: String(defaultScene.id),
               nodes: virtualTourNodes,
-              transitionOptions: (toNode: any, _fromNode: any, fromLink: any) => {
-                const targetSceneId = Number(toNode?.id ?? fromLink?.nodeId);
-                pendingPreviewOrientation = Number.isFinite(targetSceneId)
-                  ? getPreviewFallbackOrientation(targetSceneId, fromLink ?? null)
-                  : null;
-
-                return getPreviewTransitionWithOrientation(pendingPreviewOrientation);
-              },
+              transitionOptions: getPreviewTransitionOptions,
             },
           ],
         ],
       });
 
       previewViewerRef.current = viewer;
-
-      const previewVtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
-
-      previewVtPlugin.addEventListener("node-changed", ({ node, data }: any) => {
-        const nextSceneId = Number(node?.id);
-        const orientation =
-          pendingPreviewOrientation ??
-          (Number.isFinite(nextSceneId)
-            ? getPreviewFallbackOrientation(nextSceneId, data?.fromLink ?? null)
-            : null);
-
-        pendingPreviewOrientation = null;
-
-        if (isFiniteOrientation(orientation)) {
-          const yaw = normalizeYaw(orientation.yaw);
-          const pitch = clampPitch(orientation.pitch);
-
-          requestAnimationFrame(() => {
-            viewer?.rotate({ yaw, pitch });
-            requestAnimationFrame(() => viewer?.rotate({ yaw, pitch }));
-          });
-        }
-      });
     } catch (error) {
       console.error("Preview viewer init error:", error);
     }
