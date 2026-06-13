@@ -154,42 +154,6 @@ const clampPitch = (pitch: number) => {
   return Math.max(MIN_SAFE_PITCH, Math.min(MAX_SAFE_PITCH, pitch));
 };
 
-const circularMean = (angles: number[]) => {
-  const validAngles = angles.filter(Number.isFinite);
-  if (validAngles.length === 0) return null;
-
-  const sin = validAngles.reduce((sum, angle) => sum + Math.sin(angle), 0);
-  const cos = validAngles.reduce((sum, angle) => sum + Math.cos(angle), 0);
-
-  if (Math.abs(sin) < 1e-9 && Math.abs(cos) < 1e-9) return null;
-  return normalizeYaw(Math.atan2(sin, cos));
-};
-
-const getFloorPlanBearing = (
-  fromScene: Pick<SceneType, "positionX" | "positionY">,
-  toScene: Pick<SceneType, "positionX" | "positionY">,
-) => {
-  if (
-    typeof fromScene.positionX !== "number" ||
-    typeof fromScene.positionY !== "number" ||
-    typeof toScene.positionX !== "number" ||
-    typeof toScene.positionY !== "number" ||
-    !Number.isFinite(fromScene.positionX) ||
-    !Number.isFinite(fromScene.positionY) ||
-    !Number.isFinite(toScene.positionX) ||
-    !Number.isFinite(toScene.positionY)
-  ) {
-    return null;
-  }
-
-  const dx = toScene.positionX - fromScene.positionX;
-  const dy = toScene.positionY - fromScene.positionY;
-
-  if (Math.hypot(dx, dy) < 0.001) return null;
-
-  return normalizeYaw(Math.atan2(dx, -dy));
-};
-
 const uniqueNumbers = (items: number[]) => {
   return items.filter((id, index, arr) => arr.indexOf(id) === index);
 };
@@ -508,34 +472,6 @@ export function VirtualTour360({
     return map;
   }, [sortedScenes, scenesById]);
 
-  const sceneHeadingOffsetsById = useMemo(() => {
-    const samplesBySceneId = new Map<number, number[]>();
-
-    sortedScenes.forEach((scene) => {
-      scene.hotspots.forEach((hotspot) => {
-        const targetScene = scenesById.get(Number(hotspot.toSceneId));
-        if (!targetScene || !Number.isFinite(hotspot.yaw)) return;
-
-        const floorBearing = getFloorPlanBearing(scene, targetScene);
-        if (floorBearing === null) return;
-
-        const sceneId = Number(scene.id);
-        const currentSamples = samplesBySceneId.get(sceneId) || [];
-        currentSamples.push(normalizeYaw(floorBearing - hotspot.yaw));
-        samplesBySceneId.set(sceneId, currentSamples);
-      });
-    });
-
-    const offsets = new Map<number, number>();
-
-    samplesBySceneId.forEach((samples, sceneId) => {
-      const meanOffset = circularMean(samples);
-      if (meanOffset !== null) offsets.set(sceneId, meanOffset);
-    });
-
-    return offsets;
-  }, [sortedScenes, scenesById]);
-
   const nodes = useMemo(() => {
     return sortedScenes.map((scene) => {
       const validHotspots = scene.hotspots.filter((hotspot) =>
@@ -630,11 +566,40 @@ export function VirtualTour360({
     [getSceneById],
   );
 
+  const getReciprocalEntryOrientation = useCallback(
+    (sourceSceneId: number | null, targetSceneId: number): Orientation | null => {
+      if (sourceSceneId === null) return null;
+
+      const targetScene = getSceneById(targetSceneId);
+      if (!targetScene) return null;
+
+      const reverseHotspot = targetScene.hotspots.find(
+        (hotspot) => Number(hotspot.toSceneId) === Number(sourceSceneId),
+      );
+
+      if (!reverseHotspot || !Number.isFinite(reverseHotspot.yaw)) return null;
+
+      const targetInitialPitch =
+        typeof targetScene.initialPitch === "number" &&
+        Number.isFinite(targetScene.initialPitch)
+          ? targetScene.initialPitch
+          : 0;
+
+      return {
+        yaw: normalizeYaw(reverseHotspot.yaw + Math.PI),
+        pitch: clampPitch(targetInitialPitch),
+      };
+    },
+    [getSceneById],
+  );
+
   const getHotspotEntryOrientation = useCallback(
     (targetSceneId: number, link: any | null): Orientation | null => {
       const targetYaw = link?.data?.targetYaw;
       const targetPitch = link?.data?.targetPitch;
 
+      // Highest-priority source: the exact entry view saved on this hotspot/link.
+      // This is the only 100% reliable orientation for manually captured 360 panoramas.
       if (
         typeof targetYaw === "number" &&
         typeof targetPitch === "number" &&
@@ -644,68 +609,54 @@ export function VirtualTour360({
         return { yaw: normalizeYaw(targetYaw), pitch: clampPitch(targetPitch) };
       }
 
+      const currentSourceScene = currentSceneRef.current;
+      const sourceSceneIdFromLink = Number(link?.data?.fromSceneId);
+      const sourceSceneId = Number.isFinite(sourceSceneIdFromLink)
+        ? sourceSceneIdFromLink
+        : currentSourceScene
+          ? Number(currentSourceScene.id)
+          : null;
+
+      // When there is no manual calibration yet, infer a good default from the
+      // reverse hotspot in the target scene. Example: for A -> B, if B has B -> A,
+      // the entry direction in B is opposite of B -> A.
+      const reciprocalOrientation = getReciprocalEntryOrientation(
+        sourceSceneId,
+        targetSceneId,
+      );
+
+      if (reciprocalOrientation) return reciprocalOrientation;
+
       return getSceneStartOrientation(targetSceneId);
     },
-    [getSceneStartOrientation],
-  );
-
-  const getCurrentViewerOrientation = useCallback((): Orientation | null => {
-    const viewer = viewerRef.current;
-    if (!viewer) return null;
-
-    try {
-      const position = viewer.getPosition?.();
-      if (!position) return null;
-
-      if (!Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
-        return null;
-      }
-
-      return {
-        yaw: normalizeYaw(position.yaw),
-        pitch: clampPitch(position.pitch),
-      };
-    } catch (error) {
-      console.error("Viewer orientation read error:", error);
-      return null;
-    }
-  }, []);
-
-  const getPreservedWorldOrientation = useCallback(
-    (targetSceneId: number, sourceOrientation?: Orientation | null): Orientation | null => {
-      const sourceScene = currentSceneRef.current;
-      if (!sourceScene) return null;
-
-      const fromSceneId = Number(sourceScene.id);
-      const toSceneId = Number(targetSceneId);
-      if (fromSceneId === toSceneId) return null;
-
-      const sourceOffset = sceneHeadingOffsetsById.get(fromSceneId);
-      const targetOffset = sceneHeadingOffsetsById.get(toSceneId);
-
-      if (!Number.isFinite(sourceOffset) || !Number.isFinite(targetOffset)) {
-        return null;
-      }
-
-      const currentOrientation = sourceOrientation || getCurrentViewerOrientation();
-      if (!isFiniteOrientation(currentOrientation)) return null;
-
-      return {
-        yaw: normalizeYaw(currentOrientation.yaw + sourceOffset! - targetOffset!),
-        pitch: clampPitch(currentOrientation.pitch),
-      };
-    },
-    [getCurrentViewerOrientation, sceneHeadingOffsetsById],
+    [getReciprocalEntryOrientation, getSceneStartOrientation],
   );
 
   const getNavigationEntryOrientation = useCallback(
     (targetSceneId: number, link: any | null): Orientation | null => {
-      const preservedOrientation = getPreservedWorldOrientation(targetSceneId);
-      if (preservedOrientation) return preservedOrientation;
+      if (link) return getHotspotEntryOrientation(targetSceneId, link);
 
-      return getHotspotEntryOrientation(targetSceneId, link);
+      const sourceScene = currentSceneRef.current;
+      const sourceHotspot = sourceScene?.hotspots.find(
+        (hotspot) => Number(hotspot.toSceneId) === Number(targetSceneId),
+      );
+
+      if (sourceHotspot) {
+        return getHotspotEntryOrientation(targetSceneId, {
+          nodeId: String(targetSceneId),
+          data: {
+            hotspotId: sourceHotspot.id,
+            fromSceneId: sourceHotspot.fromSceneId,
+            toSceneId: sourceHotspot.toSceneId,
+            targetYaw: sourceHotspot.targetYaw ?? null,
+            targetPitch: sourceHotspot.targetPitch ?? null,
+          },
+        });
+      }
+
+      return getSceneStartOrientation(targetSceneId);
     },
-    [getPreservedWorldOrientation, getHotspotEntryOrientation],
+    [getHotspotEntryOrientation, getSceneStartOrientation],
   );
 
   const clearLoaderTimer = useCallback(() => {
@@ -843,9 +794,28 @@ export function VirtualTour360({
     const viewer = viewerRef.current;
     if (!viewer || !isFiniteOrientation(orientation)) return;
 
+    const finalPosition = {
+      yaw: normalizeYaw(orientation.yaw),
+      pitch: clampPitch(orientation.pitch),
+    };
+
+    const rotatePrecisely = () => {
+      const liveViewer = viewerRef.current;
+      if (!liveViewer) return;
+      liveViewer.rotate(finalPosition);
+    };
+
+    // PSV/VirtualTour can still finish one internal render tick after node-changed.
+    // Applying the same exact orientation across the next frames avoids the old
+    // "jumps back to initial/floor-plan direction" behavior without changing preload.
     requestAnimationFrame(() => {
-      viewer.rotate({ yaw: normalizeYaw(orientation.yaw), pitch: clampPitch(orientation.pitch) });
+      rotatePrecisely();
+      requestAnimationFrame(rotatePrecisely);
     });
+
+    if (typeof window !== "undefined") {
+      window.setTimeout(rotatePrecisely, 80);
+    }
   }, []);
 
   const goToScene = useCallback(

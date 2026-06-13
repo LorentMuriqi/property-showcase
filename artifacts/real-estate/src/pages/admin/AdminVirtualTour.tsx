@@ -249,42 +249,6 @@ const isFiniteOrientation = (orientation: Orientation | null): orientation is Or
   );
 };
 
-const circularMean = (angles: number[]) => {
-  const validAngles = angles.filter(Number.isFinite);
-  if (validAngles.length === 0) return null;
-
-  const sin = validAngles.reduce((sum, angle) => sum + Math.sin(angle), 0);
-  const cos = validAngles.reduce((sum, angle) => sum + Math.cos(angle), 0);
-
-  if (Math.abs(sin) < 1e-9 && Math.abs(cos) < 1e-9) return null;
-  return normalizeYaw(Math.atan2(sin, cos));
-};
-
-const getFloorPlanBearing = (
-  fromScene: Pick<Scene, "position_x" | "position_y">,
-  toScene: Pick<Scene, "position_x" | "position_y">,
-) => {
-  if (
-    typeof fromScene.position_x !== "number" ||
-    typeof fromScene.position_y !== "number" ||
-    typeof toScene.position_x !== "number" ||
-    typeof toScene.position_y !== "number" ||
-    !Number.isFinite(fromScene.position_x) ||
-    !Number.isFinite(fromScene.position_y) ||
-    !Number.isFinite(toScene.position_x) ||
-    !Number.isFinite(toScene.position_y)
-  ) {
-    return null;
-  }
-
-  const dx = toScene.position_x - fromScene.position_x;
-  const dy = toScene.position_y - fromScene.position_y;
-
-  if (Math.hypot(dx, dy) < 0.001) return null;
-
-  return normalizeYaw(Math.atan2(dx, -dy));
-};
-
 
 type HotspotLike = {
   id: number;
@@ -440,35 +404,6 @@ export default function AdminVirtualTour() {
 
   return index >= 0 ? index + 1 : null;
 }, [scenes, selectedScene]);
-
-  const sceneHeadingOffsetsById = useMemo(() => {
-    const scenesById = new Map<number, Scene>(
-      scenes.map((scene) => [Number(scene.id), scene]),
-    );
-    const samplesBySceneId = new Map<number, number[]>();
-
-    scenes.forEach((scene) => {
-      scene.hotspots.forEach((hotspot) => {
-        const targetScene = scenesById.get(Number(hotspot.to_scene_id));
-        if (!targetScene || !Number.isFinite(hotspot.yaw)) return;
-
-        const floorBearing = getFloorPlanBearing(scene, targetScene);
-        if (floorBearing === null) return;
-
-        const currentSamples = samplesBySceneId.get(Number(scene.id)) || [];
-        currentSamples.push(normalizeYaw(floorBearing - hotspot.yaw));
-        samplesBySceneId.set(Number(scene.id), currentSamples);
-      });
-    });
-
-    const offsets = new Map<number, number>();
-    samplesBySceneId.forEach((samples, sceneId) => {
-      const meanOffset = circularMean(samples);
-      if (meanOffset !== null) offsets.set(sceneId, meanOffset);
-    });
-
-    return offsets;
-  }, [scenes]);
 
   const [viewerError, setViewerError] = useState("");
   const [isPlacementMode, setIsPlacementMode] = useState(false);
@@ -2006,6 +1941,9 @@ return () => {
               ? `${baseName} · ${displayPosition.clusterIndex + 1}/${displayPosition.clusterSize}`
               : baseName,
             data: {
+              hotspotId: hotspot.id,
+              fromSceneId: hotspot.scene_id,
+              toSceneId: hotspot.to_scene_id,
               targetYaw: hotspot.target_yaw ?? null,
               targetPitch: hotspot.target_pitch ?? null,
               rawYaw: displayPosition?.rawYaw ?? hotspot.yaw,
@@ -2023,10 +1961,15 @@ return () => {
   }, [scenes]);
 
   const getPreviewFallbackOrientation = useCallback(
-    (targetSceneId: number, link: any | null): Orientation | null => {
+    (
+      sourceSceneId: number | null,
+      targetSceneId: number,
+      link: any | null,
+    ): Orientation | null => {
       const targetYaw = link?.data?.targetYaw;
       const targetPitch = link?.data?.targetPitch;
 
+      // Priority 1: exact per-hotspot entry view saved by calibration.
       if (
         typeof targetYaw === "number" &&
         typeof targetPitch === "number" &&
@@ -2040,6 +1983,29 @@ return () => {
         (scene) => Number(scene.id) === Number(targetSceneId),
       );
 
+      // Priority 2: smart automatic fallback from the reverse hotspot.
+      // For A -> B, if B has a hotspot back to A, entering B should face the
+      // opposite direction of B -> A. This does not rely on floor-plan X/Y.
+      if (targetScene && sourceSceneId !== null) {
+        const reverseHotspot = targetScene.hotspots.find(
+          (hotspot) => Number(hotspot.to_scene_id) === Number(sourceSceneId),
+        );
+
+        if (reverseHotspot && Number.isFinite(reverseHotspot.yaw)) {
+          const targetInitialPitch =
+            typeof targetScene.initial_pitch === "number" &&
+            Number.isFinite(targetScene.initial_pitch)
+              ? targetScene.initial_pitch
+              : 0;
+
+          return {
+            yaw: normalizeYaw(reverseHotspot.yaw + Math.PI),
+            pitch: clampPitch(targetInitialPitch),
+          };
+        }
+      }
+
+      // Priority 3: scene start view.
       if (
         targetScene &&
         typeof targetScene.initial_yaw === "number" &&
@@ -2110,32 +2076,15 @@ return () => {
       let currentPreviewSceneId = Number(defaultScene.id);
       let pendingPreviewOrientation: Orientation | null = null;
 
-      const getPreviewPreservedOrientation = (targetSceneId: number) => {
-        const position = viewer?.getPosition?.();
-        if (!position || !Number.isFinite(position.yaw) || !Number.isFinite(position.pitch)) {
-          return null;
-        }
-
-        const sourceOffset = sceneHeadingOffsetsById.get(Number(currentPreviewSceneId));
-        const targetOffset = sceneHeadingOffsetsById.get(Number(targetSceneId));
-
-        if (!Number.isFinite(sourceOffset) || !Number.isFinite(targetOffset)) {
-          return null;
-        }
-
-        return {
-          yaw: normalizeYaw(position.yaw + sourceOffset! - targetOffset!),
-          pitch: clampPitch(position.pitch),
-        };
-      };
-
       previewVtPlugin.addEventListener("select-link", ({ link }: any) => {
         const targetSceneId = Number(link?.nodeId);
         if (!Number.isFinite(targetSceneId)) return;
 
-        pendingPreviewOrientation =
-          getPreviewPreservedOrientation(targetSceneId) ||
-          getPreviewFallbackOrientation(targetSceneId, link);
+        pendingPreviewOrientation = getPreviewFallbackOrientation(
+          Number(currentPreviewSceneId),
+          targetSceneId,
+          link,
+        );
       });
 
       previewVtPlugin.addEventListener("node-changed", ({ node }: any) => {
@@ -2168,7 +2117,6 @@ return () => {
   }, [
     virtualTourNodes,
     scenes,
-    sceneHeadingOffsetsById,
     getPreviewFallbackOrientation,
   ]);
 
