@@ -30,6 +30,11 @@ interface VirtualTour360Props {
       targetYaw?: number | null;
       targetPitch?: number | null;
       label?: string | null;
+      // Runtime fallback if a parent passes raw Supabase rows instead of mapped camelCase props.
+      scene_id?: number | null;
+      to_scene_id?: number | null;
+      target_yaw?: number | null;
+      target_pitch?: number | null;
     }>;
   }>;
   defaultSceneId?: number | null;
@@ -154,8 +159,44 @@ const clampPitch = (pitch: number) => {
   return Math.max(MIN_SAFE_PITCH, Math.min(MAX_SAFE_PITCH, pitch));
 };
 
+const toFiniteNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
 const uniqueNumbers = (items: number[]) => {
   return items.filter((id, index, arr) => arr.indexOf(id) === index);
+};
+
+type RuntimeHotspot = SceneType["hotspots"][number] & Record<string, unknown>;
+
+const getRuntimeHotspotId = (hotspot: RuntimeHotspot) => {
+  return toFiniteNumber(hotspot.id) ?? 0;
+};
+
+const getRuntimeHotspotSourceSceneId = (hotspot: RuntimeHotspot, fallbackSceneId: number) => {
+  return toFiniteNumber(hotspot.fromSceneId ?? hotspot.scene_id) ?? fallbackSceneId;
+};
+
+const getRuntimeHotspotTargetSceneId = (hotspot: RuntimeHotspot) => {
+  return toFiniteNumber(hotspot.toSceneId ?? hotspot.to_scene_id);
+};
+
+const getRuntimeHotspotYaw = (hotspot: RuntimeHotspot) => {
+  return normalizeYaw(toFiniteNumber(hotspot.yaw) ?? 0);
+};
+
+const getRuntimeHotspotPitch = (hotspot: RuntimeHotspot) => {
+  return clampPitch(toFiniteNumber(hotspot.pitch) ?? 0);
+};
+
+const getRuntimeHotspotTargetYaw = (hotspot: RuntimeHotspot) => {
+  return toFiniteNumber(hotspot.targetYaw ?? hotspot.target_yaw);
+};
+
+const getRuntimeHotspotTargetPitch = (hotspot: RuntimeHotspot) => {
+  return toFiniteNumber(hotspot.targetPitch ?? hotspot.target_pitch);
 };
 
 
@@ -434,6 +475,9 @@ export function VirtualTour360({
   const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
   const cleanupTasksRef = useRef<Array<() => void>>([]);
   const loaderTimerRef = useRef<number | null>(null);
+  const orientationTimeoutsRef = useRef<number[]>([]);
+  const orientationAnimationFramesRef = useRef<number[]>([]);
+  const activeEntryOrientationRef = useRef<Orientation | null>(null);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -462,8 +506,8 @@ export function VirtualTour360({
     sortedScenes.forEach((scene) => {
       const validTargetIds = uniqueNumbers(
         scene.hotspots
-          .map((hotspot) => Number(hotspot.toSceneId))
-          .filter((id) => scenesById.has(id)),
+          .map((hotspot) => getRuntimeHotspotTargetSceneId(hotspot as RuntimeHotspot))
+          .filter((id): id is number => id !== null && scenesById.has(id)),
       );
 
       map.set(Number(scene.id), validTargetIds);
@@ -472,11 +516,30 @@ export function VirtualTour360({
     return map;
   }, [sortedScenes, scenesById]);
 
+
   const nodes = useMemo(() => {
     return sortedScenes.map((scene) => {
-      const validHotspots = scene.hotspots.filter((hotspot) =>
-        scenesById.has(Number(hotspot.toSceneId)),
-      );
+      const validHotspots = scene.hotspots
+        .map((hotspot) => {
+          const runtimeHotspot = hotspot as RuntimeHotspot;
+          const toSceneId = getRuntimeHotspotTargetSceneId(runtimeHotspot);
+
+          if (toSceneId === null || !scenesById.has(toSceneId)) return null;
+
+          return {
+            ...hotspot,
+            id: getRuntimeHotspotId(runtimeHotspot),
+            fromSceneId: getRuntimeHotspotSourceSceneId(runtimeHotspot, Number(scene.id)),
+            toSceneId,
+            yaw: getRuntimeHotspotYaw(runtimeHotspot),
+            pitch: getRuntimeHotspotPitch(runtimeHotspot),
+            targetYaw: getRuntimeHotspotTargetYaw(runtimeHotspot),
+            targetPitch: getRuntimeHotspotTargetPitch(runtimeHotspot),
+            label: String(hotspot.label || "").trim() || null,
+          };
+        })
+        .filter((hotspot): hotspot is NonNullable<typeof hotspot> => hotspot !== null);
+
       const clusteredPositions = getClusteredHotspotPositions(validHotspots);
 
       return {
@@ -542,10 +605,6 @@ export function VirtualTour360({
     [scenesById],
   );
 
-  const getNodeById = useCallback(
-    (id: string) => nodes.find((node) => node.id === id) || null,
-    [nodes],
-  );
 
   const getSceneStartOrientation = useCallback(
     (sceneId: number): Orientation | null => {
@@ -566,97 +625,68 @@ export function VirtualTour360({
     [getSceneById],
   );
 
-  const getReciprocalEntryOrientation = useCallback(
-    (sourceSceneId: number | null, targetSceneId: number): Orientation | null => {
-      if (sourceSceneId === null) return null;
+  const getDirectHotspotEntryOrientation = useCallback(
+    (targetSceneId: number, link: any | null): Orientation | null => {
+      const targetYaw = toFiniteNumber(link?.data?.targetYaw);
+      if (targetYaw === null) return null;
+
+      const targetPitch = toFiniteNumber(link?.data?.targetPitch);
+      const sceneStart = getSceneStartOrientation(targetSceneId);
+
+      return {
+        yaw: normalizeYaw(targetYaw),
+        pitch: clampPitch(targetPitch ?? sceneStart?.pitch ?? 0),
+      };
+    },
+    [getSceneStartOrientation],
+  );
+
+  const getReverseHotspotEntryOrientation = useCallback(
+    (targetSceneId: number, sourceSceneId?: number | null): Orientation | null => {
+      const sourceId = toFiniteNumber(sourceSceneId);
+      if (sourceId === null) return null;
 
       const targetScene = getSceneById(targetSceneId);
       if (!targetScene) return null;
 
       const reverseHotspot = targetScene.hotspots.find(
-        (hotspot) => Number(hotspot.toSceneId) === Number(sourceSceneId),
+        (hotspot) => getRuntimeHotspotTargetSceneId(hotspot as RuntimeHotspot) === Number(sourceId),
       );
 
-      if (!reverseHotspot || !Number.isFinite(reverseHotspot.yaw)) return null;
+      const reverseYaw = reverseHotspot
+        ? getRuntimeHotspotYaw(reverseHotspot as RuntimeHotspot)
+        : null;
+      if (reverseYaw === null) return null;
 
-      const targetInitialPitch =
-        typeof targetScene.initialPitch === "number" &&
-        Number.isFinite(targetScene.initialPitch)
-          ? targetScene.initialPitch
-          : 0;
+      const sceneStart = getSceneStartOrientation(targetSceneId);
 
+      // If B has a hotspot back to A, entering B from A should face forward into B,
+      // not back toward the door we came from. Therefore we use the opposite yaw.
       return {
-        yaw: normalizeYaw(reverseHotspot.yaw + Math.PI),
-        pitch: clampPitch(targetInitialPitch),
+        yaw: normalizeYaw(reverseYaw + Math.PI),
+        pitch: clampPitch(sceneStart?.pitch ?? 0),
       };
     },
-    [getSceneById],
-  );
-
-  const getHotspotEntryOrientation = useCallback(
-    (targetSceneId: number, link: any | null): Orientation | null => {
-      const targetYaw = link?.data?.targetYaw;
-      const targetPitch = link?.data?.targetPitch;
-
-      // Highest-priority source: the exact entry view saved on this hotspot/link.
-      // This is the only 100% reliable orientation for manually captured 360 panoramas.
-      if (
-        typeof targetYaw === "number" &&
-        typeof targetPitch === "number" &&
-        Number.isFinite(targetYaw) &&
-        Number.isFinite(targetPitch)
-      ) {
-        return { yaw: normalizeYaw(targetYaw), pitch: clampPitch(targetPitch) };
-      }
-
-      const currentSourceScene = currentSceneRef.current;
-      const sourceSceneIdFromLink = Number(link?.data?.fromSceneId);
-      const sourceSceneId = Number.isFinite(sourceSceneIdFromLink)
-        ? sourceSceneIdFromLink
-        : currentSourceScene
-          ? Number(currentSourceScene.id)
-          : null;
-
-      // When there is no manual calibration yet, infer a good default from the
-      // reverse hotspot in the target scene. Example: for A -> B, if B has B -> A,
-      // the entry direction in B is opposite of B -> A.
-      const reciprocalOrientation = getReciprocalEntryOrientation(
-        sourceSceneId,
-        targetSceneId,
-      );
-
-      if (reciprocalOrientation) return reciprocalOrientation;
-
-      return getSceneStartOrientation(targetSceneId);
-    },
-    [getReciprocalEntryOrientation, getSceneStartOrientation],
+    [getSceneById, getSceneStartOrientation],
   );
 
   const getNavigationEntryOrientation = useCallback(
     (targetSceneId: number, link: any | null): Orientation | null => {
-      if (link) return getHotspotEntryOrientation(targetSceneId, link);
+      const directSavedOrientation = getDirectHotspotEntryOrientation(targetSceneId, link);
+      if (directSavedOrientation) return directSavedOrientation;
 
-      const sourceScene = currentSceneRef.current;
-      const sourceHotspot = sourceScene?.hotspots.find(
-        (hotspot) => Number(hotspot.toSceneId) === Number(targetSceneId),
-      );
+      // Only hotspot navigation may use a reverse-link fallback. Map/gallery clicks should
+      // open the scene with its own start view instead of guessing from the current scene.
+      const sourceSceneId = toFiniteNumber(link?.data?.fromSceneId);
+      const reverseOrientation = link
+        ? getReverseHotspotEntryOrientation(targetSceneId, sourceSceneId)
+        : null;
 
-      if (sourceHotspot) {
-        return getHotspotEntryOrientation(targetSceneId, {
-          nodeId: String(targetSceneId),
-          data: {
-            hotspotId: sourceHotspot.id,
-            fromSceneId: sourceHotspot.fromSceneId,
-            toSceneId: sourceHotspot.toSceneId,
-            targetYaw: sourceHotspot.targetYaw ?? null,
-            targetPitch: sourceHotspot.targetPitch ?? null,
-          },
-        });
-      }
+      if (reverseOrientation) return reverseOrientation;
 
       return getSceneStartOrientation(targetSceneId);
     },
-    [getHotspotEntryOrientation, getSceneStartOrientation],
+    [getDirectHotspotEntryOrientation, getReverseHotspotEntryOrientation, getSceneStartOrientation],
   );
 
   const clearLoaderTimer = useCallback(() => {
@@ -769,54 +799,58 @@ export function VirtualTour360({
     [linkedSceneIdsBySceneId, preloadScenePanoramaOnce],
   );
 
-  const updateTargetNodeOrientation = useCallback(
-    (vtPlugin: any, targetNodeId: string, orientation: Orientation | null) => {
-      const existingNode = getNodeById(targetNodeId);
-      if (!existingNode) return;
+  const clearOrientationApplyTimers = useCallback(() => {
+    if (typeof window === "undefined") return;
 
-      vtPlugin.updateNode({
-        id: targetNodeId,
-        data: {
-          ...(existingNode.data || {}),
-          initialYaw: isFiniteOrientation(orientation)
-            ? orientation.yaw
-            : existingNode.data?.initialYaw ?? null,
-          initialPitch: isFiniteOrientation(orientation)
-            ? orientation.pitch
-            : existingNode.data?.initialPitch ?? null,
-        },
-      });
-    },
-    [getNodeById],
-  );
+    orientationTimeoutsRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    orientationTimeoutsRef.current = [];
+
+    orientationAnimationFramesRef.current.forEach((frameId) => {
+      window.cancelAnimationFrame(frameId);
+    });
+    orientationAnimationFramesRef.current = [];
+  }, []);
 
   const applyManualSceneOrientation = useCallback((orientation: Orientation | null) => {
-    const viewer = viewerRef.current;
-    if (!viewer || !isFiniteOrientation(orientation)) return;
+    const viewerAtSchedule = viewerRef.current;
+    if (!viewerAtSchedule || !isFiniteOrientation(orientation)) return;
 
-    const finalPosition = {
-      yaw: normalizeYaw(orientation.yaw),
-      pitch: clampPitch(orientation.pitch),
+    clearOrientationApplyTimers();
+
+    const yaw = normalizeYaw(orientation.yaw);
+    const pitch = clampPitch(orientation.pitch);
+
+    const rotateNow = () => {
+      const viewer = viewerRef.current;
+      if (!viewer || viewer !== viewerAtSchedule) return;
+
+      try {
+        viewer.rotate({ yaw, pitch });
+      } catch (error) {
+        console.error("Entry orientation apply error:", error);
+      }
     };
 
-    const rotatePrecisely = () => {
-      const liveViewer = viewerRef.current;
-      if (!liveViewer) return;
-      liveViewer.rotate(finalPosition);
-    };
+    rotateNow();
 
-    // PSV/VirtualTour can still finish one internal render tick after node-changed.
-    // Applying the same exact orientation across the next frames avoids the old
-    // "jumps back to initial/floor-plan direction" behavior without changing preload.
-    requestAnimationFrame(() => {
-      rotatePrecisely();
-      requestAnimationFrame(rotatePrecisely);
+    if (typeof window === "undefined") return;
+
+    const firstFrame = window.requestAnimationFrame(() => {
+      rotateNow();
+
+      const secondFrame = window.requestAnimationFrame(rotateNow);
+      orientationAnimationFramesRef.current.push(secondFrame);
     });
 
-    if (typeof window !== "undefined") {
-      window.setTimeout(rotatePrecisely, 80);
-    }
-  }, []);
+    orientationAnimationFramesRef.current.push(firstFrame);
+
+    [50, 140, 320, 650].forEach((delay) => {
+      const timerId = window.setTimeout(rotateNow, delay);
+      orientationTimeoutsRef.current.push(timerId);
+    });
+  }, [clearOrientationApplyTimers]);
 
   const goToScene = useCallback(
     async (targetSceneId: number, forcedOrientation?: Orientation | null) => {
@@ -834,16 +868,11 @@ export function VirtualTour360({
 
       const entryOrientation = forcedOrientation ?? getNavigationEntryOrientation(targetSceneId, null);
       pendingEntryOrientationRef.current = entryOrientation;
+      activeEntryOrientationRef.current = entryOrientation;
       showNavigationLoader(targetScene.title);
 
       try {
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
-
-        updateTargetNodeOrientation(
-          vtPlugin,
-          String(targetSceneId),
-          entryOrientation,
-        );
 
         if (!psvReadyPanoramasRef.current.has(targetScene.imageUrl)) {
           await preloadScenePanoramaOnce(targetSceneId, "high");
@@ -863,7 +892,6 @@ export function VirtualTour360({
       getSceneById,
       getNavigationEntryOrientation,
       showNavigationLoader,
-      updateTargetNodeOrientation,
       preloadScenePanoramaOnce,
       applyManualSceneOrientation,
       hideNavigationLoader,
@@ -1065,6 +1093,7 @@ export function VirtualTour360({
       }
 
       finishInitialLoad();
+      applyManualSceneOrientation(activeEntryOrientationRef.current);
       hideNavigationLoader();
     });
 
@@ -1089,16 +1118,11 @@ export function VirtualTour360({
 
       const entryOrientation = getNavigationEntryOrientation(targetSceneId, link);
       pendingEntryOrientationRef.current = entryOrientation;
+      activeEntryOrientationRef.current = entryOrientation;
       setLoadError(null);
       showNavigationLoader(targetScene.title);
 
       void preloadScenePanoramaOnce(targetSceneId, "high");
-
-      updateTargetNodeOrientation(
-        vtPlugin,
-        String(targetSceneId),
-        entryOrientation,
-      );
     });
 
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
@@ -1115,6 +1139,7 @@ export function VirtualTour360({
 
       const pending = pendingEntryOrientationRef.current;
       pendingEntryOrientationRef.current = null;
+      activeEntryOrientationRef.current = pending;
       applyManualSceneOrientation(pending);
       warmSceneNeighborhood(nextId);
       hideNavigationLoader();
@@ -1123,12 +1148,14 @@ export function VirtualTour360({
     return () => {
       clearFirstLoadHintTimer();
       clearLoaderTimer();
+      clearOrientationApplyTimers();
       cleanupTasksRef.current.forEach((cleanup) => cleanup());
       cleanupTasksRef.current = [];
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
       pendingEntryOrientationRef.current = null;
+      activeEntryOrientationRef.current = null;
     };
   }, [
     resolvedStartScene,
@@ -1136,13 +1163,13 @@ export function VirtualTour360({
     getSceneById,
     getSceneStartOrientation,
     getNavigationEntryOrientation,
-    updateTargetNodeOrientation,
     preloadScenePanoramaOnce,
     applyManualSceneOrientation,
     warmSceneNeighborhood,
     showNavigationLoader,
     hideNavigationLoader,
     clearLoaderTimer,
+    clearOrientationApplyTimers,
   ]);
 
   useEffect(() => {

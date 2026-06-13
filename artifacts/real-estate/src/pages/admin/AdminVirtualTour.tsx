@@ -225,6 +225,12 @@ const toNullableNumber = (value: any) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const toFiniteNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
 const TWO_PI = Math.PI * 2;
 const MIN_SAFE_PITCH = -Math.PI / 2 + 0.02;
 const MAX_SAFE_PITCH = Math.PI / 2 - 0.02;
@@ -404,6 +410,7 @@ export default function AdminVirtualTour() {
 
   return index >= 0 ? index + 1 : null;
 }, [scenes, selectedScene]);
+
 
   const [viewerError, setViewerError] = useState("");
   const [isPlacementMode, setIsPlacementMode] = useState(false);
@@ -1709,6 +1716,23 @@ if (editorViewerRef.current) {
 let viewer: Viewer | null = null;
 let cameraInterval: number | null = null;
 
+const activeCaptureHotspot =
+  targetViewCapture && Number(selectedScene.id) === Number(targetViewCapture.targetSceneId)
+    ? scenes
+        .flatMap((scene) => scene.hotspots)
+        .find((hotspot) => Number(hotspot.id) === Number(targetViewCapture.hotspotId)) || null
+    : null;
+
+const editorStartYaw =
+  toFiniteNumber(activeCaptureHotspot?.target_yaw) ??
+  toFiniteNumber(selectedScene.initial_yaw) ??
+  0;
+
+const editorStartPitch =
+  toFiniteNumber(activeCaptureHotspot?.target_pitch) ??
+  toFiniteNumber(selectedScene.initial_pitch) ??
+  0;
+
     try {
       viewer = new Viewer({
         container: editorContainerRef.current,
@@ -1717,8 +1741,8 @@ let cameraInterval: number | null = null;
         adapter: EquirectangularAdapter.withConfig({
           resolution: 128,
         }),
-        defaultYaw: selectedScene.initial_yaw ?? 0,
-        defaultPitch: selectedScene.initial_pitch ?? 0,
+        defaultYaw: normalizeYaw(editorStartYaw),
+        defaultPitch: clampPitch(editorStartPitch),
         moveInertia: true,
         mousewheelCtrlKey: false,
         touchmoveTwoFingers: false,
@@ -1899,6 +1923,7 @@ return () => {
   isPlacementMode,
   editingHotspot,
   isEditingHotspotPlacement,
+  targetViewCapture,
 ]);
 
   const virtualTourNodes = useMemo(() => {
@@ -1961,51 +1986,21 @@ return () => {
   }, [scenes]);
 
   const getPreviewFallbackOrientation = useCallback(
-    (
-      sourceSceneId: number | null,
-      targetSceneId: number,
-      link: any | null,
-    ): Orientation | null => {
-      const targetYaw = link?.data?.targetYaw;
-      const targetPitch = link?.data?.targetPitch;
-
-      // Priority 1: exact per-hotspot entry view saved by calibration.
-      if (
-        typeof targetYaw === "number" &&
-        typeof targetPitch === "number" &&
-        Number.isFinite(targetYaw) &&
-        Number.isFinite(targetPitch)
-      ) {
-        return { yaw: normalizeYaw(targetYaw), pitch: clampPitch(targetPitch) };
-      }
+    (targetSceneId: number, link: any | null): Orientation | null => {
+      const targetYaw = toFiniteNumber(link?.data?.targetYaw);
+      const targetPitch = toFiniteNumber(link?.data?.targetPitch);
 
       const targetScene = scenes.find(
         (scene) => Number(scene.id) === Number(targetSceneId),
       );
 
-      // Priority 2: smart automatic fallback from the reverse hotspot.
-      // For A -> B, if B has a hotspot back to A, entering B should face the
-      // opposite direction of B -> A. This does not rely on floor-plan X/Y.
-      if (targetScene && sourceSceneId !== null) {
-        const reverseHotspot = targetScene.hotspots.find(
-          (hotspot) => Number(hotspot.to_scene_id) === Number(sourceSceneId),
-        );
-
-        if (reverseHotspot && Number.isFinite(reverseHotspot.yaw)) {
-          const targetInitialPitch =
-            typeof targetScene.initial_pitch === "number" &&
-            Number.isFinite(targetScene.initial_pitch)
-              ? targetScene.initial_pitch
-              : 0;
-
-          return {
-            yaw: normalizeYaw(reverseHotspot.yaw + Math.PI),
-            pitch: clampPitch(targetInitialPitch),
-          };
-        }
+      if (targetYaw !== null) {
+        return {
+          yaw: normalizeYaw(targetYaw),
+          pitch: clampPitch(targetPitch ?? toFiniteNumber(targetScene?.initial_pitch) ?? 0),
+        };
       }
 
-      // Priority 3: scene start view.
       if (
         targetScene &&
         typeof targetScene.initial_yaw === "number" &&
@@ -2073,35 +2068,44 @@ return () => {
       previewViewerRef.current = viewer;
 
       const previewVtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
-      let currentPreviewSceneId = Number(defaultScene.id);
       let pendingPreviewOrientation: Orientation | null = null;
+
+      const applyPreviewOrientation = (orientation: Orientation | null) => {
+        if (!isFiniteOrientation(orientation)) return;
+
+        const yaw = normalizeYaw(orientation.yaw);
+        const pitch = clampPitch(orientation.pitch);
+        const rotateNow = () => {
+          try {
+            viewer?.rotate({ yaw, pitch });
+          } catch (error) {
+            console.error("Preview orientation apply error:", error);
+          }
+        };
+
+        rotateNow();
+        requestAnimationFrame(() => {
+          rotateNow();
+          requestAnimationFrame(rotateNow);
+        });
+        window.setTimeout(rotateNow, 80);
+        window.setTimeout(rotateNow, 220);
+      };
 
       previewVtPlugin.addEventListener("select-link", ({ link }: any) => {
         const targetSceneId = Number(link?.nodeId);
         if (!Number.isFinite(targetSceneId)) return;
 
-        pendingPreviewOrientation = getPreviewFallbackOrientation(
-          Number(currentPreviewSceneId),
-          targetSceneId,
-          link,
-        );
+        pendingPreviewOrientation = getPreviewFallbackOrientation(targetSceneId, link);
       });
 
       previewVtPlugin.addEventListener("node-changed", ({ node }: any) => {
         const nextSceneId = Number(node?.id);
-        if (Number.isFinite(nextSceneId)) currentPreviewSceneId = nextSceneId;
+        if (!Number.isFinite(nextSceneId)) return;
 
         const orientation = pendingPreviewOrientation;
         pendingPreviewOrientation = null;
-
-        if (isFiniteOrientation(orientation)) {
-          requestAnimationFrame(() => {
-            viewer?.rotate({
-              yaw: normalizeYaw(orientation.yaw),
-              pitch: clampPitch(orientation.pitch),
-            });
-          });
-        }
+        applyPreviewOrientation(orientation);
       });
     } catch (error) {
       console.error("Preview viewer init error:", error);
