@@ -1027,35 +1027,58 @@ export function VirtualTour360({
     setLoadError(null);
     setShowFirstLoadHint(false);
 
-    const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
-    let didFinishInitialLoad = false;
-    let firstLoadHintTimer: number | null = window.setTimeout(() => {
-      if (!didFinishInitialLoad) setShowFirstLoadHint(true);
-    }, FIRST_LOAD_HINT_MS);
+   
+   
+   const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
 
-    const clearFirstLoadHintTimer = () => {
-      if (firstLoadHintTimer !== null) {
-        window.clearTimeout(firstLoadHintTimer);
-        firstLoadHintTimer = null;
-      }
-    };
+let didFinishInitialLoad = false;
+let loaderExitTimer: number | null = null;
 
-    const finishInitialLoad = () => {
-      if (didFinishInitialLoad) return;
-      didFinishInitialLoad = true;
-      clearFirstLoadHintTimer();
+let firstLoadHintTimer: number | null = window.setTimeout(() => {
+  if (!didFinishInitialLoad) {
+    setShowFirstLoadHint(true);
+  }
+}, FIRST_LOAD_HINT_MS);
 
-      currentSceneRef.current = resolvedStartScene;
-      setCurrentSceneId(resolvedStartScene.id);
-      psvReadyPanoramasRef.current.add(resolvedStartScene.imageUrl);
+const clearFirstLoadHintTimer = () => {
+  if (firstLoadHintTimer !== null) {
+    window.clearTimeout(firstLoadHintTimer);
+    firstLoadHintTimer = null;
+  }
+};
 
-      requestAnimationFrame(() => {
-        setIsViewerVisible(true);
-        setIsInitialLoading(false);
-        setShowFirstLoadHint(false);
-        warmSceneNeighborhood(resolvedStartScene.id);
-      });
-    };
+const clearLoaderExitTimer = () => {
+  if (loaderExitTimer !== null) {
+    window.clearTimeout(loaderExitTimer);
+    loaderExitTimer = null;
+  }
+};
+
+const finishInitialLoad = () => {
+  if (didFinishInitialLoad) return;
+
+  didFinishInitialLoad = true;
+  clearFirstLoadHintTimer();
+
+  currentSceneRef.current = resolvedStartScene;
+  setCurrentSceneId(resolvedStartScene.id);
+  psvReadyPanoramasRef.current.add(resolvedStartScene.imageUrl);
+
+  requestAnimationFrame(() => {
+    setIsViewerVisible(true);
+    warmSceneNeighborhood(resolvedStartScene.id);
+
+    clearLoaderExitTimer();
+
+    loaderExitTimer = window.setTimeout(() => {
+      setIsInitialLoading(false);
+      setShowFirstLoadHint(false);
+      loaderExitTimer = null;
+    }, 380);
+  });
+};
+   
+   
 
     const deviceProfile = getDeviceProfile();
 
@@ -1150,9 +1173,10 @@ export function VirtualTour360({
       warmSceneNeighborhood(nextId);
     });
 
-    return () => {
-      clearFirstLoadHintTimer();
-      cleanupTasksRef.current.forEach((cleanup) => cleanup());
+return () => {
+  clearFirstLoadHintTimer();
+  clearLoaderExitTimer();
+  cleanupTasksRef.current.forEach((cleanup) => cleanup());
       cleanupTasksRef.current = [];
       viewer.destroy();
       viewerRef.current = null;
@@ -1208,16 +1232,119 @@ export function VirtualTour360({
 
   return (
     <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
-      <style>{`
-        .virtual-tour-shell .psv-loader-container,
-        .virtual-tour-shell .psv-loader {
-          display: none !important;
-        }
+<style>{`
+  .virtual-tour-shell .psv-loader-container,
+  .virtual-tour-shell .psv-loader {
+    display: none !important;
+  }
 
-        .virtual-tour-shell .psv-virtual-tour-link {
-          filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.45));
-        }
-      `}</style>
+  .virtual-tour-shell .psv-virtual-tour-link {
+    filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.45));
+  }
+
+  @keyframes virtual-tour-loader-enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes virtual-tour-loader-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes virtual-tour-loader-progress {
+    0% {
+      opacity: 0;
+      transform: translateX(-165%);
+    }
+
+    18% {
+      opacity: 0.95;
+    }
+
+    78% {
+      opacity: 0.95;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateX(335%);
+    }
+  }
+
+  @keyframes virtual-tour-loader-glow {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(0.92);
+    }
+
+    50% {
+      opacity: 0.7;
+      transform: scale(1.08);
+    }
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__content {
+    animation:
+      virtual-tour-loader-enter
+      560ms
+      cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__orbit {
+    border: 1.5px solid transparent;
+    border-top-color: rgba(212, 175, 55, 0.98);
+    border-right-color: rgba(212, 175, 55, 0.28);
+    animation: virtual-tour-loader-orbit 2.35s linear infinite;
+    will-change: transform;
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__progress {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(212, 175, 55, 0.35) 20%,
+      rgba(212, 175, 55, 1) 50%,
+      rgba(255, 255, 255, 0.72) 66%,
+      transparent 100%
+    );
+    animation:
+      virtual-tour-loader-progress
+      1.85s
+      cubic-bezier(0.45, 0, 0.2, 1)
+      infinite;
+    will-change: transform, opacity;
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__glow {
+    animation: virtual-tour-loader-glow 2.7s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .virtual-tour-shell .virtual-tour-loader__content,
+    .virtual-tour-shell .virtual-tour-loader__orbit,
+    .virtual-tour-shell .virtual-tour-loader__progress,
+    .virtual-tour-shell .virtual-tour-loader__glow {
+      animation: none !important;
+    }
+
+    .virtual-tour-shell .virtual-tour-loader__progress {
+      width: 100% !important;
+      opacity: 0.55;
+    }
+  }
+`}</style>
 
       <button
         onPointerUp={(event) => {
@@ -1239,40 +1366,111 @@ export function VirtualTour360({
       </button>
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
-        <div
-          ref={containerRef}
-          className="w-full h-full bg-black"
-          style={{
-            opacity: isViewerVisible ? 1 : 0,
-            transition: "opacity 220ms ease",
-          }}
-        />
+       
+	   
+	   <div
+  ref={containerRef}
+  className="w-full h-full bg-black"
+  style={{
+    opacity: isViewerVisible ? 1 : 0,
+    transition: "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1)",
+  }}
+/>
 
-        {isInitialLoading && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black">
+{isInitialLoading && (
+  <div
+    className="absolute inset-0 z-30 overflow-hidden bg-[#050505]"
+    style={{
+      opacity: isViewerVisible ? 0 : 1,
+      transform: isViewerVisible ? "scale(1.012)" : "scale(1)",
+      transition:
+        "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 520ms cubic-bezier(0.22, 1, 0.36, 1)",
+      pointerEvents: isViewerVisible ? "none" : "auto",
+    }}
+    role="status"
+    aria-live="polite"
+    aria-busy={!isViewerVisible}
+  >
+    {resolvedStartScene?.thumbnailUrl && (
+      <div
+        className="absolute inset-0 scale-[1.12] bg-cover bg-center opacity-40 blur-[28px] saturate-[0.85]"
+        style={{
+          backgroundImage: `url(${resolvedStartScene.thumbnailUrl})`,
+        }}
+      />
+    )}
+
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(212,175,55,0.11),transparent_31%),linear-gradient(180deg,rgba(3,3,3,0.60)_0%,rgba(3,3,3,0.84)_58%,rgba(0,0,0,0.97)_100%)]" />
+
+    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+    <div
+      className="relative z-10 flex h-full items-center justify-center px-6"
+      style={{
+        paddingTop: "max(24px, env(safe-area-inset-top))",
+        paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+      }}
+    >
+      <div className="virtual-tour-loader__content w-full max-w-[340px] text-center">
+        <div className="relative mx-auto mb-7 h-[76px] w-[76px]">
+          <div className="virtual-tour-loader__glow absolute inset-[10px] rounded-full bg-primary/25 blur-2xl" />
+
+          <div className="absolute inset-0 rounded-full border border-white/10 bg-black/15 shadow-[inset_0_0_30px_rgba(255,255,255,0.025)]" />
+
+          <div className="absolute inset-[7px] flex items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.045] shadow-[0_18px_48px_rgba(0,0,0,0.48)]">
             {resolvedStartScene?.thumbnailUrl && (
               <div
-                className="absolute inset-0 scale-110 bg-cover bg-center opacity-35 blur-2xl"
-                style={{ backgroundImage: `url(${resolvedStartScene.thumbnailUrl})` }}
+                className="absolute inset-0 scale-125 bg-cover bg-center opacity-80"
+                style={{
+                  backgroundImage: `url(${resolvedStartScene.thumbnailUrl})`,
+                }}
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/80 to-black/95" />
-            <div className="relative flex w-[min(90vw,360px)] flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-7 text-center shadow-2xl md:backdrop-blur-xl">
-              <div className="h-1.5 w-40 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/90" />
-              </div>
-              <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
-              <p className="text-white/90 text-sm tracking-wide font-medium">
-                Duke përgatitur turin virtual
-              </p>
-              <span className="min-h-[32px] text-xs leading-5 text-white/58">
-                {showFirstLoadHint
-                  ? "Hapja e parë mund të zgjasë pak më shumë. Pamjet pasuese do të hapen më shpejt."
-                  : "Po ngarkohet pamja 360° me cilësi të lartë."}
-              </span>
-            </div>
+
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_26%,rgba(255,255,255,0.18),transparent_35%),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.72))]" />
+
+            <span className="relative translate-x-[0.1em] text-[11px] font-semibold tracking-[0.2em] text-white/90">
+              360°
+            </span>
           </div>
-        )}
+
+          <div className="virtual-tour-loader__orbit absolute inset-0 rounded-full">
+            <span className="absolute left-1/2 top-[-3px] h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_16px_rgba(212,175,55,0.95)]" />
+          </div>
+        </div>
+
+        <div className="mb-3 flex items-center justify-center gap-3">
+          <span className="h-px w-7 bg-gradient-to-r from-transparent to-primary/55" />
+
+          <span className="text-[10px] font-medium uppercase tracking-[0.32em] text-white/45">
+            Përvojë 360°
+          </span>
+
+          <span className="h-px w-7 bg-gradient-to-l from-transparent to-primary/55" />
+        </div>
+
+        <h2 className="font-display text-[20px] font-semibold tracking-[-0.02em] text-white md:text-[22px]">
+          Po hapim hapësirën
+        </h2>
+
+        <p className="mx-auto mt-2 min-h-[40px] max-w-[300px] text-[12px] leading-5 text-white/52">
+          {showFirstLoadHint
+            ? "Hapja e parë mund të zgjasë pak. Pamjet e radhës do të hapen më shpejt."
+            : "Pamja e parë po përgatitet me cilësi të lartë."}
+        </p>
+
+        <div className="mx-auto mt-6 h-px w-44 overflow-hidden bg-white/10">
+          <div className="virtual-tour-loader__progress h-full w-[42%]" />
+        </div>
+
+        <span className="sr-only">
+          Duke përgatitur turin virtual.
+        </span>
+      </div>
+    </div>
+  </div>
+)}
+	   
 
         {loadError && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] rounded-2xl border border-white/10 bg-black/80 px-4 py-3 text-xs text-white shadow-2xl md:backdrop-blur-xl">
