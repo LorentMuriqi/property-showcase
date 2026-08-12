@@ -950,10 +950,17 @@ export default function ProjectDetails() {
         const isVerticalSwipeMode = lightboxAxis === "y";
 
         // iOS Safari does not provide reliable fullscreen dimensions for normal divs.
-        // This shell is sized with real visualViewport pixels and centered by numeric
-        // margins, so browser toolbars cannot push the rotated content off-screen.
+        // The visual shell remains rotated exactly as before, but the Embla gesture plane
+        // is counter-rotated. This keeps drag detection and slide movement on the same
+        // physical axis while preserving the existing fullscreen appearance.
         const shellWidth = shouldUseHorizontalFullscreen ? viewportHeight : viewportWidth;
         const shellHeight = shouldUseHorizontalFullscreen ? viewportWidth : viewportHeight;
+        const carouselPlaneWidth = shouldUseHorizontalFullscreen
+          ? shellHeight
+          : shellWidth;
+        const carouselPlaneHeight = shouldUseHorizontalFullscreen
+          ? shellWidth
+          : shellHeight;
 
         return (
           <div
@@ -989,9 +996,19 @@ export default function ProjectDetails() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div
-                  className="h-full w-full overflow-hidden"
+                  className="absolute overflow-hidden transition-transform duration-300 ease-out"
                   ref={lightboxRef}
-                  style={{ touchAction: isVerticalSwipeMode ? "pan-y" : "pan-x" }}
+                  style={{
+                    left: `${shellWidth / 2}px`,
+                    top: `${shellHeight / 2}px`,
+                    width: `${carouselPlaneWidth}px`,
+                    height: `${carouselPlaneHeight}px`,
+                    marginLeft: `${-carouselPlaneWidth / 2}px`,
+                    marginTop: `${-carouselPlaneHeight / 2}px`,
+                    transform: shouldUseHorizontalFullscreen ? "rotate(-90deg)" : "none",
+                    transformOrigin: "center center",
+                    touchAction: isVerticalSwipeMode ? "pan-y" : "pan-x",
+                  }}
                 >
                   <div
                     className={`flex h-full w-full ${
@@ -1001,9 +1018,9 @@ export default function ProjectDetails() {
                     {images.map((img, idx) => (
                       <div
                         key={img.id || idx}
-                        className={`relative flex h-full w-full flex-[0_0_100%] items-center justify-center overflow-hidden ${
+                        className={`relative h-full w-full flex-[0_0_100%] overflow-hidden ${
                           isVerticalSwipeMode ? "min-h-0" : "min-w-0"
-                        } ${isLightboxFullscreen ? "p-0" : "p-4 md:p-8"}`}
+                        }`}
                         ref={(node) => {
                           if (!node) return;
                           if (node.hasAttribute("data-zoom-attached")) return;
@@ -1074,33 +1091,49 @@ export default function ProjectDetails() {
                           });
                         }}
                       >
-                        <img
-                          src={getLightboxImageUrl(img, idx)}
-                          alt={img.caption || `${project.title} - Foto ${idx + 1}`}
-                          onLoad={(e) => {
-                            const { naturalWidth, naturalHeight } = e.currentTarget;
-                            const orientation = getImageOrientation(naturalWidth, naturalHeight);
-                            setImageOrientations((prev) => {
-                              if (prev[idx] === orientation) return prev;
-                              return { ...prev, [idx]: orientation };
-                            });
-                          }}
-                          loading={
-                            lightboxIndex !== null &&
-                            (idx === lightboxIndex ||
-                              idx === (lightboxIndex - 1 + images.length) % images.length ||
-                              idx === (lightboxIndex + 1) % images.length)
-                              ? "eager"
-                              : "lazy"
-                          }
-                          decoding="async"
-                          draggable={false}
-                          className={`select-none object-contain transition-all duration-300 ${
-                            isLightboxFullscreen
-                              ? "h-full w-full max-h-full max-w-full rounded-none"
-                              : "max-h-full max-w-full rounded-xl shadow-2xl md:max-h-[85vh] md:max-w-[85vw]"
+                        <div
+                          className={`absolute flex items-center justify-center overflow-hidden transition-transform duration-300 ease-out ${
+                            isLightboxFullscreen ? "p-0" : "p-4 md:p-8"
                           }`}
-                        />
+                          style={{
+                            left: `${carouselPlaneWidth / 2}px`,
+                            top: `${carouselPlaneHeight / 2}px`,
+                            width: `${shellWidth}px`,
+                            height: `${shellHeight}px`,
+                            marginLeft: `${-shellWidth / 2}px`,
+                            marginTop: `${-shellHeight / 2}px`,
+                            transform: shouldUseHorizontalFullscreen ? "rotate(90deg)" : "none",
+                            transformOrigin: "center center",
+                          }}
+                        >
+                          <img
+                            src={getLightboxImageUrl(img, idx)}
+                            alt={img.caption || `${project.title} - Foto ${idx + 1}`}
+                            onLoad={(e) => {
+                              const { naturalWidth, naturalHeight } = e.currentTarget;
+                              const orientation = getImageOrientation(naturalWidth, naturalHeight);
+                              setImageOrientations((prev) => {
+                                if (prev[idx] === orientation) return prev;
+                                return { ...prev, [idx]: orientation };
+                              });
+                            }}
+                            loading={
+                              lightboxIndex !== null &&
+                              (idx === lightboxIndex ||
+                                idx === (lightboxIndex - 1 + images.length) % images.length ||
+                                idx === (lightboxIndex + 1) % images.length)
+                                ? "eager"
+                                : "lazy"
+                            }
+                            decoding="async"
+                            draggable={false}
+                            className={`select-none object-contain transition-all duration-300 ${
+                              isLightboxFullscreen
+                                ? "h-full w-full max-h-full max-w-full rounded-none"
+                                : "max-h-full max-w-full rounded-xl shadow-2xl md:max-h-[85vh] md:max-w-[85vw]"
+                            }`}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
