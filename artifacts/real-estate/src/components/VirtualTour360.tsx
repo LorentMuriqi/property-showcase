@@ -117,35 +117,60 @@ const getCacheMaxItems = () => {
   return 14;
 };
 
-const getPreloadBudget = () => {
+type PreloadPlan = {
+  immediate: number;
+  total: number;
+  gapMs: number;
+  positionDebounceMs: number;
+};
+
+const getPreloadPlan = (): PreloadPlan => {
   const profile = getDeviceProfile();
 
   if (profile.isSlowConnection) {
-    return { direct: 0, secondLevel: 0 };
+    return {
+      immediate: 1,
+      total: 2,
+      gapMs: 260,
+      positionDebounceMs: 280,
+    };
   }
 
   if (profile.isLowMemory) {
-    return { direct: 1, secondLevel: 0 };
+    return {
+      immediate: 1,
+      total: 3,
+      gapMs: 220,
+      positionDebounceMs: 240,
+    };
   }
 
   if (profile.isMobile) {
-    return { direct: 3, secondLevel: 0 };
+    return {
+      immediate: 1,
+      total: 6,
+      gapMs: 150,
+      positionDebounceMs: 190,
+    };
   }
 
-  return { direct: 5, secondLevel: 6 };
+  return {
+    immediate: 2,
+    total: 10,
+    gapMs: 110,
+    positionDebounceMs: 150,
+  };
 };
 
-const getProgressiveDirectPreloadLimit = () => {
-  const profile = getDeviceProfile();
+const waitForPreloadGap = (delay: number): Promise<void> => {
+  if (typeof window === "undefined" || delay <= 0) {
+    return Promise.resolve();
+  }
 
-  if (profile.isSlowConnection) return 0;
-  if (profile.isLowMemory) return 1;
-  if (profile.isMobile) return 4;
-  return 10;
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
 };
-
-const PROGRESSIVE_DIRECT_PRELOAD_START_MS = 180;
-const PROGRESSIVE_DIRECT_PRELOAD_STEP_MS = 280;
 
 const isFiniteOrientation = (orientation: Orientation | null): orientation is Orientation => {
   return (
@@ -478,18 +503,10 @@ const scheduleDelayedIdleTask = (callback: () => void, delay = 0) => {
   };
 };
 
-const shouldPluginPreloadLink = (node: any, link: any) => {
-  const budget = getPreloadBudget();
-  if (budget.direct <= 0) return false;
-
-  const links = Array.isArray(node?.links) ? node.links : [];
-  const directTargets = uniqueNumbers(
-    links
-      .map((item: any) => Number(item?.nodeId))
-      .filter((id: number) => Number.isFinite(id)),
-  ).slice(0, budget.direct);
-
-  return directTargets.includes(Number(link?.nodeId));
+const shouldPluginPreloadLink = () => {
+  // Preload-in e menaxhon vetëm radha inteligjente custom.
+  // Kjo shmang dy ngarkime paralele për të njëjtën panoramë.
+  return false;
 };
 
 export function VirtualTour360({
@@ -503,10 +520,21 @@ export function VirtualTour360({
   const isNavigatingRef = useRef(false);
   const pendingEntryOrientationRef = useRef<Orientation | null>(null);
   const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-  const browserPreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
-  const psvPreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
-  const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
-  const cleanupTasksRef = useRef<Array<() => void>>([]);
+const browserPreloadPromisesRef = useRef<Map<string, Promise<void>>>(
+  new Map(),
+);
+
+const psvPreloadPromisesRef = useRef<Map<string, Promise<void>>>(
+  new Map(),
+);
+
+const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
+
+const preloadSequenceRef = useRef(0);
+
+const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
+  null,
+);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
@@ -717,145 +745,324 @@ export function VirtualTour360({
   );
 
   const preloadBrowserImageOnce = useCallback(
-    (src?: string | null, priority: PreloadPriority = "low"): Promise<void> => {
-      if (!src) return Promise.resolve();
+  (
+    src?: string | null,
+    priority: PreloadPriority = "low",
+  ): Promise<void> => {
+    if (!src) return Promise.resolve();
 
-      const existingPromise = browserPreloadPromisesRef.current.get(src);
-      if (existingPromise) return existingPromise;
+    const existingPromise =
+      browserPreloadPromisesRef.current.get(src);
 
-      const promise = preloadBrowserImage(src, priority);
-      browserPreloadPromisesRef.current.set(src, promise);
+    if (existingPromise) {
+      return existingPromise;
+    }
 
-      return promise;
-    },
-    [],
-  );
+    const promise = preloadBrowserImage(src, priority).finally(() => {
+      browserPreloadPromisesRef.current.delete(src);
+    });
 
-  const preloadScenePanoramaOnce = useCallback(
-    (sceneId: number | null, priority: PreloadPriority = "low"): Promise<void> => {
-      if (sceneId === null) return Promise.resolve();
+    browserPreloadPromisesRef.current.set(src, promise);
 
-      const scene = getSceneById(sceneId);
-      if (!scene?.imageUrl) return Promise.resolve();
+    return promise;
+  },
+  [],
+);
 
-      const viewer = viewerRef.current as any;
-      const src = scene.imageUrl;
+const preloadScenePanoramaOnce = useCallback(
+  (
+    sceneId: number | null,
+    priority: PreloadPriority = "low",
+  ): Promise<void> => {
+    if (sceneId === null) {
+      return Promise.resolve();
+    }
 
-      if (viewer?.textureLoader?.preloadPanorama) {
-        const existingPromise = psvPreloadPromisesRef.current.get(src);
-        if (existingPromise) return existingPromise;
+    const scene = getSceneById(sceneId);
 
-        const promise = Promise.resolve(viewer.textureLoader.preloadPanorama(src))
-          .then(() => {
-            psvReadyPanoramasRef.current.add(src);
-          })
-          .catch((error) => {
-            psvPreloadPromisesRef.current.delete(src);
-            console.warn("Panorama preload failed:", error);
-          });
+    if (!scene?.imageUrl) {
+      return Promise.resolve();
+    }
 
-        psvPreloadPromisesRef.current.set(src, promise);
-        return promise;
-      }
+    const viewer = viewerRef.current as any;
+    const src = scene.imageUrl;
 
+    /*
+     * Photo Sphere Viewer e ruan Blob-in duke përdorur URL-në
+     * e panoramës si cache key.
+     *
+     * Nëse fotografia është tashmë në cache, nuk bëjmë:
+     * - request të dytë;
+     * - decode të dytë;
+     * - punë të panevojshme në GPU.
+     */
+    if (Cache.get(src, src)) {
+      return Promise.resolve();
+    }
+
+    const existingPromise =
+      psvPreloadPromisesRef.current.get(src);
+
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    let task: Promise<unknown>;
+
+    if (viewer?.textureLoader?.loadFile) {
+      /*
+       * Preload vetëm skedarin Blob.
+       *
+       * Mos përdor preloadPanorama për çdo hotspot,
+       * sepse ai vazhdon edhe me dekodimin dhe krijimin
+       * e texture-it, gjë që rëndon telefonin kur kemi
+       * shumë lidhje.
+       */
+      task = Promise.resolve(
+        viewer.textureLoader.loadFile(
+          src,
+          undefined,
+          src,
+        ),
+      );
+    } else if (viewer?.textureLoader?.preloadPanorama) {
+      /*
+       * Fallback për versione ku loadFile nuk është
+       * i ekspozuar.
+       */
+      task = Promise.resolve(
+        viewer.textureLoader.preloadPanorama(src),
+      );
+    } else {
       return preloadBrowserImageOnce(src, priority);
-    },
-    [getSceneById, preloadBrowserImageOnce],
-  );
+    }
 
-  const getPrioritizedLinkedSceneIds = useCallback(
-    (sceneId: number | null) => {
-      if (sceneId === null) return [] as number[];
+    const promise = task
+      .then(() => undefined)
+      .catch((error) => {
+        console.warn(
+          "Panorama preload failed:",
+          error,
+        );
+      })
+      .finally(() => {
+        /*
+         * Në këtë Map mbajmë vetëm request-et aktive.
+         * Pas përfundimit, Cache është burimi real
+         * i informacionit.
+         */
+        psvPreloadPromisesRef.current.delete(src);
+      });
 
-      const fallbackTargetIds = linkedSceneIdsBySceneId.get(Number(sceneId)) || [];
-      const scene = getSceneById(Number(sceneId));
-      if (!scene || fallbackTargetIds.length <= 1) return fallbackTargetIds;
+    psvPreloadPromisesRef.current.set(src, promise);
 
-      let viewerYaw: number | null = null;
+    return promise;
+  },
+  [getSceneById, preloadBrowserImageOnce],
+);
 
-      try {
-        const position = viewerRef.current?.getPosition?.();
-        if (position && Number.isFinite(position.yaw)) {
-          viewerYaw = normalizeYaw(position.yaw);
-        }
-      } catch {
-        viewerYaw = null;
+const getPrioritizedLinkedSceneIds = useCallback(
+  (sceneId: number | null) => {
+    if (sceneId === null) {
+      return [] as number[];
+    }
+
+    const fallbackTargetIds =
+      linkedSceneIdsBySceneId.get(Number(sceneId)) || [];
+
+    const currentNode = nodes.find(
+      (node) => Number(node.id) === Number(sceneId),
+    );
+
+    if (!currentNode || fallbackTargetIds.length <= 1) {
+      return fallbackTargetIds;
+    }
+
+    let viewerPosition: Orientation | null = null;
+
+    try {
+      const position =
+        viewerRef.current?.getPosition?.();
+
+      if (
+        position &&
+        Number.isFinite(position.yaw) &&
+        Number.isFinite(position.pitch)
+      ) {
+        viewerPosition = {
+          yaw: normalizeYaw(position.yaw),
+          pitch: clampPitch(position.pitch),
+        };
+      }
+    } catch {
+      viewerPosition = null;
+    }
+
+    if (!viewerPosition) {
+      return fallbackTargetIds;
+    }
+
+    const scoresByTargetId = new Map<number, number>();
+
+    /*
+     * Përdorim pozicionet vizuale reale të hotspot-eve.
+     * Kjo përfshin edhe fan-out-in e hotspot-eve që janë
+     * shumë afër njëri-tjetrit.
+     */
+    currentNode.links.forEach((link: any) => {
+      const targetId = toFiniteNumber(link?.nodeId);
+      const yaw = toFiniteNumber(link?.position?.yaw);
+      const pitch = toFiniteNumber(link?.position?.pitch);
+
+      if (
+        targetId === null ||
+        yaw === null ||
+        pitch === null ||
+        !scenesById.has(targetId)
+      ) {
+        return;
       }
 
-      if (viewerYaw === null) return fallbackTargetIds;
-
-      const scoresByTargetId = new Map<number, number>();
-
-      scene.hotspots.forEach((hotspot) => {
-        const runtimeHotspot = hotspot as RuntimeHotspot;
-        const targetId = getRuntimeHotspotTargetSceneId(runtimeHotspot);
-        if (targetId === null || !scenesById.has(targetId)) return;
-
-        const yaw = getRuntimeHotspotYaw(runtimeHotspot);
-        const distance = getYawDistance(yaw, viewerYaw as number);
-        const previousScore = scoresByTargetId.get(targetId);
-
-        if (previousScore === undefined || distance < previousScore) {
-          scoresByTargetId.set(targetId, distance);
-        }
-      });
-
-      return [...fallbackTargetIds].sort((a, b) => {
-        const scoreA = scoresByTargetId.get(a) ?? Number.MAX_SAFE_INTEGER;
-        const scoreB = scoresByTargetId.get(b) ?? Number.MAX_SAFE_INTEGER;
-        return scoreA - scoreB;
-      });
-    },
-    [getSceneById, linkedSceneIdsBySceneId, scenesById],
-  );
-
-  const warmSceneNeighborhood = useCallback(
-    (sceneId: number | null) => {
-      if (sceneId === null) return;
-
-      const budget = getPreloadBudget();
-      const orderedTargetIds = getPrioritizedLinkedSceneIds(sceneId);
-      if (budget.direct <= 0 || orderedTargetIds.length === 0) return;
-
-      const directTargetIds = orderedTargetIds.slice(0, budget.direct);
-
-      directTargetIds.forEach((targetId) => {
-        void preloadScenePanoramaOnce(targetId, "high");
-      });
-
-      const progressiveLimit = getProgressiveDirectPreloadLimit();
-      const deferredDirectTargetIds = orderedTargetIds.slice(
-        budget.direct,
-        budget.direct + progressiveLimit,
+      const yawDistance = getYawDistance(
+        yaw,
+        viewerPosition.yaw,
       );
 
-      deferredDirectTargetIds.forEach((targetId, index) => {
-        const cancelIdle = scheduleDelayedIdleTask(() => {
-          void preloadScenePanoramaOnce(targetId, "low");
-        }, PROGRESSIVE_DIRECT_PRELOAD_START_MS + index * PROGRESSIVE_DIRECT_PRELOAD_STEP_MS);
+      const pitchDistance = Math.abs(
+        pitch - viewerPosition.pitch,
+      );
 
-        cleanupTasksRef.current.push(cancelIdle);
-      });
+      const distance = Math.hypot(
+        yawDistance,
+        pitchDistance,
+      );
 
-      if (budget.secondLevel <= 0) return;
+      const previousScore =
+        scoresByTargetId.get(targetId);
 
-      const cancelIdle = scheduleDelayedIdleTask(() => {
-        const secondLevelIds = uniqueNumbers(
-          directTargetIds.flatMap((targetId) => linkedSceneIdsBySceneId.get(targetId) || []),
-        )
-          .filter((targetId) => targetId !== Number(sceneId))
-          .filter((targetId) => !directTargetIds.includes(targetId))
-          .slice(0, budget.secondLevel);
+      if (
+        previousScore === undefined ||
+        distance < previousScore
+      ) {
+        scoresByTargetId.set(targetId, distance);
+      }
+    });
 
-        secondLevelIds.forEach((targetId) => {
-          void preloadScenePanoramaOnce(targetId, "low");
-        });
-      }, 700 + deferredDirectTargetIds.length * PROGRESSIVE_DIRECT_PRELOAD_STEP_MS);
+    return [...fallbackTargetIds].sort((a, b) => {
+      const scoreA =
+        scoresByTargetId.get(a) ??
+        Number.MAX_SAFE_INTEGER;
 
-      cleanupTasksRef.current.push(cancelIdle);
-    },
-    [getPrioritizedLinkedSceneIds, linkedSceneIdsBySceneId, preloadScenePanoramaOnce],
-  );
+      const scoreB =
+        scoresByTargetId.get(b) ??
+        Number.MAX_SAFE_INTEGER;
+
+      return scoreA - scoreB;
+    });
+  },
+  [
+    linkedSceneIdsBySceneId,
+    nodes,
+    scenesById,
+  ],
+);
+
+const warmSceneNeighborhood = useCallback(
+  (sceneId: number | null) => {
+    /*
+     * Ndal radhen e vjetër kur:
+     * - ndryshon skena;
+     * - përdoruesi ndryshon drejtimin;
+     * - hotspot-et prioritare ndryshojnë.
+     */
+    neighborhoodWarmupCleanupRef.current?.();
+    neighborhoodWarmupCleanupRef.current = null;
+
+    const sequenceId = ++preloadSequenceRef.current;
+
+    if (sceneId === null) {
+      return;
+    }
+
+    const plan = getPreloadPlan();
+
+    const orderedTargetIds =
+      getPrioritizedLinkedSceneIds(sceneId).slice(
+        0,
+        plan.total,
+      );
+
+    if (orderedTargetIds.length === 0) {
+      return;
+    }
+
+    /*
+     * Vetëm hotspot-i më i mundshëm në telefon,
+     * ose dy hotspot-et më të mundshme në desktop,
+     * fillojnë menjëherë.
+     */
+    const immediateTargetIds =
+      orderedTargetIds.slice(0, plan.immediate);
+
+    const deferredTargetIds =
+      orderedTargetIds.slice(plan.immediate);
+
+    const immediatePreload = Promise.all(
+      immediateTargetIds.map((targetId) =>
+        preloadScenePanoramaOnce(
+          targetId,
+          "high",
+        ),
+      ),
+    );
+
+    if (deferredTargetIds.length === 0) {
+      return;
+    }
+
+    /*
+     * Panorama të tjera ngarkohen njëra pas tjetrës.
+     * Nuk hapim 6–10 request-e të mëdha njëkohësisht.
+     */
+    neighborhoodWarmupCleanupRef.current =
+      scheduleDelayedIdleTask(() => {
+        void (async () => {
+          await immediatePreload;
+
+          if (
+            preloadSequenceRef.current !== sequenceId
+          ) {
+            return;
+          }
+
+          for (const targetId of deferredTargetIds) {
+            if (
+              preloadSequenceRef.current !== sequenceId
+            ) {
+              return;
+            }
+
+            await preloadScenePanoramaOnce(
+              targetId,
+              "low",
+            );
+
+            if (
+              preloadSequenceRef.current !== sequenceId
+            ) {
+              return;
+            }
+
+            await waitForPreloadGap(plan.gapMs);
+          }
+        })();
+      }, 120);
+  },
+  [
+    getPrioritizedLinkedSceneIds,
+    preloadScenePanoramaOnce,
+  ],
+);
 
   const getTransitionWithEntryOrientation = useCallback(
     (orientation: Orientation | null): NavigationTransitionOptions => {
@@ -1130,11 +1337,54 @@ const finishInitialLoad = () => {
       ],
     });
 
-    viewerRef.current = viewer;
+viewerRef.current = viewer;
 
-    const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
+const vtPlugin = viewer.getPlugin(
+  VirtualTourPlugin as any,
+) as any;
 
-    viewer.addEventListener("panorama-loaded", () => {
+const originalSetCurrentNode =
+  vtPlugin.setCurrentNode.bind(vtPlugin);
+
+/*
+ * Kur përdoruesi klikon hotspot-in gjatë kohës që
+ * fotografia e tij është duke u prefetch-uar, navigimi
+ * pret të njëjtin request.
+ *
+ * Në këtë mënyrë nuk hapet një request i dytë për të
+ * njëjtën panoramë.
+ */
+vtPlugin.setCurrentNode = async (
+  nodeId: string,
+  options?: any,
+  fromLink?: any,
+): Promise<boolean> => {
+  const targetSceneId = toFiniteNumber(nodeId);
+
+  const targetScene =
+    targetSceneId !== null
+      ? getSceneById(targetSceneId)
+      : null;
+
+  const pendingPreload = targetScene?.imageUrl
+    ? psvPreloadPromisesRef.current.get(
+        targetScene.imageUrl,
+      )
+    : null;
+
+  if (pendingPreload) {
+    await pendingPreload;
+  }
+
+  return originalSetCurrentNode(
+    nodeId,
+    options,
+    fromLink,
+  );
+};
+
+viewer.addEventListener("panorama-loaded", () => {
+	
       setLoadError(null);
       const currentScene = currentSceneRef.current || resolvedStartScene;
       if (currentScene?.imageUrl) {
@@ -1150,14 +1400,53 @@ const finishInitialLoad = () => {
       finishInitialLoad();
     });
 
-    vtPlugin.addEventListener("enter-arrow", ({ link }: any) => {
-      const targetSceneId = Number(link?.nodeId);
-      if (Number.isFinite(targetSceneId)) {
-        void preloadScenePanoramaOnce(targetSceneId, "high");
-      }
-    });
+let positionWarmupTimer: number | null = null;
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+const schedulePositionAwareWarmup = () => {
+  if (positionWarmupTimer !== null) {
+    window.clearTimeout(positionWarmupTimer);
+  }
+
+  positionWarmupTimer = window.setTimeout(() => {
+    positionWarmupTimer = null;
+
+    const activeSceneId = toFiniteNumber(
+      currentSceneRef.current?.id,
+    );
+
+    if (activeSceneId !== null) {
+      warmSceneNeighborhood(activeSceneId);
+    }
+  }, getPreloadPlan().positionDebounceMs);
+};
+
+/*
+ * Kur përdoruesi ndalon së rrotulluari panoramën,
+ * hotspot-et që janë përpara kamerës marrin
+ * prioritet më të lartë.
+ */
+viewer.addEventListener(
+  "position-updated",
+  schedulePositionAwareWarmup,
+);
+
+vtPlugin.addEventListener(
+  "enter-arrow",
+  ({ link }: any) => {
+    const targetSceneId = Number(link?.nodeId);
+
+    if (Number.isFinite(targetSceneId)) {
+      void preloadScenePanoramaOnce(
+        targetSceneId,
+        "high",
+      );
+    }
+  },
+);
+
+vtPlugin.addEventListener(
+  "node-changed",
+  ({ node }: any) => {
       const nextId = Number(node.id);
       const nextScene = getSceneById(nextId);
 
@@ -1169,15 +1458,28 @@ const finishInitialLoad = () => {
         psvReadyPanoramasRef.current.add(nextScene.imageUrl);
       }
 
-      pendingEntryOrientationRef.current = null;
-      warmSceneNeighborhood(nextId);
-    });
+pendingEntryOrientationRef.current = null;
+
+/*
+ * Lejo viewer-in ta vizatojë skenën e re fillimisht,
+ * pastaj fillo preload-in e lidhjeve të radhës.
+ */
+requestAnimationFrame(() => {
+  warmSceneNeighborhood(nextId);
+});
+});
 
 return () => {
   clearFirstLoadHintTimer();
   clearLoaderExitTimer();
-  cleanupTasksRef.current.forEach((cleanup) => cleanup());
-      cleanupTasksRef.current = [];
+if (positionWarmupTimer !== null) {
+  window.clearTimeout(positionWarmupTimer);
+}
+
+preloadSequenceRef.current += 1;
+
+neighborhoodWarmupCleanupRef.current?.();
+neighborhoodWarmupCleanupRef.current = null;
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
@@ -1193,10 +1495,7 @@ return () => {
     warmSceneNeighborhood,
   ]);
 
-  useEffect(() => {
-    if (currentSceneId === null) return;
-    warmSceneNeighborhood(currentSceneId);
-  }, [currentSceneId, warmSceneNeighborhood]);
+
 
   useEffect(() => {
     if (currentSceneId === null) return;
