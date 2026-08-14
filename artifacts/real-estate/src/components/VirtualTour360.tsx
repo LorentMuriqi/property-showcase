@@ -1646,42 +1646,7 @@ neighborhoodWarmupCleanupRef.current = null;
     }
   }
   
-  @media (min-width: 1024px) {
-  .virtual-tour-shell .psv-navbar {
-    left: 18px !important;
-    right: auto !important;
-    bottom: 18px !important;
 
-    width: max-content !important;
-    max-width: calc(100vw - 36px) !important;
-    height: 44px !important;
-    min-height: 44px !important;
-
-    padding: 0 6px !important;
-
-    background: rgba(8, 8, 8, 0.62) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 14px !important;
-
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.38) !important;
-
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-
-    overflow: hidden;
-  }
-
-  .virtual-tour-shell .psv-navbar .psv-button {
-    height: 44px !important;
-    color: rgba(255, 255, 255, 0.88) !important;
-  }
-}
-
-@media (max-width: 1023px) {
-  .virtual-tour-shell .psv-navbar {
-    display: none !important;
-  }
-}
   
 `}</style>
 
@@ -1859,9 +1824,9 @@ neighborhoodWarmupCleanupRef.current = null;
           </div>
         )}
 
-<div className="pointer-events-none absolute inset-x-0 bottom-[76px] z-40 hidden lg:flex justify-center px-5">
-  <div className="pointer-events-auto flex w-fit max-w-[min(78vw,1120px)] gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/55 p-2 shadow-[0_16px_45px_rgba(0,0,0,0.38)] backdrop-blur-xl hide-scrollbar">
-            {sortedScenes.map((scene) => (
+<div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
+  <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
+           {sortedScenes.map((scene) => (
               <button
                 key={scene.id}
                 ref={(element) => {
