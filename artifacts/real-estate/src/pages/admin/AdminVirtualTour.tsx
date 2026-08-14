@@ -50,6 +50,29 @@ type Scene = {
   hotspots: Hotspot[];
 };
 
+const TOUR_THUMBNAIL_PLACEHOLDER =
+  "/tour-thumbnail-placeholder.svg";
+
+const getSceneThumbnailUrl = (
+  scene: Pick<Scene, "thumbnail_url">,
+) =>
+  scene.thumbnail_url?.trim() ||
+  TOUR_THUMBNAIL_PLACEHOLDER;
+
+const handleSceneThumbnailError = (
+  event: { currentTarget: HTMLImageElement },
+) => {
+  const image = event.currentTarget;
+
+  if (
+    !image.src.endsWith(
+      TOUR_THUMBNAIL_PLACEHOLDER,
+    )
+  ) {
+    image.src = TOUR_THUMBNAIL_PLACEHOLDER;
+  }
+};
+
 type Hotspot = {
   id: number;
   scene_id: number;
@@ -2343,7 +2366,7 @@ export default function AdminVirtualTour() {
         id: String(scene.id),
         panorama: scene.image_url,
         name: scene.title,
-        thumbnail: scene.thumbnail_url || scene.image_url,
+        thumbnail: getSceneThumbnailUrl(scene),
         data: {
           initialYaw: scene.initial_yaw ?? null,
           initialPitch: scene.initial_pitch ?? null,
@@ -3174,11 +3197,13 @@ export default function AdminVirtualTour() {
                   >
                     <div className="aspect-[2/1] bg-black relative">
                       <img
-                        src={scene.thumbnail_url || scene.image_url}
-                        alt={scene.title}
-                        crossOrigin="anonymous"
-                        className="w-full h-full object-cover opacity-90"
-                      />
+  src={getSceneThumbnailUrl(scene)}
+  alt={scene.title}
+  loading="lazy"
+  decoding="async"
+  onError={handleSceneThumbnailError}
+  className="w-full h-full object-cover opacity-90"
+/>
                       {scene.is_default && (
                         <span className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-primary text-black text-[10px] font-bold uppercase">
                           Default
@@ -3757,12 +3782,14 @@ export default function AdminVirtualTour() {
                       className="rounded-xl overflow-hidden border border-border bg-card"
                     >
                       <div className="aspect-[4/3] bg-black">
-                        <img
-                          src={scene.thumbnail_url || scene.image_url}
-                          alt={scene.title}
-                          crossOrigin="anonymous"
-                          className="w-full h-full object-cover"
-                        />
+<img
+  src={getSceneThumbnailUrl(scene)}
+  alt={scene.title}
+  loading="lazy"
+  decoding="async"
+  onError={handleSceneThumbnailError}
+  className="w-full h-full object-cover"
+/>
                       </div>
                       <div className="p-2">
                         <p className="text-xs text-foreground truncate">
@@ -3855,20 +3882,21 @@ export default function AdminVirtualTour() {
                       key={String(scene.id)}
                       className="flex items-center gap-3 rounded-xl bg-muted/40 p-2.5 border border-border"
                     >
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
-                        {scene.thumbnail_url || scene.image_url ? (
-                          <img
-                            src={scene.thumbnail_url || scene.image_url}
-                            alt={scene.title}
-                            crossOrigin="anonymous"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30">
-                            <ImageIcon size={14} />
-                          </div>
-                        )}
-                      </div>
+                      
+					  
+					  <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0">
+  <img
+    src={getSceneThumbnailUrl(scene)}
+    alt={scene.title}
+    loading="lazy"
+    decoding="async"
+    onError={handleSceneThumbnailError}
+    className="w-full h-full object-cover"
+  />
+</div>
+					  
+					  
+					  
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-foreground truncate">
                           {scene.title}
@@ -3925,19 +3953,34 @@ export default function AdminVirtualTour() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Thumbnail URL
-              </label>
-              <input
-                className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                value={sceneForm.thumbnailUrl}
-                onChange={(e) =>
-                  setSceneForm((prev) => ({ ...prev, thumbnailUrl: e.target.value }))
-                }
-                placeholder="https://..."
-              />
-            </div>
+            
+			<div className="space-y-2">
+  <label className="text-xs uppercase tracking-wider text-muted-foreground">
+    Thumbnail URL{" "}
+    <span className="normal-case tracking-normal opacity-60">
+      (opsionale)
+    </span>
+  </label>
+
+  <input
+    className="w-full bg-background border border-border rounded-xl px-3 py-3 text-sm text-foreground focus:border-primary focus:outline-none"
+    value={sceneForm.thumbnailUrl}
+    onChange={(e) =>
+      setSceneForm((prev) => ({
+        ...prev,
+        thumbnailUrl: e.target.value,
+      }))
+    }
+    placeholder="https://.../thumbnail.webp"
+  />
+
+  <p className="text-[11px] leading-5 text-muted-foreground">
+    Nëse lihet bosh, përdoret automatikisht një
+    thumbnail i lehtë. Fotografia e plotë 360° nuk
+    ngarkohet si preview.
+  </p>
+</div>
+			
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

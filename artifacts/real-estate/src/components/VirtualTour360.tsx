@@ -56,7 +56,7 @@ type DeviceProfile = {
 };
 
 const FIRST_LOAD_HINT_MS = 6500;
-const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
+const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-thumbnail-placeholder.svg";
 
 const CACHE_TTL_SECONDS = 30 * 60;
 const NAVIGATION_TRANSITION = {
@@ -600,7 +600,9 @@ const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
       return {
         id: String(scene.id),
         panorama: scene.imageUrl,
-        thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
+        thumbnail:
+  scene.thumbnailUrl?.trim() ||
+  TOUR_THUMBNAIL_PLACEHOLDER,
         name: scene.title,
         caption: scene.title,
         data: {
@@ -1714,11 +1716,7 @@ neighborhoodWarmupCleanupRef.current = null;
     >
       <div className="virtual-tour-loader__content flex flex-col items-center text-center">
         {/* Simbol i vogël dhe minimalist */}
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/25 shadow-[0_12px_35px_rgba(0,0,0,0.35)] backdrop-blur-md">
-          <span className="translate-x-[0.05em] text-[10px] font-semibold tracking-[0.16em] text-white/90">
-            360°
-          </span>
-        </div>
+
 
         <h2 className="font-display text-lg font-medium tracking-[-0.01em] text-white md:text-xl">
           Duke hapur turin 360°
@@ -1844,14 +1842,29 @@ neighborhoodWarmupCleanupRef.current = null;
                 type="button"
               >
                 <img
-                  src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
-                  alt={scene.title}
-                  crossOrigin="anonymous"
-                  loading="lazy"
-                  decoding="async"
-                  fetchPriority={currentSceneId === scene.id ? "high" : "low"}
-                  className="w-full h-full object-cover"
-                />
+  src={
+    scene.thumbnailUrl?.trim() ||
+    TOUR_THUMBNAIL_PLACEHOLDER
+  }
+  alt={scene.title}
+  loading="lazy"
+  decoding="async"
+  fetchPriority={
+    currentSceneId === scene.id ? "high" : "low"
+  }
+  onError={(event) => {
+    const image = event.currentTarget;
+
+    if (
+      !image.src.endsWith(
+        TOUR_THUMBNAIL_PLACEHOLDER,
+      )
+    ) {
+      image.src = TOUR_THUMBNAIL_PLACEHOLDER;
+    }
+  }}
+  className="w-full h-full object-cover"
+/>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent flex items-end p-1.5">
                   <span className="text-[10px] text-white font-semibold truncate drop-shadow-md">
                     {scene.title}
