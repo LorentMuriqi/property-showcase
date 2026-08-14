@@ -1681,27 +1681,29 @@ neighborhoodWarmupCleanupRef.current = null;
     className="absolute inset-0 z-30 overflow-hidden bg-[#050505]"
     style={{
       opacity: isViewerVisible ? 0 : 1,
-      transform: isViewerVisible ? "scale(1.012)" : "scale(1)",
+      transform: isViewerVisible ? "scale(1.01)" : "scale(1)",
       transition:
-        "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 520ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "opacity 340ms cubic-bezier(0.22, 1, 0.36, 1), transform 500ms cubic-bezier(0.22, 1, 0.36, 1)",
       pointerEvents: isViewerVisible ? "none" : "auto",
     }}
     role="status"
     aria-live="polite"
     aria-busy={!isViewerVisible}
   >
+    {/* Përdor vetëm thumbnail-in që të mos ngadalësohet panorama kryesore */}
     {resolvedStartScene?.thumbnailUrl && (
       <div
-        className="absolute inset-0 scale-[1.12] bg-cover bg-center opacity-40 blur-[28px] saturate-[0.85]"
+        className="absolute inset-[-18px] scale-[1.04] bg-cover bg-center opacity-75 blur-[10px]"
         style={{
           backgroundImage: `url(${resolvedStartScene.thumbnailUrl})`,
         }}
       />
     )}
 
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(212,175,55,0.11),transparent_31%),linear-gradient(180deg,rgba(3,3,3,0.60)_0%,rgba(3,3,3,0.84)_58%,rgba(0,0,0,0.97)_100%)]" />
+    {/* Overlay i pastër dhe premium */}
+    <div className="absolute inset-0 bg-black/50" />
 
-    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/45" />
 
     <div
       className="relative z-10 flex h-full items-center justify-center px-6"
@@ -1710,60 +1712,32 @@ neighborhoodWarmupCleanupRef.current = null;
         paddingBottom: "max(24px, env(safe-area-inset-bottom))",
       }}
     >
-      <div className="virtual-tour-loader__content w-full max-w-[340px] text-center">
-        <div className="relative mx-auto mb-7 h-[76px] w-[76px]">
-          <div className="virtual-tour-loader__glow absolute inset-[10px] rounded-full bg-primary/25 blur-2xl" />
-
-          <div className="absolute inset-0 rounded-full border border-white/10 bg-black/15 shadow-[inset_0_0_30px_rgba(255,255,255,0.025)]" />
-
-          <div className="absolute inset-[7px] flex items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.045] shadow-[0_18px_48px_rgba(0,0,0,0.48)]">
-            {resolvedStartScene?.thumbnailUrl && (
-              <div
-                className="absolute inset-0 scale-125 bg-cover bg-center opacity-80"
-                style={{
-                  backgroundImage: `url(${resolvedStartScene.thumbnailUrl})`,
-                }}
-              />
-            )}
-
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_26%,rgba(255,255,255,0.18),transparent_35%),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.72))]" />
-
-            <span className="relative translate-x-[0.1em] text-[11px] font-semibold tracking-[0.2em] text-white/90">
-              360°
-            </span>
-          </div>
-
-          <div className="virtual-tour-loader__orbit absolute inset-0 rounded-full">
-            <span className="absolute left-1/2 top-[-3px] h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_16px_rgba(212,175,55,0.95)]" />
-          </div>
-        </div>
-
-        <div className="mb-3 flex items-center justify-center gap-3">
-          <span className="h-px w-7 bg-gradient-to-r from-transparent to-primary/55" />
-
-          <span className="text-[10px] font-medium uppercase tracking-[0.32em] text-white/45">
-            Përvojë 360°
+      <div className="virtual-tour-loader__content flex flex-col items-center text-center">
+        {/* Simbol i vogël dhe minimalist */}
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/25 shadow-[0_12px_35px_rgba(0,0,0,0.35)] backdrop-blur-md">
+          <span className="translate-x-[0.05em] text-[10px] font-semibold tracking-[0.16em] text-white/90">
+            360°
           </span>
-
-          <span className="h-px w-7 bg-gradient-to-l from-transparent to-primary/55" />
         </div>
 
-        <h2 className="font-display text-[20px] font-semibold tracking-[-0.02em] text-white md:text-[22px]">
-          Po hapim hapësirën
+        <h2 className="font-display text-lg font-medium tracking-[-0.01em] text-white md:text-xl">
+          Duke hapur turin 360°
         </h2>
 
-        <p className="mx-auto mt-2 min-h-[40px] max-w-[300px] text-[12px] leading-5 text-white/52">
-          {showFirstLoadHint
-            ? "Hapja e parë mund të zgjasë pak. Pamjet e radhës do të hapen më shpejt."
-            : "Pamja e parë po përgatitet me cilësi të lartë."}
-        </p>
+        {/* Shfaqet vetëm kur ngarkimi zgjat më shumë */}
+        {showFirstLoadHint && (
+          <p className="mt-3 max-w-[270px] text-[11px] leading-5 text-white/50">
+            Hapja e parë mund të zgjasë pak. Pamjet e radhës do të
+            hapen më shpejt.
+          </p>
+        )}
 
-        <div className="mx-auto mt-6 h-px w-44 overflow-hidden bg-white/10">
+        <div className="mx-auto mt-5 h-px w-36 overflow-hidden bg-white/15">
           <div className="virtual-tour-loader__progress h-full w-[42%]" />
         </div>
 
         <span className="sr-only">
-          Duke përgatitur turin virtual.
+          Po përgatitet pamja e parë e turit virtual.
         </span>
       </div>
     </div>
