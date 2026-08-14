@@ -23,10 +23,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   const navLinks = [
-    { name: "Kryefaqja", href: "/" },
-    { name: "Prona", href: "/projects" },
+    { name: "Ballina", href: "/" },
+    { name: "Pronat", href: "/projects" },
     { name: "Rreth Nesh", href: "/about" },
-    { name: "Kontakt", href: "/contact" },
+    { name: "Kontakti", href: "/contact" },
   ];
 
   if (isAdmin) {
@@ -169,7 +169,7 @@ className={`text-sm font-medium tracking-wide uppercase transition-all hover:tex
       </div>
 
       <div>
-        <h4 className="font-display text-lg text-white mb-6">Kontakt</h4>
+        <h4 className="font-display text-lg text-white mb-6">Kontakti</h4>
 
         <ul className="space-y-4 text-white/85">
           <li className="flex items-start gap-3">
