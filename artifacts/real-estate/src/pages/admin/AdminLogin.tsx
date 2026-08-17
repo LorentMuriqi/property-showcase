@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
@@ -18,6 +19,12 @@ export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+const [captchaVersion, setCaptchaVersion] = useState(0);
+
+const adminTurnstileSiteKey =
+  import.meta.env.VITE_TURNSTILE_ADMIN_SITE_KEY;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,15 +40,29 @@ export default function AdminLogin() {
       return;
     }
 
+if (!captchaToken) {
+  toast({
+    title: "Verifikimi i sigurisë",
+    description: "Ju lutemi përfundoni verifikimin e sigurisë.",
+    variant: "destructive",
+  });
+  return;
+}
+
     try {
       setIsSubmitting(true);
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: usernameToEmail(normalized),
-        password,
-      });
+const { error } = await supabase.auth.signInWithPassword({
+  email: usernameToEmail(normalized),
+  password,
+  options: {
+    captchaToken,
+  },
+});
 
       if (error) {
+		  setCaptchaToken(null);
+setCaptchaVersion((prev) => prev + 1);
         toast({
           title: "Hyrja u Refuzua",
           description: "Username ose password i pasaktë.",
@@ -88,7 +109,7 @@ export default function AdminLogin() {
             />
           </div>
 
-          <div>
+                    <div>
             <label className="block text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">
               Password
             </label>
@@ -102,10 +123,20 @@ export default function AdminLogin() {
             />
           </div>
 
+          {adminTurnstileSiteKey && (
+            <div className="flex justify-center">
+              <TurnstileWidget
+                key={captchaVersion}
+                siteKey={adminTurnstileSiteKey}
+                onVerify={setCaptchaToken}
+              />
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors disabled:opacity-50"
+            disabled={isSubmitting || !captchaToken}
+            className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-white hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Duke hyrë..." : "Hyr"}
           </button>
