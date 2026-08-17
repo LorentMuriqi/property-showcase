@@ -292,7 +292,7 @@ className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground pla
   </div>
 )}
 
-                <button type="submit" disabled={!turnstileToken} className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors mt-4">
+                <button type="submit" className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors mt-4">
                   Dërgo Kërkesën
                 </button>
               </form>
