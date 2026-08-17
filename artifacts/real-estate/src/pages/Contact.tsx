@@ -3,6 +3,7 @@ import { Mail, MapPin, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 
 export default function Contact() {
@@ -22,6 +23,12 @@ const PHONE_LENGTHS: Record<string, number> = {
 const [countryCode, setCountryCode] = useState("+383");
 const [phoneNumber, setPhoneNumber] = useState("");
 const [phoneTouched, setPhoneTouched] = useState(false);
+
+const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+const [captchaVersion, setCaptchaVersion] = useState(0);
+
+const turnstileSiteKey =
+  import.meta.env.VITE_TURNSTILE_CONTACT_SITE_KEY;
 
 const sanitizePhone = (value: string) => value.replace(/\D/g, "");
 
@@ -68,7 +75,7 @@ if (
     });
     return;
   }
-  if (!isPhoneValid(payload.countryCode, payload.phoneNumber)) {
+if (!isPhoneValid(payload.countryCode, payload.phoneNumber)) {
   setPhoneTouched(true);
   toast({
     title: "Gabim",
@@ -78,13 +85,25 @@ if (
   return;
 }
 
-  try {
+if (!turnstileToken) {
+  toast({
+    title: "Verifikimi i sigurisë",
+    description: "Ju lutemi përfundoni verifikimin e sigurisë.",
+    variant: "destructive",
+  });
+  return;
+}
+
+try {
     const res = await fetch("/api/contact", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+  ...payload,
+  turnstileToken,
+}),
     });
 
 
@@ -107,19 +126,25 @@ if (!res.ok) {
 
 
 
-    toast({
-      title: "Kërkesa u Pranua",
-      description: "Mesazhi u dërgua me sukses. Do t'ju kontaktojmë së shpejti.",
-    });
+toast({
+  title: "Kërkesa u Pranua",
+  description: "Mesazhi u dërgua me sukses. Do t'ju kontaktojmë së shpejti.",
+});
 
-    form.reset();
-  } catch (error: any) {
-    toast({
-      title: "Gabim",
-      description: error.message || "Nuk u dërgua mesazhi.",
-      variant: "destructive",
-    });
-  }
+form.reset();
+
+setTurnstileToken(null);
+setCaptchaVersion((prev) => prev + 1);
+} catch (error: any) {
+  setTurnstileToken(null);
+  setCaptchaVersion((prev) => prev + 1);
+
+  toast({
+    title: "Gabim",
+    description: error.message || "Nuk u dërgua mesazhi.",
+    variant: "destructive",
+  });
+}
 };
 
   return (
@@ -256,8 +281,18 @@ className={`w-full bg-background border rounded-xl px-4 py-3 text-foreground pla
                   <label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Mesazhi</label>
                  <textarea name="message" required rows={4} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary transition-colors resize-none"></textarea>
                 </div>
+				
+				{turnstileSiteKey && (
+  <div className="flex justify-center">
+    <TurnstileWidget
+      key={captchaVersion}
+      siteKey={turnstileSiteKey}
+      onVerify={setTurnstileToken}
+    />
+  </div>
+)}
 
-                <button type="submit" className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors mt-4">
+                <button type="submit" disabled={!turnstileToken} className="w-full py-4 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-sm rounded-xl hover:bg-primary/90 transition-colors mt-4">
                   Dërgo Kërkesën
                 </button>
               </form>

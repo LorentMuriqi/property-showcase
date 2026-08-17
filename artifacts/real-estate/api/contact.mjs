@@ -21,19 +21,95 @@ const isPhoneValid = (code, phone) => {
 };
 
 
+async function verifyTurnstile(token) {
+  const secret = process.env.TURNSTILE_CONTACT_SECRET_KEY;
+
+  if (!secret || !token) {
+    return {
+      success: false,
+      "error-codes": ["missing-input"],
+    };
+  }
+
+  const response = await fetch(
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        secret,
+        response: token,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    return {
+      success: false,
+      "error-codes": ["siteverify-request-failed"],
+    };
+  }
+
+  return response.json();
+}
+
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ message: "Method not allowed" });
     }
 
-    const { firstName, lastName, email, countryCode, phoneNumber, requestType, message } = req.body || {};
+    const {
+      firstName,
+      lastName,
+      email,
+      countryCode,
+      phoneNumber,
+      requestType,
+      message,
+      turnstileToken,
+    } = req.body || {};
 
-if (!isPhoneValid(countryCode, phoneNumber)) {
-  return res.status(400).json({
-    message: "Numri i telefonit është i pavlefshëm.",
-  });
-}
+    // 1. Kontrollo nëse Turnstile token ekziston
+    if (!turnstileToken) {
+      return res.status(400).json({
+        message: "Verifikimi i sigurisë mungon.",
+      });
+    }
+
+    // 2. Verifiko token-in me Cloudflare
+    const turnstileResult = await verifyTurnstile(turnstileToken);
+
+    const allowedHostnames = new Set([
+      "auraks.com",
+      "www.auraks.com",
+      "property-showcase-real-estate.vercel.app",
+    ]);
+
+    if (
+      !turnstileResult.success ||
+      !allowedHostnames.has(turnstileResult.hostname)
+    ) {
+      console.warn("Turnstile verification failed:", {
+        hostname: turnstileResult.hostname,
+        errorCodes: turnstileResult["error-codes"],
+      });
+
+      return res.status(400).json({
+        message:
+          "Verifikimi i sigurisë dështoi. Ju lutemi provoni përsëri.",
+      });
+    }
+
+    // 3. Kontrollo telefonin
+    if (!isPhoneValid(countryCode, phoneNumber)) {
+      return res.status(400).json({
+        message: "Numri i telefonit është i pavlefshëm.",
+      });
+    }
 
     if (!firstName || !lastName || !countryCode || !phoneNumber || !requestType || !message) {
       return res.status(400).json({
