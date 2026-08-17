@@ -51,7 +51,7 @@ export default function TurnstileWidget({
       widgetId = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
         theme: "auto",
-        appearance: "interaction-only",
+        appearance: "always",
 
         callback: (token) => {
           callbackRef.current(token);
