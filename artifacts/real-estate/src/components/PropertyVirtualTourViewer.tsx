@@ -16,6 +16,9 @@ export default function PropertyVirtualTourViewer({
 }) {
   const [scenes, setScenes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [showAura360Branding, setShowAura360Branding] =
+  useState(true);
 
   useEffect(() => {
     const loadScenes = async () => {
