@@ -6,11 +6,12 @@ import { VirtualTour360 } from "@/components/VirtualTour360";
 type PublicTourResponse = {
   available: boolean;
   reason?: string;
-  tour?: {
-    id: string;
-    title: string;
-    expiresAt: string | null;
-  };
+tour?: {
+  id: string;
+  title: string;
+  expiresAt: string | null;
+  showAura360Branding: boolean;
+};
   scenes?: any[];
 };
 
@@ -71,12 +72,17 @@ export default function PublicClientVirtualTour() {
   const defaultScene = data.scenes.find((scene) => scene.isDefault);
 
   return (
-    <VirtualTour360
-      scenes={data.scenes}
-      defaultSceneId={defaultScene?.id ?? data.scenes[0]?.id}
-      onClose={() => {
-        window.history.back();
-      }}
-    />
+<VirtualTour360
+  scenes={data.scenes}
+  defaultSceneId={
+    defaultScene?.id ?? data.scenes[0]?.id
+  }
+  showAura360Branding={
+    data.tour?.showAura360Branding ?? true
+  }
+  onClose={() => {
+    window.history.back();
+  }}
+/>
   );
 }

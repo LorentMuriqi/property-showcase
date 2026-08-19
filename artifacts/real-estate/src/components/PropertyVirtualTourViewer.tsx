@@ -21,17 +21,27 @@ export default function PropertyVirtualTourViewer({
     const loadScenes = async () => {
       setLoading(true);
 
-	  const { data: propertyData, error: propertyError } = await supabase
-  .from("properties")
-  .select("virtual_tour_status")
-  .eq("id", propertyId)
-  .single();
+const { data: propertyData, error: propertyError } =
+  await supabase
+    .from("properties")
+    .select(
+      "virtual_tour_status, show_aura360_branding",
+    )
+    .eq("id", propertyId)
+    .single();
 
-if (propertyError || propertyData?.virtual_tour_status !== "published") {
+if (
+  propertyError ||
+  propertyData?.virtual_tour_status !== "published"
+) {
   setScenes([]);
   setLoading(false);
   return;
 }
+
+setShowAura360Branding(
+  propertyData.show_aura360_branding ?? true,
+);
 
 
 
@@ -133,11 +143,12 @@ const normalized = sceneData.map((scene) => ({
   if (scenes.length > 0) {
     const defaultScene = scenes.find((s) => s.isDefault);
     return (
-      <VirtualTour360
-        scenes={scenes}
-        defaultSceneId={defaultScene?.id ?? scenes[0]?.id}
-        onClose={onClose}
-      />
+<VirtualTour360
+  scenes={scenes}
+  defaultSceneId={defaultScene?.id ?? scenes[0]?.id}
+  onClose={onClose}
+  showAura360Branding={showAura360Branding}
+/>
     );
   }
 

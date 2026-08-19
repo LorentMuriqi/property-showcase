@@ -39,6 +39,8 @@ interface VirtualTour360Props {
   }>;
   defaultSceneId?: number | null;
   onClose?: () => void;
+  
+  showAura360Branding?: boolean;
 }
 
 type SceneType = VirtualTour360Props["scenes"][number];
@@ -513,6 +515,7 @@ export function VirtualTour360({
   scenes,
   defaultSceneId,
   onClose,
+  showAura360Branding = true,
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -1759,6 +1762,29 @@ neighborhoodWarmupCleanupRef.current = null;
             </h2>
           </div>
         </div>
+		
+		
+		{showAura360Branding && isViewerVisible && (
+  <div
+    className="absolute left-4 z-40 pointer-events-none select-none"
+    style={{
+      bottom:
+        "calc(6rem + max(12px, env(safe-area-inset-bottom)))",
+    }}
+    aria-hidden="true"
+  >
+    <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 shadow-lg md:backdrop-blur-md">
+      <span className="text-[9px] md:text-[10px] font-medium tracking-wide text-white/55">
+        Powered by
+      </span>
+
+      <span className="text-[10px] md:text-[11px] font-semibold tracking-[0.08em] text-primary">
+        Aura360
+      </span>
+    </div>
+  </div>
+)}
+		
 
         <div className="absolute bottom-24 right-6 z-40 hidden lg:flex flex-col gap-3">
           {hasMap && (

@@ -112,6 +112,8 @@ type Project = {
   virtual_tour_published_at?: string | null;
   tour_expires_at?: string | null;
   paused_at?: string | null;
+  
+  show_aura360_branding?: boolean;
 };
 
 type HotspotFormState = {
@@ -471,6 +473,8 @@ export default function AdminVirtualTour() {
     useState<TargetViewCapture | null>(null);
 
   const [expiresAtInput, setExpiresAtInput] = useState<string>("");
+  
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
 
   const [isEditHotspotModalOpen, setIsEditHotspotModalOpen] = useState(false);
   const [editingHotspot, setEditingHotspot] = useState<HotspotFormState | null>(
@@ -720,19 +724,21 @@ export default function AdminVirtualTour() {
 
     const currentSelectedSceneId = selectedSceneIdRef.current;
 
-    const { data: rawRecordData, error: recordError } = isClientTourEditor
-      ? await supabase
-          .from("virtual_tours")
-          .select(
-            "id, title, status, client_token, expires_at, activated_at, paused_at",
-          )
-          .eq("id", recordId)
-          .single()
-      : await supabase
-          .from("properties")
-          .select("id, title, virtual_tour_status, virtual_tour_published_at")
-          .eq("id", recordId)
-          .single();
+const { data: rawRecordData, error: recordError } = isClientTourEditor
+  ? await supabase
+      .from("virtual_tours")
+      .select(
+        "id, title, status, client_token, expires_at, activated_at, paused_at, show_aura360_branding",
+      )
+      .eq("id", recordId)
+      .single()
+  : await supabase
+      .from("properties")
+      .select(
+        "id, title, virtual_tour_status, virtual_tour_published_at, show_aura360_branding",
+      )
+      .eq("id", recordId)
+      .single();
 
     if (recordError || !rawRecordData) {
       toast({
@@ -754,12 +760,16 @@ export default function AdminVirtualTour() {
           tour_expires_at: rawRecordData.expires_at,
           virtual_tour_published_at: rawRecordData.activated_at,
           paused_at: rawRecordData.paused_at,
+		show_aura360_branding:
+        rawRecordData.show_aura360_branding ?? true,		  
         }
       : {
           id: rawRecordData.id,
           title: rawRecordData.title || "Pronë",
           virtual_tour_status: rawRecordData.virtual_tour_status || "draft",
           virtual_tour_published_at: rawRecordData.virtual_tour_published_at,
+		show_aura360_branding:
+        rawRecordData.show_aura360_branding ?? true,		  
         };
 
     const { data: scenesData, error: scenesError } = await supabase
@@ -1153,6 +1163,53 @@ export default function AdminVirtualTour() {
         description: error.message || "Ruajtja e datës dështoi.",
         variant: "destructive",
       });
+    }
+  };
+  
+    const handleAura360BrandingChange = async (enabled: boolean) => {
+    if (!project || !recordId || isSavingBranding) return;
+
+    try {
+      setIsSavingBranding(true);
+
+      const { error } = await supabase.rpc(
+        "set_virtual_tour_branding",
+        {
+          p_owner_type: isClientTourEditor
+            ? "client"
+            : "property",
+          p_owner_id: recordId,
+          p_enabled: enabled,
+        },
+      );
+
+      if (error) throw error;
+
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              show_aura360_branding: enabled,
+            }
+          : prev,
+      );
+
+      toast({
+        title: "Branding u ruajt",
+        description: enabled
+          ? "“Powered by Aura360” do të shfaqet në turin virtual."
+          : "“Powered by Aura360” nuk do të shfaqet në këtë tur.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gabim",
+        description:
+          error?.message ||
+          "Nuk u ruajt konfigurimi i branding-ut.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingBranding(false);
     }
   };
 
@@ -2950,6 +3007,41 @@ export default function AdminVirtualTour() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 space-y-8">
+	  
+	  <div className="glass-panel rounded-2xl border border-border px-5 py-4">
+  <label className="flex items-center justify-between gap-5 cursor-pointer">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-foreground">
+          Aura360 Branding
+        </span>
+
+        <span className="text-[10px] uppercase tracking-widest text-primary border border-primary/25 bg-primary/5 px-2 py-1 rounded-full">
+          Default On
+        </span>
+      </div>
+
+      <p className="text-sm text-muted-foreground mt-1">
+        Shfaq “Powered by Aura360” në turin virtual publik.
+      </p>
+    </div>
+
+    <input
+      type="checkbox"
+      checked={project?.show_aura360_branding ?? true}
+      disabled={!project || isSavingBranding}
+      onChange={(event) =>
+        void handleAura360BrandingChange(
+          event.target.checked,
+        )
+      }
+      className="h-5 w-5 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+      aria-label="Shfaq Powered by Aura360"
+    />
+  </label>
+</div>
+	  
+	  
         <div
           className={`glass-panel p-6 rounded-2xl border ${
             tourReadiness.isReady
