@@ -1773,15 +1773,15 @@ neighborhoodWarmupCleanupRef.current = null;
     }}
     aria-hidden="true"
   >
-    <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 shadow-lg md:backdrop-blur-md">
-      <span className="text-[9px] md:text-[10px] font-medium tracking-wide text-white/55">
-        Powered by
-      </span>
+<div className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-black/30 px-2.5 py-1 shadow-md md:backdrop-blur-md">
+  <span className="text-[8px] md:text-[9px] font-medium tracking-wide text-white/45">
+    Powered by
+  </span>
 
-      <span className="text-[10px] md:text-[11px] font-semibold tracking-[0.08em] text-primary">
-        Aura360
-      </span>
-    </div>
+  <span className="text-[9px] md:text-[10px] font-semibold tracking-[0.08em] text-primary/85">
+    Aura360
+  </span>
+</div>
   </div>
 )}
 		
