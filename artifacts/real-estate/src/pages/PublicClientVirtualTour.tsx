@@ -80,9 +80,7 @@ export default function PublicClientVirtualTour() {
   showAura360Branding={
     data.tour?.showAura360Branding ?? true
   }
-  onClose={() => {
-    window.history.back();
-  }}
+}
 />
   );
 }

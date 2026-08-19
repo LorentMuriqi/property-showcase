@@ -1671,6 +1671,7 @@ neighborhoodWarmupCleanupRef.current = null;
       >
         <X size={22} />
       </button>
+	  )}
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
        
