@@ -1769,7 +1769,7 @@ neighborhoodWarmupCleanupRef.current = null;
     className="absolute left-4 z-40 pointer-events-none select-none"
     style={{
       bottom:
-        "calc(6rem + max(12px, env(safe-area-inset-bottom)))",
+        "calc(4.75rem + max(12px, env(safe-area-inset-bottom)))",
     }}
     aria-hidden="true"
   >
