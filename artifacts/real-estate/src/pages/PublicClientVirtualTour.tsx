@@ -74,13 +74,10 @@ export default function PublicClientVirtualTour() {
   return (
 <VirtualTour360
   scenes={data.scenes}
-  defaultSceneId={
-    defaultScene?.id ?? data.scenes[0]?.id
-  }
+  defaultSceneId={defaultScene?.id ?? data.scenes[0]?.id}
   showAura360Branding={
     data.tour?.showAura360Branding ?? true
   }
-}
 />
   );
 }
