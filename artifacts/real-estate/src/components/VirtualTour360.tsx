@@ -1653,25 +1653,26 @@ neighborhoodWarmupCleanupRef.current = null;
   
 `}</style>
 
-      <button
-        onPointerUp={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          handleCloseTour();
-        }}
-        className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
-        style={{
-          top: "max(12px, env(safe-area-inset-top))",
-          right: "max(12px, env(safe-area-inset-right))",
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-        aria-label="Mbyll turin virtual"
-        type="button"
-      >
-        <X size={22} />
-      </button>
-	  )}
+{onClose && (
+  <button
+    onPointerUp={(event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handleCloseTour();
+    }}
+    className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
+    style={{
+      top: "max(12px, env(safe-area-inset-top))",
+      right: "max(12px, env(safe-area-inset-right))",
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent",
+    }}
+    aria-label="Mbyll turin virtual"
+    type="button"
+  >
+    <X size={22} />
+  </button>
+)}
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
        
