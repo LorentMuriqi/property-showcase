@@ -28,10 +28,17 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
+
+    // Runtime error overlay vetëm gjatë development.
+    ...(process.env.NODE_ENV !== "production"
+      ? [runtimeErrorOverlay()]
+      : []),
+
+    // Replit development tools vetëm jashtë production.
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
@@ -40,33 +47,76 @@ export default defineConfig({
               root: path.resolve(import.meta.dirname, ".."),
             }),
           ),
+
           await import("@replit/vite-plugin-dev-banner").then((m) =>
             m.devBanner(),
           ),
         ]
       : []),
   ],
+
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+
+      "@assets": path.resolve(
+        import.meta.dirname,
+        "..",
+        "..",
+        "attached_assets",
+      ),
     },
+
     dedupe: ["react", "react-dom"],
   },
+
   root: path.resolve(import.meta.dirname),
-  build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true,
+
+  // Pastro debug information në production.
+  esbuild: {
+    drop: ["debugger"],
+
+    pure:
+      process.env.NODE_ENV === "production"
+        ? [
+            "console.log",
+            "console.debug",
+            "console.info",
+          ]
+        : [],
   },
+
+  build: {
+    outDir: path.resolve(
+      import.meta.dirname,
+      "dist/public",
+    ),
+
+    emptyOutDir: true,
+
+    // Mos publiko source maps.
+    // Kjo pengon rikonstruktimin e lehtë të source code-it origjinal.
+    sourcemap: false,
+
+    // Minifiko JavaScript-in e production.
+    minify: "esbuild",
+  },
+
   server: {
     port,
     host: "0.0.0.0",
+
+    // E nevojshme për development environment-in aktual.
     allowedHosts: true,
+
     fs: {
       strict: true,
+
+      // Mos lejo Vite dev server të shërbejë hidden files.
       deny: ["**/.*"],
     },
   },
+
   preview: {
     port,
     host: "0.0.0.0",
