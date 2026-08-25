@@ -1,5 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Search, ChevronDown, SlidersHorizontal } from "lucide-react";
+import {
+  Bath,
+  BedDouble,
+  Building2,
+  Check,
+  ChevronDown,
+  Euro,
+  MapPin,
+  Maximize2,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  Tag,
+  X,
+} from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { ProjectCard } from "@/components/ProjectCard";
 import { supabase } from "@/lib/supabase";
@@ -12,7 +26,7 @@ const PROJECTS_RESTORE_SCROLL_KEY = "projects-restore-scroll";
 const PROJECTS_ACTIVE_CARD_ID_KEY = "projects-active-card-id";
 const PROJECTS_ACTIVE_CARD_TOP_KEY = "projects-active-card-top";
 
-const PROJECTS_LIST_CACHE_KEY = "projects-list-cache-v1";
+const PROJECTS_LIST_CACHE_KEY = "projects-list-cache-v2";
 const PROJECTS_LIST_CACHE_TTL = 5 * 60 * 1000;
 
 type ProjectsListCache = {
@@ -125,6 +139,17 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "for_rent", label: "Me Qira" },
 ];
 
+const ROOM_PLUS_VALUE = 5;
+
+const ROOM_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: "Të gjitha" },
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4" },
+  { value: ROOM_PLUS_VALUE, label: `${ROOM_PLUS_VALUE}+` },
+];
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const formatPrice = (val: number, currency = "EUR") => {
   if (val >= 1_000_000)
@@ -132,6 +157,29 @@ const formatPrice = (val: number, currency = "EUR") => {
   if (val >= 1_000) return `${Math.round(val / 1_000)}K ${currency}`;
   return `${val} ${currency}`;
 };
+
+const formatResultCount = (count: number) =>
+  `${count} ${count === 1 ? "pronë" : "prona"}`;
+
+const formatRoomFilterLabel = (
+  value: number,
+  singular: string,
+  plural: string
+) => {
+  const amount =
+    value >= ROOM_PLUS_VALUE ? `${ROOM_PLUS_VALUE}+` : String(value);
+
+  return `${amount} ${value === 1 ? singular : plural}`;
+};
+
+const getSearchTerms = (value: string) =>
+  value
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .slice(0, 8);
 
 // ─── Range Slider ─────────────────────────────────────────────────────────────
 interface RangeSliderProps {
@@ -211,54 +259,124 @@ function RangeSlider({ min, max, value, onChange, formatLabel, step = 1 }: Range
 // ─── Accordion section helper ──────────────────────────────────────────────
 function FilterSection({
   title,
+  icon,
   children,
   defaultOpen = true,
-  badge,
+  badge = 0,
 }: {
   title: string;
+  icon: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
   badge?: number;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const isActive = badge > 0;
+
   return (
-    <div className="border-b border-border last:border-0 pb-5 last:pb-0">
+    <section
+      className={`overflow-hidden rounded-[18px] border transition-colors duration-200 ${
+        isActive
+          ? "border-primary/[0.35] bg-primary/[0.035]"
+          : "border-border/70 bg-background/35"
+      }`}
+    >
       <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between py-1 mb-3 group"
         type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        className="group flex w-full items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/[0.35]"
       >
-        <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">
-          {title}
-          {!!badge && (
-            <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-              {badge}
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+            isActive
+              ? "border-primary/30 bg-primary/10 text-primary"
+              : "border-border/70 bg-card text-muted-foreground group-hover:text-primary"
+          }`}
+        >
+          {icon}
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold tracking-[0.025em] text-foreground">
+            {title}
+          </span>
+          {isActive && (
+            <span className="mt-0.5 block text-[10px] font-medium text-primary">
+              {badge === 1 ? "1 filtër aktiv" : `${badge} filtra aktivë`}
             </span>
           )}
         </span>
+
         <ChevronDown
           size={16}
-          className={`text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
         />
       </button>
-      {open && <div>{children}</div>}
-    </div>
+
+      {open && (
+        <div className="border-t border-border/60 px-4 pb-4 pt-4">
+          {children}
+        </div>
+      )}
+    </section>
   );
 }
 
 // ─── Active filter chip ───────────────────────────────────────────────────
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-semibold">
-      {label}
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/25 bg-primary/[0.075] py-1.5 pl-3 pr-1.5 text-xs font-semibold text-primary shadow-sm">
+      <span className="max-w-[230px] truncate">{label}</span>
       <button
-        onClick={onRemove}
-        className="ml-0.5 hover:text-foreground transition-colors"
         type="button"
+        onClick={onRemove}
+        aria-label={`Hiq filtrin: ${label}`}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-primary/[0.15] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/[0.35]"
       >
         <X size={12} />
       </button>
     </span>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  disabled = false,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      <span className="relative block">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          aria-label={label}
+          className="h-12 w-full appearance-none rounded-xl border border-border/80 bg-background px-3.5 pr-10 text-sm font-medium text-foreground outline-none transition-all hover:border-primary/[0.35] focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {children}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          size={15}
+          className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
+      </span>
+    </label>
   );
 }
 
@@ -280,10 +398,13 @@ const parseNumberParam = (value: string | null, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const parseNullableNumberParam = (value: string | null) => {
+const parseRoomParam = (value: string | null) => {
   if (!value) return null;
+
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (!Number.isInteger(parsed) || parsed < 1) return null;
+
+  return Math.min(parsed, ROOM_PLUS_VALUE);
 };
 
 function useDebouncedValue<T>(value: T, delay = 350) {
@@ -329,11 +450,11 @@ const [areaRange, setAreaRange] = useState<[number, number]>([
 ]);
 
 const [bedroomsMin, setBedroomsMin] = useState<number | null>(
-  parseNullableNumberParam(searchParams.get("beds"))
+  parseRoomParam(searchParams.get("beds"))
 );
 
 const [bathroomsMin, setBathroomsMin] = useState<number | null>(
-  parseNullableNumberParam(searchParams.get("baths"))
+  parseRoomParam(searchParams.get("baths"))
 );
 
 const debouncedSearch = useDebouncedValue(search.trim(), 350);
@@ -386,13 +507,12 @@ const [totalCount, setTotalCount] = useState(
 
   // ── Derived: active filter count (for badge on mobile button) ─────────
   const activeServerFilters = [
-  country,
-  city,
-  search,
-  statusFilter,
-  propertyType,
-  sortBy !== "relevance" ? sortBy : "",
-].filter(Boolean).length;
+    country,
+    city,
+    search.trim(),
+    statusFilter,
+    propertyType,
+  ].filter(Boolean).length;
 
   const activeClientFilters = [
     priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX,
@@ -643,17 +763,30 @@ if (priceMax < PRICE_MAX) query = query.lte("price", priceMax);
 if (areaMin > AREA_MIN) query = query.gte("area_m2", areaMin);
 if (areaMax < AREA_MAX) query = query.lte("area_m2", areaMax);
 
-if (bedroomsMin !== null) query = query.gte("bedrooms", bedroomsMin);
-if (bathroomsMin !== null) query = query.gte("bathrooms", bathroomsMin);
+if (bedroomsMin !== null) {
+  query =
+    bedroomsMin >= ROOM_PLUS_VALUE
+      ? query.gte("bedrooms", ROOM_PLUS_VALUE)
+      : query.eq("bedrooms", bedroomsMin);
+}
 
-if (debouncedSearch) {
-  const safeSearch = debouncedSearch.replace(/[%_,]/g, " ").trim();
+if (bathroomsMin !== null) {
+  query =
+    bathroomsMin >= ROOM_PLUS_VALUE
+      ? query.gte("bathrooms", ROOM_PLUS_VALUE)
+      : query.eq("bathrooms", bathroomsMin);
+}
 
-  if (safeSearch) {
-    query = query.or(
-      `title.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,address.ilike.%${safeSearch}%,city.ilike.%${safeSearch}%,country.ilike.%${safeSearch}%`
-    );
-  }
+for (const term of getSearchTerms(debouncedSearch)) {
+  query = query.or(
+    [
+      `title.ilike.%${term}%`,
+      `description.ilike.%${term}%`,
+      `address.ilike.%${term}%`,
+      `city.ilike.%${term}%`,
+      `country.ilike.%${term}%`,
+    ].join(",")
+  );
 }
 
 if (sortBy === "price_asc") {
@@ -858,58 +991,123 @@ const clearAllFilters = () => {
 
   // ── Active chips data ─────────────────────────────────────────────────
   const activeChips: { label: string; onRemove: () => void }[] = [
-    ...(search ? [{ label: `"${search}"`, onRemove: () => setSearch("") }] : []),
-    ...(country ? [{ label: country, onRemove: () => { setCountry(""); setCity(""); } }] : []),
+    ...(search.trim()
+      ? [{ label: `Kërko: “${search.trim()}”`, onRemove: () => setSearch("") }]
+      : []),
+    ...(country
+      ? [
+          {
+            label: country,
+            onRemove: () => {
+              setCountry("");
+              setCity("");
+            },
+          },
+        ]
+      : []),
     ...(city ? [{ label: city, onRemove: () => setCity("") }] : []),
     ...(statusFilter
-      ? [{ label: STATUS_OPTIONS.find((s) => s.value === statusFilter)?.label || statusFilter, onRemove: () => setStatusFilter("") }]
+      ? [
+          {
+            label:
+              STATUS_OPTIONS.find((status) => status.value === statusFilter)
+                ?.label || statusFilter,
+            onRemove: () => setStatusFilter(""),
+          },
+        ]
       : []),
     ...(propertyType
-      ? [{ label: PROPERTY_TYPES.find((t) => t.value === propertyType)?.label || propertyType, onRemove: () => setPropertyType("") }]
+      ? [
+          {
+            label:
+              PROPERTY_TYPES.find((type) => type.value === propertyType)?.label ||
+              propertyType,
+            onRemove: () => setPropertyType(""),
+          },
+        ]
       : []),
     ...(priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX
-      ? [{
-          label: `${formatPrice(priceRange[0])} – ${formatPrice(priceRange[1])}`,
-          onRemove: () => setPriceRange([PRICE_MIN, PRICE_MAX]),
-        }]
+      ? [
+          {
+            label: `${formatPrice(priceRange[0])} – ${
+              priceRange[1] === PRICE_MAX
+                ? "2M+ EUR"
+                : formatPrice(priceRange[1])
+            }`,
+            onRemove: () => setPriceRange([PRICE_MIN, PRICE_MAX]),
+          },
+        ]
       : []),
     ...(areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX
-      ? [{
-          label: `${areaRange[0]}–${areaRange[1]} m²`,
-          onRemove: () => setAreaRange([AREA_MIN, AREA_MAX]),
-        }]
+      ? [
+          {
+            label: `${areaRange[0]}–${
+              areaRange[1] === AREA_MAX ? `${AREA_MAX}+` : areaRange[1]
+            } m²`,
+            onRemove: () => setAreaRange([AREA_MIN, AREA_MAX]),
+          },
+        ]
       : []),
     ...(bedroomsMin !== null
-      ? [{ label: `${bedroomsMin}+ dhoma gjumi`, onRemove: () => setBedroomsMin(null) }]
+      ? [
+          {
+            label: formatRoomFilterLabel(
+              bedroomsMin,
+              "dhomë gjumi",
+              "dhoma gjumi"
+            ),
+            onRemove: () => setBedroomsMin(null),
+          },
+        ]
       : []),
     ...(bathroomsMin !== null
-      ? [{ label: `${bathroomsMin}+ banjo`, onRemove: () => setBathroomsMin(null) }]
+      ? [
+          {
+            label: formatRoomFilterLabel(bathroomsMin, "banjo", "banjo"),
+            onRemove: () => setBathroomsMin(null),
+          },
+        ]
       : []),
   ];
 
-  // ── Bedroom / bathroom quick-select buttons ───────────────────────────
+  // ── Bedroom / bathroom exact-select buttons ──────────────────────────
   const RoomButtons = ({
     value,
     onChange,
+    label,
   }: {
     value: number | null;
-    onChange: (v: number | null) => void;
+    onChange: (value: number | null) => void;
+    label: string;
   }) => (
-    <div className="flex gap-2 flex-wrap">
-      {[null, 1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n ?? "any"}
-          type="button"
-          onClick={() => onChange(value === n ? null : n)}
-          className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
-            value === n
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-          }`}
-        >
-          {n === null ? "Të gjitha" : n === 5 ? "5+" : String(n)}
-        </button>
-      ))}
+    <div>
+      <div className="grid grid-cols-3 gap-2">
+        {ROOM_OPTIONS.map((option) => {
+          const isSelected = value === option.value;
+
+          return (
+            <button
+              key={option.value ?? "all"}
+              type="button"
+              aria-pressed={isSelected}
+              aria-label={`${option.label} ${label}`}
+              onClick={() => onChange(option.value)}
+              className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl border px-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/[0.35] ${
+                isSelected
+                  ? "border-primary bg-primary text-primary-foreground shadow-[0_8px_20px_rgba(212,175,55,0.18)]"
+                  : "border-border/80 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              {isSelected && <Check size={13} strokeWidth={2.4} />}
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        1–4 shfaqin vetëm numrin e zgjedhur. 5+ përfshin pesë ose më shumë.
+      </p>
     </div>
   );
 
@@ -918,194 +1116,324 @@ const clearAllFilters = () => {
   // ─────────────────────────────────────────────────────────────────────
 
   const FilterPanel = (
-    <div className="glass-panel p-5 rounded-2xl sticky top-24 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-display text-xl text-foreground flex items-center gap-2">
-          <SlidersHorizontal size={18} className="text-primary" />
-          Filtrat
-        </h3>
-        {totalActiveFilters > 0 && (
-          <button
-            onClick={clearAllFilters}
-            className="text-xs text-primary hover:text-foreground flex items-center gap-1 font-medium transition-colors"
-            type="button"
-          >
-            <X size={13} /> Pastro të gjitha
-          </button>
-        )}
-      </div>
+    <aside id="projects-filter-panel" className="lg:sticky lg:top-24">
+      <div className="relative overflow-hidden rounded-[26px] border border-border/80 bg-card shadow-[0_24px_70px_rgba(15,23,42,0.09)]">
+        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-primary/80 to-transparent" />
 
-      {/* Search */}
-      <FilterSection title="Kërko">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Fjalë kyçe, adresë..."
-            className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-            value={search}
-onChange={(e) => {
-  setSearch(e.target.value);
-}}
-          />
-        </div>
-      </FilterSection>
+        <div className="border-b border-border/70 px-5 pb-5 pt-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                <SlidersHorizontal size={20} strokeWidth={1.8} />
+              </span>
 
-      {/* Lloji i transaksionit */}
-      <FilterSection title="Lloji i Transaksionit" badge={statusFilter ? 1 : 0}>
-        <div className="flex gap-2">
-          {STATUS_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                
-                setStatusFilter(statusFilter === opt.value ? "" : opt.value);
-              }}
-              className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-all ${
-                statusFilter === opt.value
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </FilterSection>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+                  Kërkim i avancuar
+                </p>
+                <h3 className="mt-1 font-display text-xl font-bold text-foreground">
+                  Filtrat e pronave
+                </h3>
+                <p
+                  aria-live="polite"
+                  className="mt-1 text-xs text-muted-foreground"
+                >
+                  {isLoading
+                    ? "Duke përditësuar rezultatet..."
+                    : `${formatResultCount(totalCount)} të gjetura`}
+                </p>
+              </div>
+            </div>
 
-      {/* Lloji i pronës */}
-<FilterSection title="Lloji i Pronës" badge={propertyType ? 1 : 0} defaultOpen={false}>
-  <select
-    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
-    value={propertyType}
-    onChange={(e) => {
-      
-      setPropertyType(e.target.value);
-    }}
-  >
-    <option value="">Të gjitha llojet</option>
-    {PROPERTY_TYPES.map((opt) => (
-      <option key={opt.value} value={opt.value}>
-        {opt.label}
-      </option>
-    ))}
-  </select>
-</FilterSection>
-
-      {/* Shteti / Qyteti */}
-      <FilterSection title="Vendndodhja" badge={(country ? 1 : 0) + (city ? 1 : 0)}>
-        <div className="space-y-3">
-          <select
-            className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
-            value={country}
-            onChange={(e) => {
-              
-              setCountry(e.target.value);
-              setCity("");
-            }}
-          >
-            <option value="">Të gjitha shtetet</option>
-            {countries.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-
-          <select
-            className={`w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary appearance-none cursor-pointer transition-colors ${
-              !country ? "opacity-50" : ""
-            }`}
-            value={city}
-            onChange={(e) => {
-              
-              setCity(e.target.value);
-            }}
-            disabled={!country}
-          >
-            <option value="">Të gjitha qytetet</option>
-            {cities.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-      </FilterSection>
-
-      {/* Çmimi */}
-<FilterSection
-  title="Çmimi"
-  badge={priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX ? 1 : 0}
-  defaultOpen={false}
->
-        <RangeSlider
-          min={PRICE_MIN}
-          max={PRICE_MAX}
-          step={PRICE_STEP}
-          value={priceRange}
-          onChange={setPriceRange}
-          formatLabel={(v) => formatPrice(v, "EUR")}
-        />
-        {/* Input numerik manual */}
-        <div className="flex gap-2 mt-3">
-          <div className="flex-1">
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Nga</label>
-            <input
-              type="number"
-              min={PRICE_MIN}
-              max={priceRange[1] - PRICE_STEP}
-              step={PRICE_STEP}
-              value={priceRange[0]}
-              onChange={(e) => {
-                const v = Math.max(PRICE_MIN, Math.min(Number(e.target.value), priceRange[1] - PRICE_STEP));
-                setPriceRange([v, priceRange[1]]);
-              }}
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
-            />
+            {totalActiveFilters > 0 && (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/[0.06] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-primary transition-colors hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/[0.35]"
+              >
+                <RotateCcw size={12} />
+                Rivendos
+              </button>
+            )}
           </div>
-          <div className="flex-1">
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Deri</label>
-            <input
-              type="number"
-              min={priceRange[0] + PRICE_STEP}
+        </div>
+
+        <div className="space-y-3 p-3.5">
+          <FilterSection
+            title="Kërko"
+            icon={<Search size={17} strokeWidth={1.9} />}
+            badge={search.trim() ? 1 : 0}
+          >
+            <div className="group relative">
+              <Search
+                size={17}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary"
+              />
+              <input
+                type="text"
+                value={search}
+                maxLength={120}
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="Kërko prona"
+                placeholder="Titull, adresë, qytet..."
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-12 w-full rounded-xl border border-border/80 bg-background pl-10 pr-10 text-sm font-medium text-foreground outline-none transition-all placeholder:font-normal placeholder:text-muted-foreground/80 hover:border-primary/[0.35] focus:border-primary focus:ring-4 focus:ring-primary/10"
+              />
+
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Pastro kërkimin"
+                  className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/[0.35]"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+              Mund të përdorni disa fjalë, p.sh. “vilë Prishtinë”.
+            </p>
+          </FilterSection>
+
+          <FilterSection
+            title="Lloji i transaksionit"
+            icon={<Tag size={17} strokeWidth={1.9} />}
+            badge={statusFilter ? 1 : 0}
+          >
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border/70 bg-muted/20 p-1.5">
+              {[{ value: "", label: "Të gjitha" }, ...STATUS_OPTIONS].map(
+                (option) => {
+                  const isSelected = statusFilter === option.value;
+
+                  return (
+                    <button
+                      key={option.value || "all"}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setStatusFilter(option.value)}
+                      className={`min-h-[40px] rounded-xl px-2 text-[11px] font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/[0.35] ${
+                        isSelected
+                          ? "bg-card text-foreground shadow-sm ring-1 ring-primary/25"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </FilterSection>
+
+          <FilterSection
+            title="Lloji i pronës"
+            icon={<Building2 size={17} strokeWidth={1.9} />}
+            badge={propertyType ? 1 : 0}
+            defaultOpen={false}
+          >
+            <SelectField
+              label="Kategoria"
+              value={propertyType}
+              onChange={setPropertyType}
+            >
+              <option value="">Të gjitha llojet</option>
+              {PROPERTY_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </SelectField>
+          </FilterSection>
+
+          <FilterSection
+            title="Vendndodhja"
+            icon={<MapPin size={17} strokeWidth={1.9} />}
+            badge={(country ? 1 : 0) + (city ? 1 : 0)}
+          >
+            <div className="space-y-3">
+              <SelectField
+                label="Shteti"
+                value={country}
+                onChange={(value) => {
+                  setCountry(value);
+                  setCity("");
+                }}
+              >
+                <option value="">Të gjitha shtetet</option>
+                {countries.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </SelectField>
+
+              <SelectField
+                label="Qyteti"
+                value={city}
+                disabled={!country}
+                onChange={setCity}
+              >
+                <option value="">
+                  {country
+                    ? "Të gjitha qytetet"
+                    : "Zgjidhni fillimisht shtetin"}
+                </option>
+                {cities.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          </FilterSection>
+
+          <FilterSection
+            title="Çmimi"
+            icon={<Euro size={17} strokeWidth={1.9} />}
+            badge={
+              priceRange[0] > PRICE_MIN || priceRange[1] < PRICE_MAX ? 1 : 0
+            }
+            defaultOpen={false}
+          >
+            <RangeSlider
+              min={PRICE_MIN}
               max={PRICE_MAX}
               step={PRICE_STEP}
-              value={priceRange[1]}
-              onChange={(e) => {
-                const v = Math.min(PRICE_MAX, Math.max(Number(e.target.value), priceRange[0] + PRICE_STEP));
-                setPriceRange([priceRange[0], v]);
-              }}
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+              value={priceRange}
+              onChange={setPriceRange}
+              formatLabel={(value) =>
+                value === PRICE_MAX ? "2M+ EUR" : formatPrice(value, "EUR")
+              }
             />
-          </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <label className="block">
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Minimumi
+                </span>
+                <span className="relative block">
+                  <input
+                    type="number"
+                    min={PRICE_MIN}
+                    max={priceRange[1] - PRICE_STEP}
+                    step={PRICE_STEP}
+                    value={priceRange[0]}
+                    onChange={(e) => {
+                      const nextValue = Math.max(
+                        PRICE_MIN,
+                        Math.min(
+                          Number(e.target.value),
+                          priceRange[1] - PRICE_STEP
+                        )
+                      );
+                      setPriceRange([nextValue, priceRange[1]]);
+                    }}
+                    className="h-11 w-full rounded-xl border border-border/80 bg-background px-3 pr-8 text-sm font-medium tabular-nums text-foreground outline-none transition-all hover:border-primary/[0.35] focus:border-primary focus:ring-4 focus:ring-primary/10"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground">
+                    €
+                  </span>
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Maksimumi
+                </span>
+                <span className="relative block">
+                  <input
+                    type="number"
+                    min={priceRange[0] + PRICE_STEP}
+                    max={PRICE_MAX}
+                    step={PRICE_STEP}
+                    value={priceRange[1]}
+                    onChange={(e) => {
+                      const nextValue = Math.min(
+                        PRICE_MAX,
+                        Math.max(
+                          Number(e.target.value),
+                          priceRange[0] + PRICE_STEP
+                        )
+                      );
+                      setPriceRange([priceRange[0], nextValue]);
+                    }}
+                    className="h-11 w-full rounded-xl border border-border/80 bg-background px-3 pr-8 text-sm font-medium tabular-nums text-foreground outline-none transition-all hover:border-primary/[0.35] focus:border-primary focus:ring-4 focus:ring-primary/10"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground">
+                    €
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <p className="mt-2.5 text-[10px] leading-relaxed text-muted-foreground">
+              2M+ përfshin edhe pronat mbi 2,000,000 €.
+            </p>
+          </FilterSection>
+
+          <FilterSection
+            title="Sipërfaqja"
+            icon={<Maximize2 size={17} strokeWidth={1.9} />}
+            badge={
+              areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX ? 1 : 0
+            }
+            defaultOpen={false}
+          >
+            <RangeSlider
+              min={AREA_MIN}
+              max={AREA_MAX}
+              step={AREA_STEP}
+              value={areaRange}
+              onChange={setAreaRange}
+              formatLabel={(value) =>
+                value === AREA_MAX ? `${AREA_MAX}+ m²` : `${value} m²`
+              }
+            />
+          </FilterSection>
+
+          <FilterSection
+            title="Dhoma gjumi"
+            icon={<BedDouble size={17} strokeWidth={1.9} />}
+            badge={bedroomsMin !== null ? 1 : 0}
+            defaultOpen={false}
+          >
+            <RoomButtons
+              value={bedroomsMin}
+              onChange={setBedroomsMin}
+              label="dhoma gjumi"
+            />
+          </FilterSection>
+
+          <FilterSection
+            title="Banjo"
+            icon={<Bath size={17} strokeWidth={1.9} />}
+            badge={bathroomsMin !== null ? 1 : 0}
+            defaultOpen={false}
+          >
+            <RoomButtons
+              value={bathroomsMin}
+              onChange={setBathroomsMin}
+              label="banjo"
+            />
+          </FilterSection>
+
+          <button
+            type="button"
+            onClick={() => setShowFilters(false)}
+            disabled={isLoading}
+            className="mt-1 flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-[0_12px_28px_rgba(212,175,55,0.2)] transition-all hover:-translate-y-0.5 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 lg:hidden"
+          >
+            {isLoading
+              ? "Duke kërkuar..."
+              : `Shfaq ${formatResultCount(totalCount)}`}
+          </button>
         </div>
-      </FilterSection>
-
-      {/* Sipërfaqja m² */}
-<FilterSection
-  title="Sipërfaqja (m²)"
-  badge={areaRange[0] > AREA_MIN || areaRange[1] < AREA_MAX ? 1 : 0}
-  defaultOpen={false}
->
-        <RangeSlider
-          min={AREA_MIN}
-          max={AREA_MAX}
-          step={AREA_STEP}
-          value={areaRange}
-          onChange={setAreaRange}
-          formatLabel={(v) => (v === AREA_MAX ? `${v}+ m²` : `${v} m²`)}
-        />
-      </FilterSection>
-
-      {/* Dhoma gjumi */}
-      <FilterSection title="Dhoma Gjumi" badge={bedroomsMin !== null ? 1 : 0} defaultOpen={false}>
-        <RoomButtons value={bedroomsMin} onChange={setBedroomsMin} />
-      </FilterSection>
-
-      {/* Banjo */}
-      <FilterSection title="Banjo" badge={bathroomsMin !== null ? 1 : 0} defaultOpen={false}>
-        <RoomButtons value={bathroomsMin} onChange={setBathroomsMin} />
-      </FilterSection>
-    </div>
+      </div>
+    </aside>
   );
 
   return (
@@ -1116,10 +1444,33 @@ onChange={(e) => {
         <meta property="og:title" content="Të Gjitha Pronat | Aura Estates" />
         <meta property="og:url" content="https://auraks.com/projects" />
       </Helmet>
-      {/* CSS për range slider thumbs */}
+      {/* CSS vetëm për slider-at e filtrave */}
       <style>{`
-        .range-thumb::-webkit-slider-thumb { width: 16px; height: 16px; }
-        .range-thumb::-moz-range-thumb { width: 16px; height: 16px; border: none; background: transparent; }
+        .range-thumb {
+          appearance: none;
+          -webkit-appearance: none;
+          background: transparent;
+          pointer-events: none;
+        }
+
+        .range-thumb::-webkit-slider-thumb {
+          width: 22px;
+          height: 22px;
+          border: 0;
+          background: transparent;
+          pointer-events: auto;
+          cursor: grab;
+          -webkit-appearance: none;
+        }
+
+        .range-thumb::-moz-range-thumb {
+          width: 22px;
+          height: 22px;
+          border: 0;
+          background: transparent;
+          pointer-events: auto;
+          cursor: grab;
+        }
       `}</style>
 
       <div ref={pageTopRef} className="pt-32 pb-24 bg-background min-h-screen">
@@ -1148,21 +1499,55 @@ onChange={(e) => {
 
             {/* Mobile toggle button */}
             <button
-              className="lg:hidden w-full py-3.5 border border-border rounded-xl flex items-center justify-center gap-2 text-foreground font-medium bg-card"
-              onClick={() => setShowFilters(!showFilters)}
               type="button"
+              onClick={() => setShowFilters((current) => !current)}
+              aria-expanded={showFilters}
+              aria-controls="projects-filter-panel"
+              className={`lg:hidden flex w-full items-center justify-between rounded-2xl border px-4 py-3.5 text-foreground shadow-sm transition-colors ${
+                showFilters
+                  ? "border-primary/[0.35] bg-primary/[0.05]"
+                  : "border-border/80 bg-card"
+              }`}
             >
-              <SlidersHorizontal size={18} />
-              {showFilters ? "Fshih Filtrat" : "Shfaq Filtrat"}
-              {totalActiveFilters > 0 && (
-                <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                  {totalActiveFilters}
+              <span className="flex items-center gap-3 text-left">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <SlidersHorizontal size={18} />
                 </span>
-              )}
+                <span>
+                  <span className="block text-sm font-semibold">
+                    Filtrat e pronave
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                    {totalActiveFilters > 0
+                      ? `${totalActiveFilters} ${
+                          totalActiveFilters === 1 ? "filtër aktiv" : "filtra aktivë"
+                        }`
+                      : "Kërkim i avancuar"}
+                  </span>
+                </span>
+              </span>
+
+              <span className="flex items-center gap-2">
+                {totalActiveFilters > 0 && (
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                    {totalActiveFilters}
+                  </span>
+                )}
+                <ChevronDown
+                  size={17}
+                  className={`text-muted-foreground transition-transform duration-200 ${
+                    showFilters ? "rotate-180" : ""
+                  }`}
+                />
+              </span>
             </button>
 
             {/* Sidebar filters */}
-           <div className={`w-full lg:w-72 shrink-0 ${showFilters ? "block" : "hidden lg:block"}`}>
+            <div
+              className={`w-full shrink-0 lg:w-[320px] ${
+                showFilters ? "block" : "hidden lg:block"
+              }`}
+            >
               {FilterPanel}
             </div>
 
@@ -1171,9 +1556,14 @@ onChange={(e) => {
 
               {/* Count + sort info */}
 <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-<p className="text-muted-foreground text-sm">
-  Të gjitha pronat
-</p>
+<div aria-live="polite">
+  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+    Rezultatet
+  </p>
+  <p className="mt-1 text-sm font-medium text-foreground">
+    {isLoading ? "Duke kërkuar..." : formatResultCount(totalCount)}
+  </p>
+</div>
 
     {/* Sort dropdown */}
     <div className="flex items-center gap-2 shrink-0">
