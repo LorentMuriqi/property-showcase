@@ -1517,13 +1517,7 @@ const clearAllFilters = () => {
                   <span className="block text-sm font-semibold">
                     Filtrat e pronave
                   </span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {totalActiveFilters > 0
-                      ? `${totalActiveFilters} ${
-                          totalActiveFilters === 1 ? "filtër aktiv" : "filtra aktivë"
-                        }`
-                      : "Kërkim i avancuar"}
-                  </span>
+
                 </span>
               </span>
 
