@@ -1,8 +1,10 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { supabase } from "@/lib/supabase";
@@ -56,15 +58,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<AdminUserProfile | null>(null);
+  const requestIdRef = useRef(0);
+  const signingOutInactiveUserRef = useRef(false);
 
-  const loadProfile = async () => {
-    setIsLoading(true);
+  const loadProfile = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    const requestId = ++requestIdRef.current;
+
+    if (!silent) setIsLoading(true);
 
     try {
       const {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession();
+
+      if (requestId !== requestIdRef.current) return;
 
       if (sessionError) {
         console.error("Get session error:", sessionError);
@@ -83,25 +92,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from("admin_users")
         .select(
           `
-          user_id,
-          username,
-          full_name,
-          is_super_admin,
-          is_active,
-          role_id,
-          admin_roles (
-            id,
-            name,
-            description,
-            can_create_property,
-            can_edit_property,
-            can_delete_property,
-            can_manage_virtual_tours
-          )
-        `,
+            user_id,
+            username,
+            full_name,
+            is_super_admin,
+            is_active,
+            role_id,
+            admin_roles (
+              id,
+              name,
+              description,
+              can_create_property,
+              can_edit_property,
+              can_delete_property,
+              can_manage_virtual_tours
+            )
+          `,
         )
         .eq("user_id", user.id)
         .maybeSingle();
+
+      if (requestId !== requestIdRef.current) return;
 
       if (error) {
         console.error("Load admin profile error:", error);
@@ -109,8 +120,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (!data || !data.is_active) {
+      if (!data) {
         setUserProfile(null);
+        return;
+      }
+
+      if (!data.is_active) {
+        setUserProfile(null);
+
+        if (!signingOutInactiveUserRef.current) {
+          signingOutInactiveUserRef.current = true;
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch (signOutError) {
+            console.error("Inactive admin local sign-out error:", signOutError);
+          } finally {
+            signingOutInactiveUserRef.current = false;
+          }
+        }
+
         return;
       }
 
@@ -119,23 +147,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Auth loadProfile unexpected error:", error);
       setUserProfile(null);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadProfile();
+    void loadProfile();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      loadProfile();
+      void loadProfile();
     });
+
+    const verifyActiveSession = () => {
+      void loadProfile({ silent: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") verifyActiveSession();
+    };
+
+    const intervalId = window.setInterval(verifyActiveSession, 60_000);
+    window.addEventListener("focus", verifyActiveSession);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       subscription.unsubscribe();
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", verifyActiveSession);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [loadProfile]);
 
   const refreshAuth = async () => {
     await loadProfile();
@@ -159,7 +204,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canCreateProperty: isSuperAdmin || !!role?.can_create_property,
       canEditProperty: isSuperAdmin || !!role?.can_edit_property,
       canDeleteProperty: isSuperAdmin || !!role?.can_delete_property,
-      canManageVirtualTours: isSuperAdmin || !!role?.can_manage_virtual_tours,
+      canManageVirtualTours:
+        isSuperAdmin || !!role?.can_manage_virtual_tours,
     };
 
     return {
