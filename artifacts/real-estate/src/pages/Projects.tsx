@@ -1129,7 +1129,7 @@ const clearAllFilters = () => {
 
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                  Kërkim i avancuar
+                  Kërko pronat
                 </p>
                 <h3 className="mt-1 font-display text-xl font-bold text-foreground">
                   Filtrat e pronave
