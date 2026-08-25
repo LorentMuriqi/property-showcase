@@ -11,6 +11,11 @@ import {
   EyeOff,
   RefreshCw,
   Ban,
+  Menu,
+  X,
+  Users,
+  ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -66,12 +71,35 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
 const [cityFilter, setCityFilter] = useState("");
 const [countryFilter, setCountryFilter] = useState("");
+const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
       setLocation("/admin/login");
     }
   }, [authLoading, isAdmin, setLocation]);
+  
+  useEffect(() => {
+  if (!mobileMenuOpen) return;
+
+  const previousOverflow = document.body.style.overflow;
+
+  // Mos lejo scroll të faqes prapa drawer-it.
+  document.body.style.overflow = "hidden";
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      setMobileMenuOpen(false);
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    document.body.style.overflow = previousOverflow;
+    window.removeEventListener("keydown", handleKeyDown);
+  };
+}, [mobileMenuOpen]);
 
 const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
   if (authLoading || !isAdmin) return;
@@ -499,13 +527,241 @@ const filtered = projects.filter((project) => {
         </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-        <div className="md:hidden flex justify-between items-center mb-6 glass-panel p-4 rounded-2xl">
-          <span className="font-display text-xl font-bold text-foreground">AURA Admin</span>
-          <button onClick={logout} className="text-destructive text-sm font-medium">
-            Dalje
-          </button>
+{/* Mobile admin navigation */}
+<div
+  className={`md:hidden fixed inset-0 z-[100] transition-[visibility] duration-300 ${
+    mobileMenuOpen
+      ? "visible"
+      : "invisible pointer-events-none"
+  }`}
+  aria-hidden={!mobileMenuOpen}
+>
+  {/* Backdrop */}
+  <button
+    type="button"
+    aria-label="Mbyll menynë"
+    onClick={() => setMobileMenuOpen(false)}
+    className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 ${
+      mobileMenuOpen ? "opacity-100" : "opacity-0"
+    }`}
+  />
+
+  {/* Drawer */}
+  <aside
+    id="admin-mobile-navigation"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Menuja e administratorit"
+    className={`absolute right-0 top-0 z-10 flex h-[100dvh] w-[min(88vw,360px)] flex-col bg-background border-l border-border shadow-[-24px_0_70px_rgba(15,23,42,0.18)] transform-gpu transition-transform duration-300 ease-out ${
+      mobileMenuOpen
+        ? "translate-x-0"
+        : "translate-x-full"
+    }`}
+  >
+    {/* Drawer header */}
+    <div
+      className="shrink-0 border-b border-border px-5 pb-5"
+      style={{
+        paddingTop: "max(1.25rem, env(safe-area-inset-top))",
+      }}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-display text-xl font-bold tracking-tight text-foreground">
+              AURA
+            </span>
+
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+              Admin
+            </span>
+          </div>
+
+          <p className="mt-1 text-xs text-muted-foreground">
+            Paneli administrativ
+          </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-label="Mbyll menynë"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:text-foreground active:scale-95"
+        >
+          <X size={20} />
+        </button>
+      </div>
+    </div>
+
+    {/* Navigation */}
+    <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+      <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/70">
+        Navigimi
+      </p>
+
+      <nav className="space-y-1.5">
+        {/* Properties */}
+        <Link
+          href="/admin"
+          onClick={() => setMobileMenuOpen(false)}
+          className="flex items-center gap-3.5 rounded-xl bg-primary/10 px-3.5 py-3.5 text-primary transition-colors"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Home size={18} />
+          </span>
+
+          <div className="min-w-0">
+            <span className="block text-sm font-semibold">
+              Properties
+            </span>
+            <span className="block truncate text-[11px] text-primary/70">
+              Menaxho portofolin e pronave
+            </span>
+          </div>
+        </Link>
+
+        {/* Client Virtual Tours */}
+        {permissions.canManageVirtualTours && (
+          <Link
+            href="/admin/client-tours"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-3.5 rounded-xl px-3.5 py-3.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+              <Focus size={18} />
+            </span>
+
+            <div className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">
+                Client Virtual Tours
+              </span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                Menaxho turet private të klientëve
+              </span>
+            </div>
+          </Link>
+        )}
+
+        {/* Super Admin only */}
+        {isSuperAdmin && (
+          <>
+            <Link
+              href="/admin/users"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3.5 rounded-xl px-3.5 py-3.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Users size={18} />
+              </span>
+
+              <div className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">
+                  Users
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  Përdoruesit dhe qasja në panel
+                </span>
+              </div>
+            </Link>
+
+            <Link
+              href="/admin/rules"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3.5 rounded-xl px-3.5 py-3.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <ShieldCheck size={18} />
+              </span>
+
+              <div className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">
+                  Rules
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  Rolet dhe lejet administrative
+                </span>
+              </div>
+            </Link>
+          </>
+        )}
+
+        <div className="my-3 border-t border-border" />
+
+        {/* Public website */}
+        <Link
+          href="/"
+          onClick={() => setMobileMenuOpen(false)}
+          className="flex items-center gap-3.5 rounded-xl px-3.5 py-3.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <ExternalLink size={18} />
+          </span>
+
+          <div className="min-w-0">
+            <span className="block text-sm font-semibold text-foreground">
+              Shiko Faqen
+            </span>
+            <span className="block truncate text-[11px] text-muted-foreground">
+              Kthehu në faqen publike
+            </span>
+          </div>
+        </Link>
+      </nav>
+    </div>
+
+    {/* Bottom logout */}
+    <div
+      className="shrink-0 border-t border-border bg-background/95 px-4 pt-4"
+      style={{
+        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+      }}
+    >
+      <button
+        type="button"
+        onClick={async () => {
+          setMobileMenuOpen(false);
+          await logout();
+        }}
+        className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive hover:text-white active:scale-[0.99]"
+      >
+        <LogOut size={18} />
+        Dalje nga paneli
+      </button>
+    </div>
+  </aside>
+</div>
+
+      <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto">
+<div className="md:hidden sticky top-3 z-40 mb-6">
+  <div className="glass-panel border border-border/80 bg-background/95 backdrop-blur-xl rounded-2xl px-4 py-3.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] flex items-center justify-between">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="font-display text-xl font-bold tracking-tight text-foreground">
+          AURA
+        </span>
+
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Admin
+        </span>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground mt-0.5">
+        Paneli administrativ
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setMobileMenuOpen(true)}
+      aria-label="Hap menynë e administratorit"
+      aria-expanded={mobileMenuOpen}
+      aria-controls="admin-mobile-navigation"
+      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground shadow-sm transition-all active:scale-95 hover:border-primary/50 hover:text-primary"
+    >
+      <Menu size={22} strokeWidth={2} />
+    </button>
+  </div>
+</div>
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
