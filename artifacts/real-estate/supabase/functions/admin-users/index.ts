@@ -34,6 +34,11 @@ type ActionBody =
   | {
       action: "sync_user_status";
       userId: string;
+    }
+  | {
+      action: "delete_user";
+      userId: string;
+      confirmationUsername: string;
     };
 
 type AdminProfile = {
@@ -367,7 +372,7 @@ async function writeAuditLog(
   request: Request,
   supabaseAdmin: SupabaseClient,
   actorUserId: string,
-  targetUserId: string,
+  targetUserId: string | null,
   action: string,
   details: JsonRecord = {},
 ): Promise<void> {
@@ -900,6 +905,134 @@ async function handleSyncUserStatus(
   return { user_id: userId, is_active: target.is_active };
 }
 
+async function handleDeleteUser(
+  request: Request,
+  body: Extract<ActionBody, { action: "delete_user" }>,
+  caller: User,
+  supabaseAdmin: SupabaseClient,
+) {
+  const userId = requireUuid(body.userId);
+
+  if (userId === caller.id) {
+    throw new AppError(
+      400,
+      "cannot_delete_self",
+      "Nuk mund ta fshini llogarinë tuaj.",
+    );
+  }
+
+  const target = await getTargetProfile(supabaseAdmin, userId);
+  assertEditableTarget(target);
+
+  if (target.is_active) {
+    throw new AppError(
+      409,
+      "deactivate_before_delete",
+      "Përdoruesi duhet të çaktivizohet para fshirjes përfundimtare.",
+    );
+  }
+
+  const confirmationUsername = normalizeUsername(body.confirmationUsername);
+
+  if (confirmationUsername !== target.username) {
+    throw new AppError(
+      400,
+      "delete_confirmation_mismatch",
+      "Username-i i konfirmimit nuk përputhet.",
+    );
+  }
+
+  const { data: authLookup, error: authLookupError } =
+    await supabaseAdmin.auth.admin.getUserById(userId);
+
+  if (authLookupError || !authLookup.user) {
+    console.error("Delete target Auth lookup error:", authLookupError);
+    throw new AppError(
+      500,
+      "auth_user_lookup_failed",
+      "Llogaria nuk u gjet në Supabase Authentication.",
+    );
+  }
+
+  const authUser = authLookup.user;
+  const role = normalizeRole(target);
+
+  // false = hard delete. The admin_users profile is removed by the
+  // ON DELETE CASCADE foreign key added by the accompanying migration.
+  const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(
+    userId,
+    false,
+  );
+
+  if (deleteAuthError) {
+    console.error("Hard delete Auth user error:", deleteAuthError);
+
+    const errorMessage = deleteAuthError.message?.toLowerCase() ?? "";
+
+    if (
+      errorMessage.includes("foreign key") ||
+      errorMessage.includes("violates foreign key constraint")
+    ) {
+      throw new AppError(
+        409,
+        "user_has_references",
+        "Llogaria nuk mund të fshihet sepse referencohet ende nga të dhëna të tjera. Kontrolloni foreign keys që lidhen me auth.users.",
+      );
+    }
+
+    throw new AppError(
+      500,
+      "auth_user_delete_failed",
+      "Fshirja përfundimtare në Supabase Authentication dështoi.",
+    );
+  }
+
+  const { data: remainingProfile, error: profileCheckError } = await supabaseAdmin
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (profileCheckError) {
+    console.error("Deleted profile verification error:", profileCheckError);
+  }
+
+  if (remainingProfile) {
+    const { error: profileDeleteError } = await supabaseAdmin
+      .from("admin_users")
+      .delete()
+      .eq("user_id", userId);
+
+    if (profileDeleteError) {
+      console.error("Residual admin profile delete error:", profileDeleteError);
+      throw new AppError(
+        500,
+        "profile_delete_failed",
+        "Llogaria Auth u fshi, por profili administrativ nuk u pastrua automatikisht. Kontrolloni migration-in ON DELETE CASCADE.",
+      );
+    }
+  }
+
+  // The target no longer exists in auth.users, so target_user_id is deliberately
+  // null. A minimal immutable snapshot is retained in details for accountability.
+  await writeAuditLog(request, supabaseAdmin, caller.id, null, "user_deleted", {
+    deleted_user_id: userId,
+    username: target.username,
+    full_name: target.full_name,
+    role_id: target.role_id,
+    role_name: role?.name ?? null,
+    auth_email: authUser.email ?? null,
+    last_sign_in_at: authUser.last_sign_in_at ?? null,
+    deactivated_at: target.deactivated_at,
+  });
+
+  return {
+    user_id: userId,
+    username: target.username,
+    deleted: true,
+  };
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", {
@@ -974,6 +1107,9 @@ Deno.serve(async (request: Request) => {
         break;
       case "sync_user_status":
         data = await handleSyncUserStatus(request, body, caller, supabaseAdmin);
+        break;
+      case "delete_user":
+        data = await handleDeleteUser(request, body, caller, supabaseAdmin);
         break;
       default:
         throw new AppError(400, "unknown_action", "Veprimi i kërkuar nuk njihet.");

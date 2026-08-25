@@ -24,6 +24,7 @@ import {
   Search,
   ShieldCheck,
   TriangleAlert,
+  Trash2,
   UserCheck,
   UserPlus,
   Users,
@@ -75,6 +76,7 @@ type ModalType =
   | "password"
   | "deactivate"
   | "reactivate"
+  | "delete"
   | null;
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -406,6 +408,7 @@ export default function AdminUsers() {
   const [passwordForm, setPasswordForm] =
     useState<PasswordFormState>(emptyPasswordForm);
   const [copiedPassword, setCopiedPassword] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   useEffect(() => {
     if (authLoading) return;
@@ -538,6 +541,7 @@ export default function AdminUsers() {
     setUserForm(emptyUserForm);
     setPasswordForm(emptyPasswordForm);
     setCopiedPassword(false);
+    setDeleteConfirmation("");
   };
 
   const openCreateModal = () => {
@@ -568,6 +572,12 @@ export default function AdminUsers() {
   const openStatusModal = (user: AdminUser) => {
     setSelectedUser(user);
     setModalType(user.is_active ? "deactivate" : "reactivate");
+  };
+
+  const openDeleteModal = (user: AdminUser) => {
+    setSelectedUser(user);
+    setDeleteConfirmation("");
+    setModalType("delete");
   };
 
   const validateUserForm = () => {
@@ -774,6 +784,47 @@ export default function AdminUsers() {
     } catch (error) {
       toast({
         title: "Veprimi dështoi",
+        description: error instanceof Error ? error.message : "Provo përsëri.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+
+    const normalizedConfirmation = normalizeUsername(deleteConfirmation);
+
+    if (normalizedConfirmation !== selectedUser.username) {
+      toast({
+        title: "Konfirmimi nuk përputhet",
+        description: `Shkruaj saktësisht ${selectedUser.username} për ta konfirmuar fshirjen.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await invokeAdminUsers({
+        action: "delete_user",
+        userId: selectedUser.user_id,
+        confirmationUsername: normalizedConfirmation,
+      });
+
+      toast({
+        title: "Përdoruesi u fshi përgjithmonë",
+        description: `Llogaria @${selectedUser.username} u hoq nga paneli dhe Supabase Authentication.`,
+      });
+
+      closeModal(true);
+      await fetchData({ silent: true });
+    } catch (error) {
+      toast({
+        title: "Fshirja dështoi",
         description: error instanceof Error ? error.message : "Provo përsëri.",
         variant: "destructive",
       });
@@ -1142,6 +1193,15 @@ export default function AdminUsers() {
                                   <Power size={15} />
                                 )}
                               </IconButton>
+                              {!user.is_active && (
+                                <IconButton
+                                  label="Fshi përgjithmonë"
+                                  onClick={() => openDeleteModal(user)}
+                                  danger
+                                >
+                                  <Trash2 size={15} />
+                                </IconButton>
+                              )}
                             </>
                           )}
                         </div>
@@ -1264,6 +1324,15 @@ export default function AdminUsers() {
                             <Power size={15} />
                           )}
                         </IconButton>
+                        {!user.is_active && (
+                          <IconButton
+                            label="Fshi përgjithmonë"
+                            onClick={() => openDeleteModal(user)}
+                            danger
+                          >
+                            <Trash2 size={15} />
+                          </IconButton>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1692,6 +1761,85 @@ export default function AdminUsers() {
             </div>
           </ModalShell>
         )}
+
+      {modalType === "delete" && selectedUser && (
+        <ModalShell
+          title="Fshi përdoruesin përgjithmonë"
+          description="Ky veprim heq llogarinë nga paneli dhe nga Supabase Authentication dhe nuk mund të zhbëhet."
+          onClose={closeModal}
+          closeDisabled={isSubmitting}
+        >
+          <div className="space-y-5 p-5 sm:p-7">
+            <div className="rounded-2xl border border-red-500/25 bg-red-500/5 p-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-400">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {selectedUser.full_name || selectedUser.username}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    @{selectedUser.username}
+                  </p>
+                </div>
+              </div>
+
+              <ul className="mt-5 space-y-2 text-sm leading-relaxed text-muted-foreground">
+                <li>• Llogaria e hyrjes dhe kredencialet do të fshihen.</li>
+                <li>• Profili në admin_users do të hiqet automatikisht.</li>
+                <li>• Riaktivizimi nuk do të jetë më i mundur.</li>
+                <li>• Një shënim minimal sigurie ruhet në audit log.</li>
+              </ul>
+            </div>
+
+            <div>
+              <FieldLabel>
+                Për konfirmim, shkruaj username-in
+                <span className="ml-1 font-mono text-red-400">
+                  {selectedUser.username}
+                </span>
+              </FieldLabel>
+              <input
+                type="text"
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={selectedUser.username}
+                className="h-12 w-full rounded-xl border border-red-500/25 bg-background px-4 font-mono text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-red-400"
+              />
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => closeModal()}
+                disabled={isSubmitting}
+                className="h-11 rounded-xl border border-border px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/40 disabled:opacity-50"
+              >
+                Anulo
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteUser()}
+                disabled={
+                  isSubmitting ||
+                  normalizeUsername(deleteConfirmation) !== selectedUser.username
+                }
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-500 px-5 text-sm font-bold text-white transition-colors hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isSubmitting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Trash2 size={16} />
+                )}
+                {isSubmitting ? "Duke fshirë..." : "Fshi përgjithmonë"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }
