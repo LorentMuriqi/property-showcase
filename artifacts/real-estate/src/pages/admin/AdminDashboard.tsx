@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Filter, Search } from "lucide-react";
 import {
@@ -25,6 +25,13 @@ type AdminListingStatus = "active" | "paused" | "expired";
 type VirtualTourStatusFilter = "published" | "draft";
 type SortMode = "default" | "expiry_asc" | "expiry_desc";
 
+type PropertyFilterOption = {
+  country: string | null;
+  city: string | null;
+};
+
+const PAGE_SIZE = 20;
+
 function getComputedListingStatus(project: any): AdminListingStatus {
   if (project.is_paused) return "paused";
   if (project.listing_status === "expired") return "expired";
@@ -49,22 +56,13 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionId, setActionId] = useState<string | number | null>(null);
+  const [totalProjects, setTotalProjects] = useState(0);
+  const [page, setPage] = useState(1);
+  const [filterOptions, setFilterOptions] = useState<PropertyFilterOption[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const fetchRequestIdRef = useRef(0);
   
-  const preserveAdminScroll = (callback?: () => void) => {
-  const currentScrollY = window.scrollY;
-
-  requestAnimationFrame(() => {
-    window.scrollTo({
-      top: currentScrollY,
-      left: 0,
-      behavior: "auto",
-    });
-
-    callback?.();
-  });
-};
-  
-  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [sortMode] = useState<SortMode>("default");
   const [statusFilters, setStatusFilters] = useState<AdminListingStatus[]>([]);
   const [virtualTourFilters, setVirtualTourFilters] = useState<VirtualTourStatusFilter[]>([]);
   const [showFilter, setShowFilter] = useState(false);
@@ -110,109 +108,129 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   };
 }, [mobileMenuOpen]);
 
+const fetchPropertyFilterOptions = async () => {
+  if (authLoading || !isAdmin || !permissions.canViewProperties) return;
+
+  const { data, error } = await supabase.rpc("admin_property_filter_options");
+
+  if (error) {
+    console.error("Admin property filter options error:", error);
+    setFilterOptions([]);
+    return;
+  }
+
+  setFilterOptions((data || []) as PropertyFilterOption[]);
+};
+
 const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
   if (authLoading || !isAdmin || !permissions.canViewProperties) return;
 
-  const shouldPreserveScroll = options?.preserveScroll === true;
-  const savedScrollY = shouldPreserveScroll ? window.scrollY : null;
+  const requestId = ++fetchRequestIdRef.current;
+  const savedScrollY = options?.preserveScroll ? window.scrollY : null;
 
   if (!options?.silent) {
     setIsLoading(true);
   }
 
-    const { data, error } = await supabase
-      .from("properties")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    const { data: referenceRows, error: referenceError } = await supabase
-      .from("admin_property_references")
-      .select("property_id, reference_code");
-
-    if (referenceError) {
-      console.error("Admin property reference load error:", referenceError);
-    }
-
-    const referenceMap = new Map(
-      (referenceRows || []).map((row) => [
-        String(row.property_id),
-        String(row.reference_code || ""),
-      ]),
-    );
-
-    const attachProjectReferences = (rows: any[]) =>
-      rows.map((row) => ({
-        ...row,
-        project_reference: referenceMap.get(String(row.id)) || null,
-      }));
-
-    if (error) {
-      console.error("Admin fetch error:", error);
-      toast({
-        title: "Gabim",
-        description: "Nuk u ngarkuan pronat.",
-        variant: "destructive",
-      });
-      setProjects([]);
-      setIsLoading(false);
-      return;
-    }
-
-    const now = Date.now();
-    const expiredToUpdate = (data || []).filter(
-      (project) =>
-        !project.is_paused &&
-        project.expires_at &&
-        new Date(project.expires_at).getTime() < now &&
-        project.listing_status !== "expired",
-    );
-
-    if (expiredToUpdate.length > 0 && permissions.canEditProperty) {
-      const ids = expiredToUpdate.map((p) => p.id);
-
-      const { error: expireError } = await supabase
-        .from("properties")
-        .update({ listing_status: "expired" })
-        .in("id", ids);
-
-      if (expireError) {
-        console.error("Admin auto-expire error:", expireError);
-        setProjects(attachProjectReferences(data || []));
-      } else {
-        const { data: refreshed, error: refreshedError } = await supabase
-          .from("properties")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (refreshedError) {
-          console.error("Admin refresh error:", refreshedError);
-          setProjects(attachProjectReferences(data || []));
-        } else {
-          setProjects(attachProjectReferences(refreshed || []));
-        }
-      }
-    } else {
-      setProjects(attachProjectReferences(data || []));
-    }
-
-    setIsLoading(false);
-
-if (savedScrollY !== null) {
-  requestAnimationFrame(() => {
-    window.scrollTo({
-      top: savedScrollY,
-      left: 0,
-      behavior: "auto",
-    });
+  const { data, error } = await supabase.rpc("admin_properties_page", {
+    p_search: debouncedSearch || null,
+    p_country: countryFilter || null,
+    p_city: cityFilter || null,
+    p_status_filters: statusFilters,
+    p_virtual_tour_filters: virtualTourFilters,
+    p_sort_mode: sortMode,
+    p_limit: PAGE_SIZE,
+    p_offset: (page - 1) * PAGE_SIZE,
   });
-}
+
+  if (requestId !== fetchRequestIdRef.current) return;
+
+  if (error) {
+    console.error("Admin fetch error:", error);
+    toast({
+      title: "Gabim",
+      description: "Nuk u ngarkuan pronat.",
+      variant: "destructive",
+    });
+    setProjects([]);
+    setTotalProjects(0);
+    setIsLoading(false);
+    return;
+  }
+
+  const payload = (data || {}) as {
+    items?: any[];
+    total_count?: number | string;
   };
 
-  useEffect(() => {
-    fetchProjects();
-  }, [authLoading, isAdmin, permissions.canViewProperties, permissions.canEditProperty]);
-  
-  
+  const nextProjects = Array.isArray(payload.items) ? payload.items : [];
+  const nextTotal = Math.max(0, Number(payload.total_count || 0));
+  const nextTotalPages = Math.max(1, Math.ceil(nextTotal / PAGE_SIZE));
+
+  if (page > nextTotalPages) {
+    setPage(nextTotalPages);
+    setIsLoading(false);
+    return;
+  }
+
+  setProjects(nextProjects);
+  setTotalProjects(nextTotal);
+  setIsLoading(false);
+
+  if (savedScrollY !== null) {
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: savedScrollY,
+        left: 0,
+        behavior: "auto",
+      });
+    });
+  }
+};
+
+useEffect(() => {
+  const timeoutId = window.setTimeout(() => {
+    setDebouncedSearch(searchQuery.trim());
+  }, 300);
+
+  return () => window.clearTimeout(timeoutId);
+}, [searchQuery]);
+
+useEffect(() => {
+  setPage(1);
+}, [
+  debouncedSearch,
+  cityFilter,
+  countryFilter,
+  sortMode,
+  statusFilters,
+  virtualTourFilters,
+]);
+
+useEffect(() => {
+  if (!authLoading && isAdmin && permissions.canViewProperties) {
+    void fetchPropertyFilterOptions();
+  }
+}, [authLoading, isAdmin, permissions.canViewProperties]);
+
+useEffect(() => {
+  if (!authLoading && isAdmin && permissions.canViewProperties) {
+    void fetchProjects({ silent: true });
+  }
+}, [
+  authLoading,
+  isAdmin,
+  permissions.canViewProperties,
+  permissions.canEditProperty,
+  page,
+  debouncedSearch,
+  countryFilter,
+  cityFilter,
+  sortMode,
+  statusFilters,
+  virtualTourFilters,
+]);
+
   useEffect(() => {
   const handleClickOutside = () => {
     setShowFilter(false);
@@ -243,8 +261,8 @@ if (savedScrollY !== null) {
 
       if (propertyDeleteError) throw propertyDeleteError;
 
-      setProjects((prev) => prev.filter((project) => project.id !== id));
-	  preserveAdminScroll();
+      await fetchProjects({ silent: true, preserveScroll: true });
+      void fetchPropertyFilterOptions();
 
       toast({
         title: "Projekti u Fshi",
@@ -396,78 +414,27 @@ if (savedScrollY !== null) {
 
 const countries = useMemo(() => {
   return Array.from(
-    new Set(projects.map((project) => project.country).filter(Boolean))
-  ).sort();
-}, [projects]);
+    new Set(
+      filterOptions
+        .map((option) => option.country)
+        .filter((value): value is string => !!value),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "sq"));
+}, [filterOptions]);
 
 const cities = useMemo(() => {
   return Array.from(
     new Set(
-      projects
-        .filter((project) => !countryFilter || project.country === countryFilter)
-        .map((project) => project.city)
-        .filter(Boolean)
-    )
-  ).sort();
-}, [projects, countryFilter]);
+      filterOptions
+        .filter((option) => !countryFilter || option.country === countryFilter)
+        .map((option) => option.city)
+        .filter((value): value is string => !!value),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "sq"));
+}, [filterOptions, countryFilter]);
 
-
-
-const getSortedProjects = () => {
-const normalizedSearch = searchQuery.trim().toLowerCase();
-
-const filtered = projects.filter((project) => {
-  const matchesStatus =
-    statusFilters.length === 0 ||
-    statusFilters.includes(getComputedListingStatus(project));
-	
-	const matchesVirtualTour =
-  virtualTourFilters.length === 0 ||
-  virtualTourFilters.includes(
-    project.virtual_tour_status === "published" ? "published" : "draft"
-  );
-
-  const projectReference = String(project.project_reference || "").toLowerCase();
-  const compactReferenceSearch = normalizedSearch.replace(/[\s-]/g, "");
-  const compactProjectReference = projectReference.replace(/[\s-]/g, "");
-
-  const matchesSearch =
-    !normalizedSearch ||
-    String(project.title || "").toLowerCase().includes(normalizedSearch) ||
-    String(project.city || "").toLowerCase().includes(normalizedSearch) ||
-    String(project.country || "").toLowerCase().includes(normalizedSearch) ||
-    projectReference.includes(normalizedSearch) ||
-    (compactReferenceSearch.length > 0 &&
-      compactProjectReference.includes(compactReferenceSearch));
-
-  const matchesCity = !cityFilter || project.city === cityFilter;
-  const matchesCountry = !countryFilter || project.country === countryFilter;
-
-  return (
-  matchesStatus &&
-  matchesVirtualTour &&
-  matchesSearch &&
-  matchesCity &&
-  matchesCountry
-);
-});
-
-  const copy = [...filtered];
-
-  if (sortMode === "default") {
-    return copy;
-  }
-
-  return copy.sort((a, b) => {
-    const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
-    const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
-
-    if (sortMode === "expiry_asc") return aTime - bTime;
-    if (sortMode === "expiry_desc") return bTime - aTime;
-
-    return 0;
-  });
-};
+const totalPages = Math.max(1, Math.ceil(totalProjects / PAGE_SIZE));
+const safePage = Math.min(page, totalPages);
 
   if (authLoading) {
     return <div className="min-h-screen bg-background" />;
@@ -963,7 +930,7 @@ const filtered = projects.filter((project) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {getSortedProjects().map((project) => {
+                  {projects.map((project) => {
                     const listingStatus = getComputedListingStatus(project);
                     const meta = statusMeta[listingStatus];
 
@@ -1121,7 +1088,7 @@ const filtered = projects.filter((project) => {
                     );
                   })}
 
-                  {getSortedProjects().length === 0 && (
+                  {projects.length === 0 && (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-muted-foreground">
                         Asnjë pronë nuk u gjet. Shto listimin tënd të parë.
@@ -1131,6 +1098,38 @@ const filtered = projects.filter((project) => {
                 </tbody>
               </table>
             </div>
+
+            {totalProjects > PAGE_SIZE && (
+              <div className="p-5 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p className="text-sm text-muted-foreground">
+                  Duke shfaqur {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, totalProjects)} nga {totalProjects}
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    disabled={safePage === 1}
+                    className="px-4 py-2 rounded-xl border border-border text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                  >
+                    Mbrapa
+                  </button>
+
+                  <span className="px-4 py-2 rounded-xl bg-muted text-sm text-foreground">
+                    {safePage} / {totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={safePage === totalPages}
+                    className="px-4 py-2 rounded-xl border border-border text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:border-primary transition-colors"
+                  >
+                    Para
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -60,10 +60,13 @@ export default function AdminClientTours() {
 
 const [tours, setTours] = useState<ClientTour[]>([]);
 const [isLoading, setIsLoading] = useState(true);
+const [totalTours, setTotalTours] = useState(0);
 
 const [searchQuery, setSearchQuery] = useState("");
+const [debouncedSearch, setDebouncedSearch] = useState("");
 const [page, setPage] = useState(1);
 const pageSize = 20;
+const fetchRequestIdRef = useRef(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -80,32 +83,22 @@ const pageSize = 20;
 
 
 const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
+  if (authLoading || !isAdmin || !permissions.canViewClientVirtualTours) return;
+
+  const requestId = ++fetchRequestIdRef.current;
   const savedScrollY = options?.preserveScroll ? window.scrollY : null;
 
   if (!options?.silent) {
     setIsLoading(true);
   }
 
-  const { data, error } = await supabase
-    .from("virtual_tours")
-    .select("id, title, client_name, status, client_token, expires_at, created_at")
-    .eq("visibility", "client_only")
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("admin_client_tours_page", {
+    p_search: debouncedSearch || null,
+    p_limit: pageSize,
+    p_offset: (page - 1) * pageSize,
+  });
 
-  const { data: referenceRows, error: referenceError } = await supabase
-    .from("admin_client_tour_references")
-    .select("virtual_tour_id, reference_code");
-
-  if (referenceError) {
-    console.error("Client tour reference load error:", referenceError);
-  }
-
-  const referenceMap = new Map(
-    (referenceRows || []).map((row) => [
-      String(row.virtual_tour_id),
-      String(row.reference_code || ""),
-    ]),
-  );
+  if (requestId !== fetchRequestIdRef.current) return;
 
   if (error) {
     toast({
@@ -114,15 +107,28 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
       variant: "destructive",
     });
     setTours([]);
-  } else {
-    setTours(
-      (data || []).map((tour) => ({
-        ...tour,
-        project_reference: referenceMap.get(String(tour.id)) || null,
-      })) as ClientTour[],
-    );
+    setTotalTours(0);
+    setIsLoading(false);
+    return;
   }
 
+  const payload = (data || {}) as {
+    items?: ClientTour[];
+    total_count?: number | string;
+  };
+
+  const nextTours = Array.isArray(payload.items) ? payload.items : [];
+  const nextTotal = Math.max(0, Number(payload.total_count || 0));
+  const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize));
+
+  if (page > nextTotalPages) {
+    setPage(nextTotalPages);
+    setIsLoading(false);
+    return;
+  }
+
+  setTours(nextTours);
+  setTotalTours(nextTotal);
   setIsLoading(false);
 
   if (savedScrollY !== null) {
@@ -136,12 +142,29 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
   }
 };
 
+useEffect(() => {
+  const timeoutId = window.setTimeout(() => {
+    setDebouncedSearch(searchQuery.trim());
+  }, 300);
 
-  useEffect(() => {
-    if (!authLoading && isAdmin && permissions.canViewClientVirtualTours) {
-      void fetchTours();
-    }
-  }, [authLoading, isAdmin, permissions.canViewClientVirtualTours]);
+  return () => window.clearTimeout(timeoutId);
+}, [searchQuery]);
+
+useEffect(() => {
+  setPage(1);
+}, [debouncedSearch]);
+
+useEffect(() => {
+  if (!authLoading && isAdmin && permissions.canViewClientVirtualTours) {
+    void fetchTours({ silent: true });
+  }
+}, [
+  authLoading,
+  isAdmin,
+  permissions.canViewClientVirtualTours,
+  page,
+  debouncedSearch,
+]);
 
   const createTour = async () => {
     if (!permissions.canManageClientVirtualTours) {
@@ -275,38 +298,8 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
     fetchTours({ silent: true, preserveScroll: true });
   };
   
-  const filteredTours = tours.filter((tour) => {
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-
-  if (!normalizedSearch) return true;
-
-  const computedStatus = getComputedStatus(tour);
-
-  const projectReference = String(tour.project_reference || "").toLowerCase();
-  const compactReferenceSearch = normalizedSearch.replace(/[\s-]/g, "");
-  const compactProjectReference = projectReference.replace(/[\s-]/g, "");
-
-  return (
-    String(tour.title || "").toLowerCase().includes(normalizedSearch) ||
-    String(tour.client_name || "").toLowerCase().includes(normalizedSearch) ||
-    String(computedStatus || "").toLowerCase().includes(normalizedSearch) ||
-    projectReference.includes(normalizedSearch) ||
-    (compactReferenceSearch.length > 0 &&
-      compactProjectReference.includes(compactReferenceSearch))
-  );
-});
-
-const totalPages = Math.max(1, Math.ceil(filteredTours.length / pageSize));
-const safePage = Math.min(page, totalPages);
-
-const paginatedTours = filteredTours.slice(
-  (safePage - 1) * pageSize,
-  safePage * pageSize
-);
-
-useEffect(() => {
-  setPage(1);
-}, [searchQuery]);
+  const totalPages = Math.max(1, Math.ceil(totalTours / pageSize));
+  const safePage = Math.min(page, totalPages);
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -356,8 +349,8 @@ useEffect(() => {
     <div>
       <h2 className="font-display text-xl">Lista e tureve private</h2>
       <p className="text-sm text-muted-foreground mt-1">
-        {filteredTours.length}{" "}
-        {filteredTours.length === 1 ? "tur u gjet" : "ture u gjetën"}
+        {totalTours}{" "}
+        {totalTours === 1 ? "tur u gjet" : "ture u gjetën"}
       </p>
     </div>
 
@@ -377,7 +370,7 @@ useEffect(() => {
 </div>
 
           <div className="divide-y divide-border">
-            {paginatedTours.map((tour) => {
+            {tours.map((tour) => {
               const computedStatus = getComputedStatus(tour);
               const publicUrl = `${appOrigin}/client-tour/${tour.client_token}`;
 
@@ -474,7 +467,7 @@ useEffect(() => {
               );
             })}
 
-            {filteredTours.length === 0 && (
+            {totalTours === 0 && (
               <div className="p-8 text-center text-muted-foreground">
                 {searchQuery.trim()
                   ? "Nuk u gjet asnjë virtual tour me këtë kërkim."
@@ -483,12 +476,12 @@ useEffect(() => {
             )}
           </div>
 
-          {filteredTours.length > pageSize && (
+          {totalTours > pageSize && (
             <div className="p-5 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">
                 Duke shfaqur {(safePage - 1) * pageSize + 1}–
-                {Math.min(safePage * pageSize, filteredTours.length)} nga{" "}
-                {filteredTours.length}
+                {Math.min(safePage * pageSize, totalTours)} nga{" "}
+                {totalTours}
               </p>
 
               <div className="flex items-center gap-2">
