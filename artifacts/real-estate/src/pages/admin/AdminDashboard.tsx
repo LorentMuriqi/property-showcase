@@ -125,6 +125,27 @@ const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: bool
       .select("*")
       .order("created_at", { ascending: false });
 
+    const { data: referenceRows, error: referenceError } = await supabase
+      .from("admin_property_references")
+      .select("property_id, reference_code");
+
+    if (referenceError) {
+      console.error("Admin property reference load error:", referenceError);
+    }
+
+    const referenceMap = new Map(
+      (referenceRows || []).map((row) => [
+        String(row.property_id),
+        String(row.reference_code || ""),
+      ]),
+    );
+
+    const attachProjectReferences = (rows: any[]) =>
+      rows.map((row) => ({
+        ...row,
+        project_reference: referenceMap.get(String(row.id)) || null,
+      }));
+
     if (error) {
       console.error("Admin fetch error:", error);
       toast({
@@ -156,7 +177,7 @@ const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: bool
 
       if (expireError) {
         console.error("Admin auto-expire error:", expireError);
-        setProjects(data || []);
+        setProjects(attachProjectReferences(data || []));
       } else {
         const { data: refreshed, error: refreshedError } = await supabase
           .from("properties")
@@ -165,13 +186,13 @@ const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: bool
 
         if (refreshedError) {
           console.error("Admin refresh error:", refreshedError);
-          setProjects(data || []);
+          setProjects(attachProjectReferences(data || []));
         } else {
-          setProjects(refreshed || []);
+          setProjects(attachProjectReferences(refreshed || []));
         }
       }
     } else {
-      setProjects(data || []);
+      setProjects(attachProjectReferences(data || []));
     }
 
     setIsLoading(false);
@@ -406,11 +427,18 @@ const filtered = projects.filter((project) => {
     project.virtual_tour_status === "published" ? "published" : "draft"
   );
 
+  const projectReference = String(project.project_reference || "").toLowerCase();
+  const compactReferenceSearch = normalizedSearch.replace(/[\s-]/g, "");
+  const compactProjectReference = projectReference.replace(/[\s-]/g, "");
+
   const matchesSearch =
     !normalizedSearch ||
     String(project.title || "").toLowerCase().includes(normalizedSearch) ||
     String(project.city || "").toLowerCase().includes(normalizedSearch) ||
-    String(project.country || "").toLowerCase().includes(normalizedSearch);
+    String(project.country || "").toLowerCase().includes(normalizedSearch) ||
+    projectReference.includes(normalizedSearch) ||
+    (compactReferenceSearch.length > 0 &&
+      compactProjectReference.includes(compactReferenceSearch));
 
   const matchesCity = !cityFilter || project.city === cityFilter;
   const matchesCountry = !countryFilter || project.country === countryFilter;
@@ -785,7 +813,7 @@ const filtered = projects.filter((project) => {
     <input
       value={searchQuery}
       onChange={(e) => setSearchQuery(e.target.value)}
-      placeholder="Kërko pronë, qytet ose shtet..."
+      placeholder="Kërko pronë, qytet, shtet ose Project ID..."
       className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
     />
   </div>
@@ -956,7 +984,12 @@ const filtered = projects.filter((project) => {
                                 </div>
                               )}
                             </div>
-                            <div>
+                            <div className="min-w-0">
+                              {project.project_reference && (
+                                <span className="mb-1 inline-flex rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-primary">
+                                  {project.project_reference}
+                                </span>
+                              )}
                               <span className="font-medium text-foreground max-w-[220px] truncate block">
                                 {project.title}
                               </span>

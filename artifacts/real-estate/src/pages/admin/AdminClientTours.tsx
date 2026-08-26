@@ -22,6 +22,7 @@ type ClientTour = {
   client_token: string;
   expires_at: string | null;
   created_at: string;
+  project_reference: string | null;
 };
 
 function getComputedStatus(tour: ClientTour) {
@@ -91,6 +92,21 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
     .eq("visibility", "client_only")
     .order("created_at", { ascending: false });
 
+  const { data: referenceRows, error: referenceError } = await supabase
+    .from("admin_client_tour_references")
+    .select("virtual_tour_id, reference_code");
+
+  if (referenceError) {
+    console.error("Client tour reference load error:", referenceError);
+  }
+
+  const referenceMap = new Map(
+    (referenceRows || []).map((row) => [
+      String(row.virtual_tour_id),
+      String(row.reference_code || ""),
+    ]),
+  );
+
   if (error) {
     toast({
       title: "Gabim",
@@ -99,7 +115,12 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
     });
     setTours([]);
   } else {
-    setTours((data || []) as ClientTour[]);
+    setTours(
+      (data || []).map((tour) => ({
+        ...tour,
+        project_reference: referenceMap.get(String(tour.id)) || null,
+      })) as ClientTour[],
+    );
   }
 
   setIsLoading(false);
@@ -261,10 +282,17 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
 
   const computedStatus = getComputedStatus(tour);
 
+  const projectReference = String(tour.project_reference || "").toLowerCase();
+  const compactReferenceSearch = normalizedSearch.replace(/[\s-]/g, "");
+  const compactProjectReference = projectReference.replace(/[\s-]/g, "");
+
   return (
     String(tour.title || "").toLowerCase().includes(normalizedSearch) ||
     String(tour.client_name || "").toLowerCase().includes(normalizedSearch) ||
-    String(computedStatus || "").toLowerCase().includes(normalizedSearch)
+    String(computedStatus || "").toLowerCase().includes(normalizedSearch) ||
+    projectReference.includes(normalizedSearch) ||
+    (compactReferenceSearch.length > 0 &&
+      compactProjectReference.includes(compactReferenceSearch))
   );
 });
 
@@ -341,7 +369,7 @@ useEffect(() => {
       <input
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Kërko sipas emrit ose klientit..."
+        placeholder="Kërko me emër, klient ose Project ID..."
         className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
       />
     </div>
@@ -355,7 +383,12 @@ useEffect(() => {
 
               return (
                 <div key={tour.id} className="p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  <div>
+                  <div className="min-w-0">
+                    {tour.project_reference && (
+                      <span className="mb-2 inline-flex rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-primary">
+                        {tour.project_reference}
+                      </span>
+                    )}
                     <h3 className="font-semibold text-foreground">{tour.title}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
                       {tour.client_name || "Pa klient"} ·{" "}
