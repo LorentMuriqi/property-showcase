@@ -415,6 +415,9 @@ export default function AdminVirtualTour() {
 
   const isClientTourEditor = location.startsWith("/admin/client-tours/");
   const ownerColumn = isClientTourEditor ? "virtual_tour_id" : "property_id";
+  const canManageCurrentTour = isClientTourEditor
+    ? permissions.canManageClientVirtualTours
+    : permissions.canManagePropertyVirtualTours;
 
   const [project, setProject] = useState<Project | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -538,10 +541,23 @@ export default function AdminVirtualTour() {
       return;
     }
 
-    if (!permissions.canManageVirtualTours) {
-      setLocation("/admin");
+    if (!canManageCurrentTour) {
+      const fallbackLocation = permissions.canViewProperties
+        ? "/admin"
+        : permissions.canViewClientVirtualTours
+          ? "/admin/client-tours"
+          : "/";
+
+      setLocation(fallbackLocation);
     }
-  }, [authLoading, isAdmin, permissions, setLocation]);
+  }, [
+    authLoading,
+    canManageCurrentTour,
+    isAdmin,
+    permissions.canViewClientVirtualTours,
+    permissions.canViewProperties,
+    setLocation,
+  ]);
 
   const resetDraft = useCallback((keepTargetAndLabel = true) => {
     setDraft((prev) => ({
@@ -871,7 +887,7 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
 
   useEffect(() => {
     const load = async () => {
-      if (authLoading || !isAdmin || !recordId) return;
+      if (authLoading || !isAdmin || !canManageCurrentTour || !recordId) return;
 
       setIsLoading(true);
       await refreshTour();
@@ -879,7 +895,7 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
     };
 
     load();
-  }, [authLoading, isAdmin, recordId, refreshTour]);
+  }, [authLoading, canManageCurrentTour, isAdmin, recordId, refreshTour]);
 
   useEffect(() => {
     setViewerError("");
@@ -1173,7 +1189,7 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
       setIsSavingBranding(true);
 
       const { error } = await supabase.rpc(
-        "set_virtual_tour_branding",
+        "set_virtual_tour_branding_secure",
         {
           p_owner_type: isClientTourEditor
             ? "client"
@@ -2661,7 +2677,7 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
     return <div className="min-h-screen bg-background" />;
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin || !canManageCurrentTour) return null;
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
 

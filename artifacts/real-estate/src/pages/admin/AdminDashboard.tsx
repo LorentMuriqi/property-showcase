@@ -74,10 +74,19 @@ const [countryFilter, setCountryFilter] = useState("");
 const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
+    if (authLoading) return;
+
+    if (!isAdmin) {
       setLocation("/admin/login");
+      return;
     }
-  }, [authLoading, isAdmin, setLocation]);
+
+    if (!permissions.canViewProperties) {
+      setLocation(
+        permissions.canViewClientVirtualTours ? "/admin/client-tours" : "/",
+      );
+    }
+  }, [authLoading, isAdmin, permissions, setLocation]);
   
   useEffect(() => {
   if (!mobileMenuOpen) return;
@@ -102,7 +111,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 }, [mobileMenuOpen]);
 
 const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: boolean }) => {
-  if (authLoading || !isAdmin) return;
+  if (authLoading || !isAdmin || !permissions.canViewProperties) return;
 
   const shouldPreserveScroll = options?.preserveScroll === true;
   const savedScrollY = shouldPreserveScroll ? window.scrollY : null;
@@ -137,24 +146,29 @@ const fetchProjects = async (options?: { silent?: boolean; preserveScroll?: bool
         project.listing_status !== "expired",
     );
 
-    if (expiredToUpdate.length > 0) {
+    if (expiredToUpdate.length > 0 && permissions.canEditProperty) {
       const ids = expiredToUpdate.map((p) => p.id);
 
-      await supabase
+      const { error: expireError } = await supabase
         .from("properties")
         .update({ listing_status: "expired" })
         .in("id", ids);
 
-      const { data: refreshed, error: refreshedError } = await supabase
-        .from("properties")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (refreshedError) {
-        console.error("Admin refresh error:", refreshedError);
+      if (expireError) {
+        console.error("Admin auto-expire error:", expireError);
         setProjects(data || []);
       } else {
-        setProjects(refreshed || []);
+        const { data: refreshed, error: refreshedError } = await supabase
+          .from("properties")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (refreshedError) {
+          console.error("Admin refresh error:", refreshedError);
+          setProjects(data || []);
+        } else {
+          setProjects(refreshed || []);
+        }
       }
     } else {
       setProjects(data || []);
@@ -175,7 +189,7 @@ if (savedScrollY !== null) {
 
   useEffect(() => {
     fetchProjects();
-  }, [authLoading, isAdmin]);
+  }, [authLoading, isAdmin, permissions.canViewProperties, permissions.canEditProperty]);
   
   
   useEffect(() => {
@@ -198,38 +212,9 @@ if (savedScrollY !== null) {
     try {
       setIsDeleting(true);
 
-      const { data: scenes, error: scenesError } = await supabase
-        .from("virtual_tour_scenes")
-        .select("id")
-        .eq("property_id", id);
-
-      if (scenesError) throw scenesError;
-
-      const sceneIds = (scenes || []).map((scene) => scene.id);
-
-      if (sceneIds.length > 0) {
-        const { error: hotspotsBySceneError } = await supabase
-          .from("virtual_tour_hotspots")
-          .delete()
-          .in("scene_id", sceneIds);
-
-        if (hotspotsBySceneError) throw hotspotsBySceneError;
-
-        const { error: hotspotsByTargetError } = await supabase
-          .from("virtual_tour_hotspots")
-          .delete()
-          .in("to_scene_id", sceneIds);
-
-        if (hotspotsByTargetError) throw hotspotsByTargetError;
-
-        const { error: scenesDeleteError } = await supabase
-          .from("virtual_tour_scenes")
-          .delete()
-          .in("id", sceneIds);
-
-        if (scenesDeleteError) throw scenesDeleteError;
-      }
-
+      // virtual_tour_scenes and virtual_tour_hotspots are removed by the
+      // existing ON DELETE CASCADE foreign keys. This keeps property deletion
+      // independent from the separate virtual-tour management permission.
       const { error: propertyDeleteError } = await supabase
         .from("properties")
         .delete()
@@ -460,7 +445,7 @@ const filtered = projects.filter((project) => {
     return <div className="min-h-screen bg-background" />;
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin || !permissions.canViewProperties) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
@@ -475,14 +460,16 @@ const filtered = projects.filter((project) => {
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
-          <Link
-            href="/admin"
-            className="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-xl font-medium"
-          >
-            <Home size={18} /> Properties
-          </Link>
+          {permissions.canViewProperties && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-3 px-4 py-3 bg-primary/10 text-primary rounded-xl font-medium"
+            >
+              <Home size={18} /> Properties
+            </Link>
+          )}
 		  
-		  {permissions.canManageVirtualTours && (
+		  {permissions.canViewClientVirtualTours && (
   <Link
     href="/admin/client-tours"
     className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl font-medium transition-colors"
@@ -601,27 +588,29 @@ const filtered = projects.filter((project) => {
 
       <nav className="space-y-1.5">
         {/* Properties */}
-        <Link
-          href="/admin"
-          onClick={() => setMobileMenuOpen(false)}
-          className="flex items-center gap-3.5 rounded-xl bg-primary/10 px-3.5 py-3.5 text-primary transition-colors"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Home size={18} />
-          </span>
+        {permissions.canViewProperties && (
+          <Link
+            href="/admin"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-3.5 rounded-xl bg-primary/10 px-3.5 py-3.5 text-primary transition-colors"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Home size={18} />
+            </span>
 
-          <div className="min-w-0">
-            <span className="block text-sm font-semibold">
-              Properties
-            </span>
-            <span className="block truncate text-[11px] text-primary/70">
-              Menaxho portofolin e pronave
-            </span>
-          </div>
-        </Link>
+            <div className="min-w-0">
+              <span className="block text-sm font-semibold">
+                Properties
+              </span>
+              <span className="block truncate text-[11px] text-primary/70">
+                Menaxho portofolin e pronave
+              </span>
+            </div>
+          </Link>
+        )}
 
         {/* Client Virtual Tours */}
-        {permissions.canManageVirtualTours && (
+        {permissions.canViewClientVirtualTours && (
           <Link
             href="/admin/client-tours"
             onClick={() => setMobileMenuOpen(false)}
@@ -1066,7 +1055,7 @@ const filtered = projects.filter((project) => {
                             </button>
                           )}
 
-                          {permissions.canManageVirtualTours && (
+                          {permissions.canManagePropertyVirtualTours && (
                             <Link href={`/admin/projects/${project.id}/virtual-tour`}>
                               <button
                                 className="p-2 text-primary bg-primary/10 hover:bg-primary/30 rounded-lg transition-colors inline-flex"

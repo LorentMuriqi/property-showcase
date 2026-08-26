@@ -72,8 +72,8 @@ const pageSize = 20;
       return;
     }
 
-    if (!permissions.canManageVirtualTours) {
-      setLocation("/admin");
+    if (!permissions.canViewClientVirtualTours) {
+      setLocation(permissions.canViewProperties ? "/admin" : "/");
     }
   }, [authLoading, isAdmin, permissions, setLocation]);
 
@@ -117,12 +117,21 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
 
 
   useEffect(() => {
-    if (!authLoading && isAdmin && permissions.canManageVirtualTours) {
-      fetchTours();
+    if (!authLoading && isAdmin && permissions.canViewClientVirtualTours) {
+      void fetchTours();
     }
-  }, [authLoading, isAdmin, permissions.canManageVirtualTours]);
+  }, [authLoading, isAdmin, permissions.canViewClientVirtualTours]);
 
   const createTour = async () => {
+    if (!permissions.canManageClientVirtualTours) {
+      toast({
+        title: "Pa akses",
+        description: "Nuk ke leje për të krijuar Client Virtual Tours.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const title = prompt("Emri i virtual tour-it, p.sh. Hotel Dukagjini");
     if (!title?.trim()) return;
 
@@ -153,6 +162,15 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
 
   
   const updateStatus = async (tour: ClientTour, status: ClientTour["status"]) => {
+  if (!permissions.canManageClientVirtualTours) {
+    toast({
+      title: "Pa akses",
+      description: "Nuk ke leje për të ndryshuar Client Virtual Tours.",
+      variant: "destructive",
+    });
+    return;
+  }
+
   const confirmed = window.confirm(getStatusConfirmationMessage(tour, status));
 
   if (!confirmed) return;
@@ -211,6 +229,15 @@ const fetchTours = async (options?: { silent?: boolean; preserveScroll?: boolean
   
 
   const deleteTour = async (tour: ClientTour) => {
+    if (!permissions.canManageClientVirtualTours) {
+      toast({
+        title: "Pa akses",
+        description: "Nuk ke leje për të fshirë Client Virtual Tours.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm(`A dëshironi ta fshini "${tour.title}"?`)) return;
 
     const { error } = await supabase.from("virtual_tours").delete().eq("id", tour.id);
@@ -259,12 +286,16 @@ useEffect(() => {
     return <div className="min-h-screen bg-background" />;
   }
 
+  if (!isAdmin || !permissions.canViewClientVirtualTours) return null;
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4 md:p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => setLocation("/admin")}
+            onClick={() =>
+              setLocation(permissions.canViewProperties ? "/admin" : "/")
+            }
             className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center"
           >
             <ArrowLeft size={20} />
@@ -279,13 +310,15 @@ useEffect(() => {
           </div>
         </div>
 
-        <button
-          onClick={createTour}
-          className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm inline-flex items-center gap-2"
-        >
-          <Plus size={16} />
-          Virtual Tour i Ri
-        </button>
+        {permissions.canManageClientVirtualTours && (
+          <button
+            onClick={createTour}
+            className="px-5 py-3 rounded-xl bg-primary text-black font-bold text-sm inline-flex items-center gap-2"
+          >
+            <Plus size={16} />
+            Virtual Tour i Ri
+          </button>
+        )}
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
@@ -347,11 +380,13 @@ useEffect(() => {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Link href={`/admin/client-tours/${tour.id}/virtual-tour`}>
-                      <button className="px-4 py-2 rounded-xl bg-primary/10 text-primary font-semibold">
-                        Edito Turin
-                      </button>
-                    </Link>
+                    {permissions.canManageClientVirtualTours && (
+                      <Link href={`/admin/client-tours/${tour.id}/virtual-tour`}>
+                        <button className="px-4 py-2 rounded-xl bg-primary/10 text-primary font-semibold">
+                          Edito Turin
+                        </button>
+                      </Link>
+                    )}
 
                     <a href={publicUrl} target="_blank" rel="noreferrer">
                       <button className="px-4 py-2 rounded-xl bg-muted text-foreground inline-flex items-center gap-2">
@@ -360,43 +395,47 @@ useEffect(() => {
                       </button>
                     </a>
 
-                    {computedStatus !== "active" && (
-                      <button
-                        onClick={() => updateStatus(tour, "active")}
-                        className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500"
-                        title="Aktivizo"
-                      >
-                        <Play size={16} />
-                      </button>
-                    )}
+                    {permissions.canManageClientVirtualTours && (
+                      <>
+                        {computedStatus !== "active" && (
+                          <button
+                            onClick={() => updateStatus(tour, "active")}
+                            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500"
+                            title="Aktivizo"
+                          >
+                            <Play size={16} />
+                          </button>
+                        )}
 
-                    {computedStatus === "active" && (
-                      <button
-                        onClick={() => updateStatus(tour, "paused")}
-                        className="p-2 rounded-xl bg-yellow-500/10 text-yellow-500"
-                        title="Pezullo"
-                      >
-                        <Pause size={16} />
-                      </button>
-                    )}
+                        {computedStatus === "active" && (
+                          <button
+                            onClick={() => updateStatus(tour, "paused")}
+                            className="p-2 rounded-xl bg-yellow-500/10 text-yellow-500"
+                            title="Pezullo"
+                          >
+                            <Pause size={16} />
+                          </button>
+                        )}
 
-                    {computedStatus !== "draft" && (
-                      <button
-                        onClick={() => updateStatus(tour, "draft")}
-                        className="p-2 rounded-xl bg-muted text-foreground"
-                        title="Kthe në Draft"
-                      >
-                        <RefreshCw size={16} />
-                      </button>
-                    )}
+                        {computedStatus !== "draft" && (
+                          <button
+                            onClick={() => updateStatus(tour, "draft")}
+                            className="p-2 rounded-xl bg-muted text-foreground"
+                            title="Kthe në Draft"
+                          >
+                            <RefreshCw size={16} />
+                          </button>
+                        )}
 
-                    <button
-                      onClick={() => deleteTour(tour)}
-                      className="p-2 rounded-xl bg-red-500/10 text-red-400"
-                      title="Fshi"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                        <button
+                          onClick={() => deleteTour(tour)}
+                          className="p-2 rounded-xl bg-red-500/10 text-red-400"
+                          title="Fshi"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

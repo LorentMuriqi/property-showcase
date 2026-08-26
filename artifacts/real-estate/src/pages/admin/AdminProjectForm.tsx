@@ -54,6 +54,15 @@ export default function AdminProjectForm() {
       return;
     }
 
+    const fallbackAdminLocation = permissions.canViewClientVirtualTours
+      ? "/admin/client-tours"
+      : "/";
+
+    if (!permissions.canViewProperties) {
+      setLocation(fallbackAdminLocation);
+      return;
+    }
+
     if (!isEditing && !permissions.canCreateProperty) {
       setLocation("/admin");
       return;
@@ -245,7 +254,14 @@ useEffect(() => {
 
   useEffect(() => {
     const fetchProject = async () => {
-      if (authLoading || !isAdmin || !isEditing || !id) return;
+      if (
+        authLoading ||
+        !isAdmin ||
+        !permissions.canViewProperties ||
+        !permissions.canEditProperty ||
+        !isEditing ||
+        !id
+      ) return;
 
       setIsLoading(true);
 
@@ -271,7 +287,16 @@ useEffect(() => {
     };
 
     fetchProject();
-  }, [authLoading, isAdmin, id, isEditing, setLocation, toast]);
+  }, [
+    authLoading,
+    isAdmin,
+    id,
+    isEditing,
+    permissions.canEditProperty,
+    permissions.canViewProperties,
+    setLocation,
+    toast,
+  ]);
 
   useEffect(() => {
     if (isEditing && projectToEdit) {
@@ -454,7 +479,7 @@ useEffect(() => {
     return <div className="p-8 text-foreground">Loading...</div>;
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin || !permissions.canViewProperties) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">

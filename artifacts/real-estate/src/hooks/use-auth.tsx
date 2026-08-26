@@ -13,10 +13,13 @@ type AdminRole = {
   id: number;
   name: string;
   description: string | null;
+  can_view_properties: boolean;
   can_create_property: boolean;
   can_edit_property: boolean;
   can_delete_property: boolean;
-  can_manage_virtual_tours: boolean;
+  can_manage_property_virtual_tours: boolean;
+  can_view_client_virtual_tours: boolean;
+  can_manage_client_virtual_tours: boolean;
 };
 
 type AdminUserProfile = {
@@ -30,10 +33,13 @@ type AdminUserProfile = {
 };
 
 type Permissions = {
+  canViewProperties: boolean;
   canCreateProperty: boolean;
   canEditProperty: boolean;
   canDeleteProperty: boolean;
-  canManageVirtualTours: boolean;
+  canManagePropertyVirtualTours: boolean;
+  canViewClientVirtualTours: boolean;
+  canManageClientVirtualTours: boolean;
 };
 
 interface AuthContextType {
@@ -47,10 +53,13 @@ interface AuthContextType {
 }
 
 const defaultPermissions: Permissions = {
+  canViewProperties: false,
   canCreateProperty: false,
   canEditProperty: false,
   canDeleteProperty: false,
-  canManageVirtualTours: false,
+  canManagePropertyVirtualTours: false,
+  canViewClientVirtualTours: false,
+  canManageClientVirtualTours: false,
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -102,10 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               id,
               name,
               description,
+              can_view_properties,
               can_create_property,
               can_edit_property,
               can_delete_property,
-              can_manage_virtual_tours
+              can_manage_property_virtual_tours,
+              can_view_client_virtual_tours,
+              can_manage_client_virtual_tours
             )
           `,
         )
@@ -201,11 +213,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const role = userProfile?.admin_roles ?? null;
 
     const permissions: Permissions = {
+      canViewProperties: isSuperAdmin || !!role?.can_view_properties,
       canCreateProperty: isSuperAdmin || !!role?.can_create_property,
       canEditProperty: isSuperAdmin || !!role?.can_edit_property,
       canDeleteProperty: isSuperAdmin || !!role?.can_delete_property,
-      canManageVirtualTours:
-        isSuperAdmin || !!role?.can_manage_virtual_tours,
+      canManagePropertyVirtualTours:
+        isSuperAdmin || !!role?.can_manage_property_virtual_tours,
+      canViewClientVirtualTours:
+        isSuperAdmin || !!role?.can_view_client_virtual_tours,
+      canManageClientVirtualTours:
+        isSuperAdmin || !!role?.can_manage_client_virtual_tours,
     };
 
     return {
