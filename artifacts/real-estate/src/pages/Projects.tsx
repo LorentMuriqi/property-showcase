@@ -1426,15 +1426,28 @@ const clearAllFilters = () => {
           </FilterSection>
 
           <button
-            type="button"
-            onClick={() => setShowFilters(false)}
-            disabled={isLoading}
-            className="mt-1 flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-[0_12px_28px_rgba(212,175,55,0.2)] transition-all hover:-translate-y-0.5 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 lg:hidden"
-          >
-            {isLoading
-              ? "Duke kërkuar..."
-              : `Shfaq ${formatResultCount(totalCount)}`}
-          </button>
+  type="button"
+  onClick={() => {
+    // Hiq fokusin nga input/select që tastiera mobile të mbyllet siç duhet.
+    const activeElement = document.activeElement as HTMLElement | null;
+    activeElement?.blur();
+
+    // Mbyll panelin e filtrave.
+    setShowFilters(false);
+
+    // Prit që paneli të hiqet nga layout-i dhe viewport-i mobile të stabilizohet,
+    // pastaj kthehu në fillim të faqes së pronave.
+    window.setTimeout(() => {
+      scrollToProjectsTop("smooth");
+    }, 120);
+  }}
+  disabled={isLoading}
+  className="mt-1 flex h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-[0_12px_28px_rgba(212,175,55,0.2)] transition-all hover:-translate-y-0.5 hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 lg:hidden"
+>
+  {isLoading
+    ? "Duke kërkuar..."
+    : `Shfaq ${formatResultCount(totalCount)}`}
+</button>
         </div>
       </div>
     </aside>
