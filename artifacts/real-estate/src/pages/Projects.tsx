@@ -662,9 +662,13 @@ requestAnimationFrame(() => {
 useEffect(() => {
   if (!didInitRef.current) return;
 
-  // Kur ndryshon filtër, mos e çoj përdoruesin në fillim.
-  // Vetëm kthe pagination në faqen e parë që rezultatet të jenë korrekte.
-  shouldScrollToTopRef.current = false;
+  // Çdo kërkim/filter i ri është një kontekst i ri rezultatesh.
+  // Mos rikthe pozicionin e një karte të vjetër.
+  shouldRestoreScrollRef.current = false;
+  shouldScrollToTopRef.current = true;
+  clearProjectsRestoreState();
+
+  // Rezultatet e reja gjithmonë fillojnë nga faqja 1.
   setPage(1);
 }, [
   country,
