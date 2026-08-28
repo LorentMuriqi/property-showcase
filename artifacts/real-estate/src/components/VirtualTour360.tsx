@@ -5,17 +5,9 @@ import {
   EquirectangularAdapter,
 } from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
-import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
-import "@photo-sphere-viewer/markers-plugin/index.css";
 import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
-import {
-  ensureMatterportHotspotStyles,
-  getHiddenVirtualTourArrowStyle,
-  getMatterportHotspotHtml,
-  getMatterportHotspotSize,
-} from "@/lib/matterport-hotspots";
 
 interface VirtualTour360Props {
   scenes: Array<{
@@ -47,6 +39,8 @@ interface VirtualTour360Props {
   }>;
   defaultSceneId?: number | null;
   onClose?: () => void;
+  
+  showAura360Branding?: boolean;
 }
 
 type SceneType = VirtualTour360Props["scenes"][number];
@@ -64,13 +58,13 @@ type DeviceProfile = {
 };
 
 const FIRST_LOAD_HINT_MS = 6500;
-const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-placeholder.webp";
+const TOUR_THUMBNAIL_PLACEHOLDER = "/tour-thumbnail-placeholder.svg";
 
 const CACHE_TTL_SECONDS = 30 * 60;
 const NAVIGATION_TRANSITION = {
   showLoader: false,
   effect: "fade" as const,
-  speed: 180,
+  speed: 240,
   rotation: false,
 };
 
@@ -78,7 +72,6 @@ type NavigationTransitionOptions = typeof NAVIGATION_TRANSITION & {
   rotateTo?: Orientation;
 };
 
-const LOADER_DELAY_MS = 120;
 
 const getDeviceProfile = (): DeviceProfile => {
   const width = typeof window !== "undefined" ? window.innerWidth : 1200;
@@ -122,26 +115,63 @@ const getCacheMaxItems = () => {
   const profile = getDeviceProfile();
 
   if (profile.isSlowConnection || profile.isLowMemory) return 4;
-  if (profile.isMobile) return 6;
+  if (profile.isMobile) return 8;
   return 14;
 };
 
-const getPreloadBudget = () => {
+type PreloadPlan = {
+  immediate: number;
+  total: number;
+  gapMs: number;
+  positionDebounceMs: number;
+};
+
+const getPreloadPlan = (): PreloadPlan => {
   const profile = getDeviceProfile();
 
   if (profile.isSlowConnection) {
-    return { direct: 0, secondLevel: 0 };
+    return {
+      immediate: 1,
+      total: 2,
+      gapMs: 260,
+      positionDebounceMs: 280,
+    };
   }
 
   if (profile.isLowMemory) {
-    return { direct: 1, secondLevel: 0 };
+    return {
+      immediate: 1,
+      total: 3,
+      gapMs: 220,
+      positionDebounceMs: 240,
+    };
   }
 
   if (profile.isMobile) {
-    return { direct: 2, secondLevel: 0 };
+    return {
+      immediate: 1,
+      total: 6,
+      gapMs: 150,
+      positionDebounceMs: 190,
+    };
   }
 
-  return { direct: 5, secondLevel: 6 };
+  return {
+    immediate: 2,
+    total: 10,
+    gapMs: 110,
+    positionDebounceMs: 150,
+  };
+};
+
+const waitForPreloadGap = (delay: number): Promise<void> => {
+  if (typeof window === "undefined" || delay <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
 };
 
 const isFiniteOrientation = (orientation: Orientation | null): orientation is Orientation => {
@@ -211,6 +241,108 @@ const getRuntimeHotspotTargetPitch = (hotspot: RuntimeHotspot) => {
   return toFiniteNumber(hotspot.targetPitch ?? hotspot.target_pitch);
 };
 
+
+type HotspotLike = {
+  id: number;
+  yaw: number;
+  pitch: number;
+};
+
+type ClusteredHotspotPosition = {
+  yaw: number;
+  pitch: number;
+  rawYaw: number;
+  rawPitch: number;
+  clusterIndex: number;
+  clusterSize: number;
+  isClustered: boolean;
+};
+
+const HOTSPOT_CLUSTER_RADIUS = 0.04;
+const HOTSPOT_FAN_YAW_STEP = 0.052;
+const HOTSPOT_FAN_PITCH_STEP = 0.018;
+
+const getYawDistance = (a: number, b: number) => {
+  return Math.abs(normalizeYaw(a - b));
+};
+
+const getHotspotDistance = (a: HotspotLike, b: HotspotLike) => {
+  const dyaw = getYawDistance(a.yaw, b.yaw);
+  const dpitch = Math.abs(a.pitch - b.pitch);
+  return Math.sqrt(dyaw * dyaw + dpitch * dpitch);
+};
+
+const getHotspotClusterKey = (hotspot: HotspotLike) => {
+  return `${Math.round(normalizeYaw(hotspot.yaw) / HOTSPOT_CLUSTER_RADIUS)}:${Math.round(
+    clampPitch(hotspot.pitch) / HOTSPOT_CLUSTER_RADIUS,
+  )}`;
+};
+
+const getClusteredHotspotPositions = <T extends HotspotLike>(
+  hotspots: T[],
+): Map<number, ClusteredHotspotPosition> => {
+  const clusters: T[][] = [];
+
+  hotspots.forEach((hotspot) => {
+    const existingCluster = clusters.find((cluster) => {
+      return cluster.some(
+        (clusterHotspot) => getHotspotDistance(clusterHotspot, hotspot) <= HOTSPOT_CLUSTER_RADIUS,
+      );
+    });
+
+    if (existingCluster) {
+      existingCluster.push(hotspot);
+    } else {
+      clusters.push([hotspot]);
+    }
+  });
+
+  const positions = new Map<number, ClusteredHotspotPosition>();
+
+  clusters.forEach((cluster) => {
+    const orderedCluster = [...cluster].sort((a, b) => {
+      const keyA = getHotspotClusterKey(a);
+      const keyB = getHotspotClusterKey(b);
+      if (keyA !== keyB) return keyA.localeCompare(keyB);
+      return Number(a.id) - Number(b.id);
+    });
+
+    if (orderedCluster.length === 1) {
+      const hotspot = orderedCluster[0];
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw),
+        pitch: clampPitch(hotspot.pitch),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: 0,
+        clusterSize: 1,
+        isClustered: false,
+      });
+      return;
+    }
+
+    const centerIndex = (orderedCluster.length - 1) / 2;
+
+    orderedCluster.forEach((hotspot, index) => {
+      const offset = index - centerIndex;
+      const verticalDirection = index % 2 === 0 ? 1 : -1;
+
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw + offset * HOTSPOT_FAN_YAW_STEP),
+        pitch: clampPitch(
+          hotspot.pitch + Math.abs(offset) * HOTSPOT_FAN_PITCH_STEP * verticalDirection,
+        ),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: index,
+        clusterSize: orderedCluster.length,
+        isClustered: true,
+      });
+    });
+  });
+
+  return positions;
+};
 
 const preloadBrowserImage = (
   src?: string | null,
@@ -355,24 +487,35 @@ const scheduleIdleTask = (callback: () => void, delay = 80) => {
   };
 };
 
-const shouldPluginPreloadLink = (node: any, link: any) => {
-  const budget = getPreloadBudget();
-  if (budget.direct <= 0) return false;
+const scheduleDelayedIdleTask = (callback: () => void, delay = 0) => {
+  if (typeof window === "undefined") return () => undefined;
 
-  const links = Array.isArray(node?.links) ? node.links : [];
-  const directTargets = uniqueNumbers(
-    links
-      .map((item: any) => Number(item?.nodeId))
-      .filter((id: number) => Number.isFinite(id)),
-  ).slice(0, budget.direct);
+  let cancelled = false;
+  let idleCleanup: (() => void) | null = null;
 
-  return directTargets.includes(Number(link?.nodeId));
+  const timeoutId = window.setTimeout(() => {
+    if (cancelled) return;
+    idleCleanup = scheduleIdleTask(callback, 0);
+  }, Math.max(0, delay));
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timeoutId);
+    idleCleanup?.();
+  };
+};
+
+const shouldPluginPreloadLink = () => {
+  // Preload-in e menaxhon vetëm radha inteligjente custom.
+  // Kjo shmang dy ngarkime paralele për të njëjtën panoramë.
+  return false;
 };
 
 export function VirtualTour360({
   scenes,
   defaultSceneId,
   onClose,
+  showAura360Branding = true,
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -380,27 +523,31 @@ export function VirtualTour360({
   const isNavigatingRef = useRef(false);
   const pendingEntryOrientationRef = useRef<Orientation | null>(null);
   const sceneButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-  const browserPreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
-  const psvPreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
-  const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
-  const cleanupTasksRef = useRef<Array<() => void>>([]);
-  const loaderTimerRef = useRef<number | null>(null);
+const browserPreloadPromisesRef = useRef<Map<string, Promise<void>>>(
+  new Map(),
+);
+
+const psvPreloadPromisesRef = useRef<Map<string, Promise<void>>>(
+  new Map(),
+);
+
+const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
+
+const preloadSequenceRef = useRef(0);
+
+const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
+  null,
+);
 
   const [currentSceneId, setCurrentSceneId] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
-  const [isSceneLoading, setIsSceneLoading] = useState(false);
-  const [loadingSceneTitle, setLoadingSceneTitle] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showFirstLoadHint, setShowFirstLoadHint] = useState(false);
   const [canUseFullscreen, setCanUseFullscreen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-
-  useEffect(() => {
-    ensureMatterportHotspotStyles();
-  }, []);
 
   const sortedScenes = useMemo(
     () => [...scenes].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -451,10 +598,14 @@ export function VirtualTour360({
         })
         .filter((hotspot): hotspot is NonNullable<typeof hotspot> => hotspot !== null);
 
+      const clusteredPositions = getClusteredHotspotPositions(validHotspots);
+
       return {
         id: String(scene.id),
         panorama: scene.imageUrl,
-        thumbnail: scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER,
+        thumbnail:
+  scene.thumbnailUrl?.trim() ||
+  TOUR_THUMBNAIL_PLACEHOLDER,
         name: scene.title,
         caption: scene.title,
         data: {
@@ -462,28 +613,32 @@ export function VirtualTour360({
           initialPitch: scene.initialPitch ?? null,
         },
         links: validHotspots.map((hotspot) => {
+          const visualPosition = clusteredPositions.get(Number(hotspot.id));
           const targetTitle = scenesById.get(Number(hotspot.toSceneId))?.title;
           const baseName = hotspot.label || targetTitle || "Lidhje";
-          const yaw = normalizeYaw(hotspot.yaw);
-          const pitch = clampPitch(hotspot.pitch);
 
           return {
             nodeId: String(hotspot.toSceneId),
-            position: { yaw, pitch },
-            name: baseName,
+            position: {
+              yaw: visualPosition?.yaw ?? hotspot.yaw,
+              pitch: visualPosition?.pitch ?? hotspot.pitch,
+            },
+            name: visualPosition?.isClustered
+              ? `${baseName} · ${Number(visualPosition.clusterIndex) + 1}/${visualPosition.clusterSize}`
+              : baseName,
             data: {
               hotspotId: hotspot.id,
               fromSceneId: hotspot.fromSceneId,
               toSceneId: hotspot.toSceneId,
               targetYaw: hotspot.targetYaw ?? null,
               targetPitch: hotspot.targetPitch ?? null,
-              rawYaw: yaw,
-              rawPitch: pitch,
-              displayYaw: yaw,
-              displayPitch: pitch,
-              isClustered: false,
-              clusterIndex: 0,
-              clusterSize: 1,
+              rawYaw: visualPosition?.rawYaw ?? hotspot.yaw,
+              rawPitch: visualPosition?.rawPitch ?? hotspot.pitch,
+              displayYaw: visualPosition?.yaw ?? hotspot.yaw,
+              displayPitch: visualPosition?.pitch ?? hotspot.pitch,
+              isClustered: !!visualPosition?.isClustered,
+              clusterIndex: visualPosition?.clusterIndex ?? 0,
+              clusterSize: visualPosition?.clusterSize ?? 1,
             },
           };
         }),
@@ -510,49 +665,6 @@ export function VirtualTour360({
     [scenesById],
   );
 
-  const getNavigationMarkerConfigs = useCallback(
-    (sceneId: number) => {
-      const scene = getSceneById(sceneId);
-      if (!scene) return [];
-
-      return scene.hotspots
-        .map((hotspot) => {
-          const runtimeHotspot = hotspot as RuntimeHotspot;
-          const targetSceneId = getRuntimeHotspotTargetSceneId(runtimeHotspot);
-
-          if (targetSceneId === null || !scenesById.has(targetSceneId)) return null;
-
-          const yaw = getRuntimeHotspotYaw(runtimeHotspot);
-          const pitch = getRuntimeHotspotPitch(runtimeHotspot);
-          const targetTitle = scenesById.get(targetSceneId)?.title || "Lidhje";
-          const label = String(hotspot.label || "").trim() || targetTitle;
-
-          return {
-            id: `nav-${getRuntimeHotspotId(runtimeHotspot)}`,
-            position: { yaw, pitch },
-            html: getMatterportHotspotHtml(pitch, "default"),
-            size: getMatterportHotspotSize(pitch),
-            anchor: "center center",
-            className: "aura-mp-marker",
-            hoverScale: false,
-            tooltip: {
-              content: label,
-              position: "top center",
-              trigger: "hover" as const,
-            },
-            data: {
-              hotspotId: getRuntimeHotspotId(runtimeHotspot),
-              fromSceneId: getRuntimeHotspotSourceSceneId(runtimeHotspot, Number(scene.id)),
-              toSceneId: targetSceneId,
-              targetYaw: getRuntimeHotspotTargetYaw(runtimeHotspot),
-              targetPitch: getRuntimeHotspotTargetPitch(runtimeHotspot),
-            },
-          };
-        })
-        .filter((marker): marker is NonNullable<typeof marker> => marker !== null);
-    },
-    [getSceneById, scenesById],
-  );
 
   const getSceneStartOrientation = useCallback(
     (sceneId: number): Orientation | null => {
@@ -637,115 +749,325 @@ export function VirtualTour360({
     [getDirectHotspotEntryOrientation, getReverseHotspotEntryOrientation, getSceneStartOrientation],
   );
 
-  const clearLoaderTimer = useCallback(() => {
-    if (loaderTimerRef.current !== null && typeof window !== "undefined") {
-      window.clearTimeout(loaderTimerRef.current);
-      loaderTimerRef.current = null;
-    }
-  }, []);
-
-  const showNavigationLoader = useCallback(
-    (title: string) => {
-      if (typeof window === "undefined") return;
-
-      clearLoaderTimer();
-      setLoadingSceneTitle(title);
-
-      loaderTimerRef.current = window.setTimeout(() => {
-        setIsSceneLoading(true);
-      }, LOADER_DELAY_MS);
-    },
-    [clearLoaderTimer],
-  );
-
-  const hideNavigationLoader = useCallback(() => {
-    clearLoaderTimer();
-    setIsSceneLoading(false);
-    setLoadingSceneTitle(null);
-  }, [clearLoaderTimer]);
-
   const preloadBrowserImageOnce = useCallback(
-    (src?: string | null, priority: PreloadPriority = "low"): Promise<void> => {
-      if (!src) return Promise.resolve();
+  (
+    src?: string | null,
+    priority: PreloadPriority = "low",
+  ): Promise<void> => {
+    if (!src) return Promise.resolve();
 
-      const existingPromise = browserPreloadPromisesRef.current.get(src);
-      if (existingPromise) return existingPromise;
+    const existingPromise =
+      browserPreloadPromisesRef.current.get(src);
 
-      const promise = preloadBrowserImage(src, priority);
-      browserPreloadPromisesRef.current.set(src, promise);
+    if (existingPromise) {
+      return existingPromise;
+    }
 
-      return promise;
-    },
-    [],
-  );
+    const promise = preloadBrowserImage(src, priority).finally(() => {
+      browserPreloadPromisesRef.current.delete(src);
+    });
 
-  const preloadScenePanoramaOnce = useCallback(
-    (sceneId: number | null, priority: PreloadPriority = "low"): Promise<void> => {
-      if (sceneId === null) return Promise.resolve();
+    browserPreloadPromisesRef.current.set(src, promise);
 
-      const scene = getSceneById(sceneId);
-      if (!scene?.imageUrl) return Promise.resolve();
+    return promise;
+  },
+  [],
+);
 
-      const viewer = viewerRef.current as any;
-      const src = scene.imageUrl;
+const preloadScenePanoramaOnce = useCallback(
+  (
+    sceneId: number | null,
+    priority: PreloadPriority = "low",
+  ): Promise<void> => {
+    if (sceneId === null) {
+      return Promise.resolve();
+    }
 
-      if (viewer?.textureLoader?.preloadPanorama) {
-        const existingPromise = psvPreloadPromisesRef.current.get(src);
-        if (existingPromise) return existingPromise;
+    const scene = getSceneById(sceneId);
 
-        const promise = Promise.resolve(viewer.textureLoader.preloadPanorama(src))
-          .then(() => {
-            psvReadyPanoramasRef.current.add(src);
-          })
-          .catch((error) => {
-            psvPreloadPromisesRef.current.delete(src);
-            console.warn("Panorama preload failed:", error);
-          });
+    if (!scene?.imageUrl) {
+      return Promise.resolve();
+    }
 
-        psvPreloadPromisesRef.current.set(src, promise);
-        return promise;
-      }
+    const viewer = viewerRef.current as any;
+    const src = scene.imageUrl;
 
-      return preloadBrowserImageOnce(src, priority);
-    },
-    [getSceneById, preloadBrowserImageOnce],
-  );
+    /*
+     * Photo Sphere Viewer e ruan Blob-in duke përdorur URL-në
+     * e panoramës si cache key.
+     *
+     * Nëse fotografia është tashmë në cache, nuk bëjmë:
+     * - request të dytë;
+     * - decode të dytë;
+     * - punë të panevojshme në GPU.
+     */
+    if (Cache.get(src, src)) {
+      return Promise.resolve();
+    }
 
-  const warmSceneNeighborhood = useCallback(
-    (sceneId: number | null) => {
-      if (sceneId === null) return;
+    const existingPromise =
+      psvPreloadPromisesRef.current.get(src);
 
-      const budget = getPreloadBudget();
-      if (budget.direct <= 0) return;
+    if (existingPromise) {
+      return existingPromise;
+    }
 
-      const directTargetIds = (linkedSceneIdsBySceneId.get(Number(sceneId)) || []).slice(
-        0,
-        budget.direct,
+    let task: Promise<unknown>;
+
+    if (viewer?.textureLoader?.loadFile) {
+      /*
+       * Preload vetëm skedarin Blob.
+       *
+       * Mos përdor preloadPanorama për çdo hotspot,
+       * sepse ai vazhdon edhe me dekodimin dhe krijimin
+       * e texture-it, gjë që rëndon telefonin kur kemi
+       * shumë lidhje.
+       */
+      task = Promise.resolve(
+        viewer.textureLoader.loadFile(
+          src,
+          undefined,
+          src,
+        ),
       );
+    } else if (viewer?.textureLoader?.preloadPanorama) {
+      /*
+       * Fallback për versione ku loadFile nuk është
+       * i ekspozuar.
+       */
+      task = Promise.resolve(
+        viewer.textureLoader.preloadPanorama(src),
+      );
+    } else {
+      return preloadBrowserImageOnce(src, priority);
+    }
 
-      directTargetIds.forEach((targetId) => {
-        void preloadScenePanoramaOnce(targetId, "high");
+    const promise = task
+      .then(() => undefined)
+      .catch((error) => {
+        console.warn(
+          "Panorama preload failed:",
+          error,
+        );
+      })
+      .finally(() => {
+        /*
+         * Në këtë Map mbajmë vetëm request-et aktive.
+         * Pas përfundimit, Cache është burimi real
+         * i informacionit.
+         */
+        psvPreloadPromisesRef.current.delete(src);
       });
 
-      if (budget.secondLevel <= 0) return;
+    psvPreloadPromisesRef.current.set(src, promise);
 
-      const cancelIdle = scheduleIdleTask(() => {
-        const secondLevelIds = uniqueNumbers(
-          directTargetIds.flatMap((targetId) => linkedSceneIdsBySceneId.get(targetId) || []),
-        )
-          .filter((targetId) => targetId !== Number(sceneId))
-          .filter((targetId) => !directTargetIds.includes(targetId))
-          .slice(0, budget.secondLevel);
+    return promise;
+  },
+  [getSceneById, preloadBrowserImageOnce],
+);
 
-        secondLevelIds.forEach((targetId) => {
-          void preloadScenePanoramaOnce(targetId, "low");
-        });
-      }, 700);
+const getPrioritizedLinkedSceneIds = useCallback(
+  (sceneId: number | null) => {
+    if (sceneId === null) {
+      return [] as number[];
+    }
 
-      cleanupTasksRef.current.push(cancelIdle);
-    },
-    [linkedSceneIdsBySceneId, preloadScenePanoramaOnce],
-  );
+    const fallbackTargetIds =
+      linkedSceneIdsBySceneId.get(Number(sceneId)) || [];
+
+    const currentNode = nodes.find(
+      (node) => Number(node.id) === Number(sceneId),
+    );
+
+    if (!currentNode || fallbackTargetIds.length <= 1) {
+      return fallbackTargetIds;
+    }
+
+    let viewerPosition: Orientation | null = null;
+
+    try {
+      const position =
+        viewerRef.current?.getPosition?.();
+
+      if (
+        position &&
+        Number.isFinite(position.yaw) &&
+        Number.isFinite(position.pitch)
+      ) {
+        viewerPosition = {
+          yaw: normalizeYaw(position.yaw),
+          pitch: clampPitch(position.pitch),
+        };
+      }
+    } catch {
+      viewerPosition = null;
+    }
+
+    if (!viewerPosition) {
+      return fallbackTargetIds;
+    }
+
+    const scoresByTargetId = new Map<number, number>();
+
+    /*
+     * Përdorim pozicionet vizuale reale të hotspot-eve.
+     * Kjo përfshin edhe fan-out-in e hotspot-eve që janë
+     * shumë afër njëri-tjetrit.
+     */
+    currentNode.links.forEach((link: any) => {
+      const targetId = toFiniteNumber(link?.nodeId);
+      const yaw = toFiniteNumber(link?.position?.yaw);
+      const pitch = toFiniteNumber(link?.position?.pitch);
+
+      if (
+        targetId === null ||
+        yaw === null ||
+        pitch === null ||
+        !scenesById.has(targetId)
+      ) {
+        return;
+      }
+
+      const yawDistance = getYawDistance(
+        yaw,
+        viewerPosition.yaw,
+      );
+
+      const pitchDistance = Math.abs(
+        pitch - viewerPosition.pitch,
+      );
+
+      const distance = Math.hypot(
+        yawDistance,
+        pitchDistance,
+      );
+
+      const previousScore =
+        scoresByTargetId.get(targetId);
+
+      if (
+        previousScore === undefined ||
+        distance < previousScore
+      ) {
+        scoresByTargetId.set(targetId, distance);
+      }
+    });
+
+    return [...fallbackTargetIds].sort((a, b) => {
+      const scoreA =
+        scoresByTargetId.get(a) ??
+        Number.MAX_SAFE_INTEGER;
+
+      const scoreB =
+        scoresByTargetId.get(b) ??
+        Number.MAX_SAFE_INTEGER;
+
+      return scoreA - scoreB;
+    });
+  },
+  [
+    linkedSceneIdsBySceneId,
+    nodes,
+    scenesById,
+  ],
+);
+
+const warmSceneNeighborhood = useCallback(
+  (sceneId: number | null) => {
+    /*
+     * Ndal radhen e vjetër kur:
+     * - ndryshon skena;
+     * - përdoruesi ndryshon drejtimin;
+     * - hotspot-et prioritare ndryshojnë.
+     */
+    neighborhoodWarmupCleanupRef.current?.();
+    neighborhoodWarmupCleanupRef.current = null;
+
+    const sequenceId = ++preloadSequenceRef.current;
+
+    if (sceneId === null) {
+      return;
+    }
+
+    const plan = getPreloadPlan();
+
+    const orderedTargetIds =
+      getPrioritizedLinkedSceneIds(sceneId).slice(
+        0,
+        plan.total,
+      );
+
+    if (orderedTargetIds.length === 0) {
+      return;
+    }
+
+    /*
+     * Vetëm hotspot-i më i mundshëm në telefon,
+     * ose dy hotspot-et më të mundshme në desktop,
+     * fillojnë menjëherë.
+     */
+    const immediateTargetIds =
+      orderedTargetIds.slice(0, plan.immediate);
+
+    const deferredTargetIds =
+      orderedTargetIds.slice(plan.immediate);
+
+    const immediatePreload = Promise.all(
+      immediateTargetIds.map((targetId) =>
+        preloadScenePanoramaOnce(
+          targetId,
+          "high",
+        ),
+      ),
+    );
+
+    if (deferredTargetIds.length === 0) {
+      return;
+    }
+
+    /*
+     * Panorama të tjera ngarkohen njëra pas tjetrës.
+     * Nuk hapim 6–10 request-e të mëdha njëkohësisht.
+     */
+    neighborhoodWarmupCleanupRef.current =
+      scheduleDelayedIdleTask(() => {
+        void (async () => {
+          await immediatePreload;
+
+          if (
+            preloadSequenceRef.current !== sequenceId
+          ) {
+            return;
+          }
+
+          for (const targetId of deferredTargetIds) {
+            if (
+              preloadSequenceRef.current !== sequenceId
+            ) {
+              return;
+            }
+
+            await preloadScenePanoramaOnce(
+              targetId,
+              "low",
+            );
+
+            if (
+              preloadSequenceRef.current !== sequenceId
+            ) {
+              return;
+            }
+
+            await waitForPreloadGap(plan.gapMs);
+          }
+        })();
+      }, 120);
+  },
+  [
+    getPrioritizedLinkedSceneIds,
+    preloadScenePanoramaOnce,
+  ],
+);
 
   const getTransitionWithEntryOrientation = useCallback(
     (orientation: Orientation | null): NavigationTransitionOptions => {
@@ -766,7 +1088,6 @@ export function VirtualTour360({
   const getPluginTransitionOptions = useCallback(
     (toNode: any, _fromNode?: any, fromLink?: any): NavigationTransitionOptions => {
       const targetSceneId = toFiniteNumber(toNode?.id ?? fromLink?.nodeId);
-      const targetScene = targetSceneId !== null ? getSceneById(targetSceneId) : null;
       const entryOrientation =
         targetSceneId !== null
           ? getNavigationEntryOrientation(targetSceneId, fromLink ?? null)
@@ -774,19 +1095,9 @@ export function VirtualTour360({
 
       pendingEntryOrientationRef.current = entryOrientation;
 
-      if (targetScene && (_fromNode || fromLink)) {
-        setLoadError(null);
-        showNavigationLoader(targetScene.title);
-      }
-
       return getTransitionWithEntryOrientation(entryOrientation);
     },
-    [
-      getSceneById,
-      getNavigationEntryOrientation,
-      getTransitionWithEntryOrientation,
-      showNavigationLoader,
-    ],
+    [getNavigationEntryOrientation, getTransitionWithEntryOrientation],
   );
 
   const goToScene = useCallback(
@@ -805,14 +1116,9 @@ export function VirtualTour360({
 
       const entryOrientation = forcedOrientation ?? getNavigationEntryOrientation(targetSceneId, null);
       pendingEntryOrientationRef.current = entryOrientation;
-      showNavigationLoader(targetScene.title);
 
       try {
         const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
-
-        if (!psvReadyPanoramasRef.current.has(targetScene.imageUrl)) {
-          await preloadScenePanoramaOnce(targetSceneId, "high");
-        }
 
         await vtPlugin.setCurrentNode(
           String(targetSceneId),
@@ -822,18 +1128,10 @@ export function VirtualTour360({
         console.error("Scene change error:", error);
         setLoadError("Skena nuk u hap. Provoni edhe një herë.");
       } finally {
-        hideNavigationLoader();
         isNavigatingRef.current = false;
       }
     },
-    [
-      getSceneById,
-      getNavigationEntryOrientation,
-      showNavigationLoader,
-      preloadScenePanoramaOnce,
-      getTransitionWithEntryOrientation,
-      hideNavigationLoader,
-    ],
+    [getSceneById, getNavigationEntryOrientation, getTransitionWithEntryOrientation],
   );
 
   const handleSceneChange = useCallback(
@@ -941,39 +1239,64 @@ export function VirtualTour360({
     setLoadError(null);
     setShowFirstLoadHint(false);
 
-    const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
-    let didFinishInitialLoad = false;
-    let firstLoadHintTimer: number | null = window.setTimeout(() => {
-      if (!didFinishInitialLoad) setShowFirstLoadHint(true);
-    }, FIRST_LOAD_HINT_MS);
+   
+   
+   const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
 
-    const clearFirstLoadHintTimer = () => {
-      if (firstLoadHintTimer !== null) {
-        window.clearTimeout(firstLoadHintTimer);
-        firstLoadHintTimer = null;
-      }
-    };
+let didFinishInitialLoad = false;
+let loaderExitTimer: number | null = null;
 
-    const finishInitialLoad = () => {
-      if (didFinishInitialLoad) return;
-      didFinishInitialLoad = true;
-      clearFirstLoadHintTimer();
+let firstLoadHintTimer: number | null = window.setTimeout(() => {
+  if (!didFinishInitialLoad) {
+    setShowFirstLoadHint(true);
+  }
+}, FIRST_LOAD_HINT_MS);
 
-      currentSceneRef.current = resolvedStartScene;
-      setCurrentSceneId(resolvedStartScene.id);
-      psvReadyPanoramasRef.current.add(resolvedStartScene.imageUrl);
+const clearFirstLoadHintTimer = () => {
+  if (firstLoadHintTimer !== null) {
+    window.clearTimeout(firstLoadHintTimer);
+    firstLoadHintTimer = null;
+  }
+};
 
-      requestAnimationFrame(() => {
-        setIsViewerVisible(true);
-        setIsInitialLoading(false);
-        setShowFirstLoadHint(false);
-        warmSceneNeighborhood(resolvedStartScene.id);
-      });
-    };
+const clearLoaderExitTimer = () => {
+  if (loaderExitTimer !== null) {
+    window.clearTimeout(loaderExitTimer);
+    loaderExitTimer = null;
+  }
+};
+
+const finishInitialLoad = () => {
+  if (didFinishInitialLoad) return;
+
+  didFinishInitialLoad = true;
+  clearFirstLoadHintTimer();
+
+  currentSceneRef.current = resolvedStartScene;
+  setCurrentSceneId(resolvedStartScene.id);
+  psvReadyPanoramasRef.current.add(resolvedStartScene.imageUrl);
+
+  requestAnimationFrame(() => {
+    setIsViewerVisible(true);
+    warmSceneNeighborhood(resolvedStartScene.id);
+
+    clearLoaderExitTimer();
+
+    loaderExitTimer = window.setTimeout(() => {
+      setIsInitialLoading(false);
+      setShowFirstLoadHint(false);
+      loaderExitTimer = null;
+    }, 380);
+  });
+};
+   
+   
+
+    const deviceProfile = getDeviceProfile();
 
     const viewer = new Viewer({
       container: containerRef.current,
-      navbar: ["zoom", "move"],
+      navbar: deviceProfile.isDesktop ? ["zoom", "move"] : false,
       adapter: EquirectangularAdapter.withConfig({
         resolution: getViewerResolution(),
         useXmpData: true,
@@ -981,9 +1304,9 @@ export function VirtualTour360({
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
       defaultTransition: NAVIGATION_TRANSITION,
-      maxFov: getDeviceProfile().isMobile ? 105 : 100,
+      maxFov: deviceProfile.isMobile ? 108 : 100,
       minFov: 28,
-      defaultZoomLvl: getDeviceProfile().isMobile ? 34 : 38,
+      defaultZoomLvl: deviceProfile.isMobile ? 32 : 38,
       zoomSpeed: 1.05,
       moveSpeed: 1,
       moveInertia: 0.82,
@@ -991,16 +1314,10 @@ export function VirtualTour360({
       touchmoveTwoFingers: false,
       rendererParameters: {
         alpha: false,
-        antialias: true,
+        antialias: !deviceProfile.isMobile && !deviceProfile.isLowMemory,
         powerPreference: "high-performance",
       },
       plugins: [
-        [
-          MarkersPlugin,
-          {
-            clickEventOnMarker: false,
-          },
-        ],
         [
           VirtualTourPlugin,
           {
@@ -1010,55 +1327,69 @@ export function VirtualTour360({
             nodes,
             preload: shouldPluginPreloadLink,
             transitionOptions: getPluginTransitionOptions,
-            showLinkTooltip: false,
-            arrowStyle: getHiddenVirtualTourArrowStyle(),
+            showLinkTooltip: true,
+            arrowStyle: {
+              size: { width: 72, height: 72 },
+            },
+            arrowsPosition: {
+              minPitch: 0.2,
+              maxPitch: Math.PI / 2,
+              linkOverlapAngle: Math.PI / 5,
+              linkPitchOffset: -0.08,
+            },
           },
         ],
       ],
     });
 
-    viewerRef.current = viewer;
+viewerRef.current = viewer;
 
-    const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
-    const markersPlugin = viewer.getPlugin(MarkersPlugin as any) as any;
+const vtPlugin = viewer.getPlugin(
+  VirtualTourPlugin as any,
+) as any;
 
-    const syncNavigationMarkers = (sceneId: number) => {
-      try {
-        markersPlugin.setMarkers(getNavigationMarkerConfigs(sceneId));
-      } catch (error) {
-        console.error("Navigation marker sync error:", error);
-      }
-    };
+const originalSetCurrentNode =
+  vtPlugin.setCurrentNode.bind(vtPlugin);
 
-    syncNavigationMarkers(resolvedStartScene.id);
+/*
+ * Kur përdoruesi klikon hotspot-in gjatë kohës që
+ * fotografia e tij është duke u prefetch-uar, navigimi
+ * pret të njëjtin request.
+ *
+ * Në këtë mënyrë nuk hapet një request i dytë për të
+ * njëjtën panoramë.
+ */
+vtPlugin.setCurrentNode = async (
+  nodeId: string,
+  options?: any,
+  fromLink?: any,
+): Promise<boolean> => {
+  const targetSceneId = toFiniteNumber(nodeId);
 
-    const handleMarkerEnter = ({ marker }: any) => {
-      const targetSceneId = toFiniteNumber(marker?.config?.data?.toSceneId);
-      if (targetSceneId !== null) {
-        void preloadScenePanoramaOnce(targetSceneId, "high");
-      }
-    };
+  const targetScene =
+    targetSceneId !== null
+      ? getSceneById(targetSceneId)
+      : null;
 
-    const handleMarkerSelect = ({ marker }: any) => {
-      const markerData = marker?.config?.data;
-      const targetSceneId = toFiniteNumber(markerData?.toSceneId);
-      if (targetSceneId === null) return;
+  const pendingPreload = targetScene?.imageUrl
+    ? psvPreloadPromisesRef.current.get(
+        targetScene.imageUrl,
+      )
+    : null;
 
-      const entryOrientation = getNavigationEntryOrientation(targetSceneId, {
-        data: {
-          targetYaw: markerData?.targetYaw ?? null,
-          targetPitch: markerData?.targetPitch ?? null,
-          fromSceneId: markerData?.fromSceneId ?? null,
-        },
-      });
+  if (pendingPreload) {
+    await pendingPreload;
+  }
 
-      void goToScene(targetSceneId, entryOrientation);
-    };
+  return originalSetCurrentNode(
+    nodeId,
+    options,
+    fromLink,
+  );
+};
 
-    markersPlugin.addEventListener("enter-marker", handleMarkerEnter);
-    markersPlugin.addEventListener("select-marker", handleMarkerSelect);
-
-    viewer.addEventListener("panorama-loaded", () => {
+viewer.addEventListener("panorama-loaded", () => {
+	
       setLoadError(null);
       const currentScene = currentSceneRef.current || resolvedStartScene;
       if (currentScene?.imageUrl) {
@@ -1066,45 +1397,94 @@ export function VirtualTour360({
       }
 
       finishInitialLoad();
-      hideNavigationLoader();
     });
 
     viewer.addEventListener("panorama-error", (error: any) => {
       console.error("Panorama error:", error);
       setLoadError("Panorama nuk u ngarkua si duhet.");
       finishInitialLoad();
-      hideNavigationLoader();
     });
 
-    vtPlugin.addEventListener("node-changed", ({ node }: any) => {
+let positionWarmupTimer: number | null = null;
+
+const schedulePositionAwareWarmup = () => {
+  if (positionWarmupTimer !== null) {
+    window.clearTimeout(positionWarmupTimer);
+  }
+
+  positionWarmupTimer = window.setTimeout(() => {
+    positionWarmupTimer = null;
+
+    const activeSceneId = toFiniteNumber(
+      currentSceneRef.current?.id,
+    );
+
+    if (activeSceneId !== null) {
+      warmSceneNeighborhood(activeSceneId);
+    }
+  }, getPreloadPlan().positionDebounceMs);
+};
+
+/*
+ * Kur përdoruesi ndalon së rrotulluari panoramën,
+ * hotspot-et që janë përpara kamerës marrin
+ * prioritet më të lartë.
+ */
+viewer.addEventListener(
+  "position-updated",
+  schedulePositionAwareWarmup,
+);
+
+vtPlugin.addEventListener(
+  "enter-arrow",
+  ({ link }: any) => {
+    const targetSceneId = Number(link?.nodeId);
+
+    if (Number.isFinite(targetSceneId)) {
+      void preloadScenePanoramaOnce(
+        targetSceneId,
+        "high",
+      );
+    }
+  },
+);
+
+vtPlugin.addEventListener(
+  "node-changed",
+  ({ node }: any) => {
       const nextId = Number(node.id);
       const nextScene = getSceneById(nextId);
 
       currentSceneRef.current = nextScene;
       setCurrentSceneId(nextId);
       setLoadError(null);
-      syncNavigationMarkers(nextId);
 
       if (nextScene?.imageUrl) {
         psvReadyPanoramasRef.current.add(nextScene.imageUrl);
       }
 
-      pendingEntryOrientationRef.current = null;
-      warmSceneNeighborhood(nextId);
-      hideNavigationLoader();
-    });
+pendingEntryOrientationRef.current = null;
 
-    return () => {
-      clearFirstLoadHintTimer();
-      clearLoaderTimer();
-      cleanupTasksRef.current.forEach((cleanup) => cleanup());
-      cleanupTasksRef.current = [];
-      try {
-        markersPlugin.removeEventListener("enter-marker", handleMarkerEnter);
-        markersPlugin.removeEventListener("select-marker", handleMarkerSelect);
-      } catch {
-        // Plugin cleanup is also handled by viewer.destroy().
-      }
+/*
+ * Lejo viewer-in ta vizatojë skenën e re fillimisht,
+ * pastaj fillo preload-in e lidhjeve të radhës.
+ */
+requestAnimationFrame(() => {
+  warmSceneNeighborhood(nextId);
+});
+});
+
+return () => {
+  clearFirstLoadHintTimer();
+  clearLoaderExitTimer();
+if (positionWarmupTimer !== null) {
+  window.clearTimeout(positionWarmupTimer);
+}
+
+preloadSequenceRef.current += 1;
+
+neighborhoodWarmupCleanupRef.current?.();
+neighborhoodWarmupCleanupRef.current = null;
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
@@ -1118,17 +1498,9 @@ export function VirtualTour360({
     preloadScenePanoramaOnce,
     getPluginTransitionOptions,
     warmSceneNeighborhood,
-    hideNavigationLoader,
-    clearLoaderTimer,
-    getNavigationMarkerConfigs,
-    getNavigationEntryOrientation,
-    goToScene,
   ]);
 
-  useEffect(() => {
-    if (currentSceneId === null) return;
-    warmSceneNeighborhood(currentSceneId);
-  }, [currentSceneId, warmSceneNeighborhood]);
+
 
   useEffect(() => {
     if (currentSceneId === null) return;
@@ -1164,74 +1536,226 @@ export function VirtualTour360({
 
   return (
     <div className="fixed inset-0 z-[9999] w-screen h-[100dvh] flex flex-col bg-black overflow-hidden font-sans group virtual-tour-shell">
-      <style>{`
-        .virtual-tour-shell .psv-loader-container,
-        .virtual-tour-shell .psv-loader {
-          display: none !important;
-        }
+<style>{`
+  .virtual-tour-shell .psv-loader-container,
+  .virtual-tour-shell .psv-loader {
+    display: none !important;
+  }
 
-        .virtual-tour-shell .aura-vt-link-hidden {
-          display: none !important;
-          pointer-events: none !important;
-        }
-      `}</style>
+  .virtual-tour-shell .psv-virtual-tour-link {
+    filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.45));
+  }
 
-      <button
-        onPointerUp={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          handleCloseTour();
-        }}
-        className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
-        style={{
-          top: "max(12px, env(safe-area-inset-top))",
-          right: "max(12px, env(safe-area-inset-right))",
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-        aria-label="Mbyll turin virtual"
-        type="button"
-      >
-        <X size={22} />
-      </button>
+  @keyframes virtual-tour-loader-enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes virtual-tour-loader-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes virtual-tour-loader-progress {
+    0% {
+      opacity: 0;
+      transform: translateX(-165%);
+    }
+
+    18% {
+      opacity: 0.95;
+    }
+
+    78% {
+      opacity: 0.95;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateX(335%);
+    }
+  }
+
+  @keyframes virtual-tour-loader-glow {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(0.92);
+    }
+
+    50% {
+      opacity: 0.7;
+      transform: scale(1.08);
+    }
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__content {
+    animation:
+      virtual-tour-loader-enter
+      560ms
+      cubic-bezier(0.22, 1, 0.36, 1)
+      both;
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__orbit {
+    border: 1.5px solid transparent;
+    border-top-color: rgba(212, 175, 55, 0.98);
+    border-right-color: rgba(212, 175, 55, 0.28);
+    animation: virtual-tour-loader-orbit 2.35s linear infinite;
+    will-change: transform;
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__progress {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(212, 175, 55, 0.35) 20%,
+      rgba(212, 175, 55, 1) 50%,
+      rgba(255, 255, 255, 0.72) 66%,
+      transparent 100%
+    );
+    animation:
+      virtual-tour-loader-progress
+      1.85s
+      cubic-bezier(0.45, 0, 0.2, 1)
+      infinite;
+    will-change: transform, opacity;
+  }
+
+  .virtual-tour-shell .virtual-tour-loader__glow {
+    animation: virtual-tour-loader-glow 2.7s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .virtual-tour-shell .virtual-tour-loader__content,
+    .virtual-tour-shell .virtual-tour-loader__orbit,
+    .virtual-tour-shell .virtual-tour-loader__progress,
+    .virtual-tour-shell .virtual-tour-loader__glow {
+      animation: none !important;
+    }
+
+    .virtual-tour-shell .virtual-tour-loader__progress {
+      width: 100% !important;
+      opacity: 0.55;
+    }
+  }
+  
+
+  
+`}</style>
+
+{onClose && (
+<button
+  onPointerDown={(event) => {
+    event.stopPropagation();
+  }}
+  onPointerUp={(event) => {
+    event.stopPropagation();
+  }}
+  onClick={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    handleCloseTour();
+  }}
+  className="absolute z-[99999] w-12 h-12 bg-black/70 active:bg-black text-white rounded-full flex items-center justify-center md:backdrop-blur-md border border-white/10 shadow-lg pointer-events-auto"
+  style={{
+    top: "max(12px, env(safe-area-inset-top))",
+    right: "max(12px, env(safe-area-inset-right))",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  }}
+  aria-label="Mbyll turin virtual"
+  type="button"
+>
+  <X size={22} />
+</button>
+)}
 
       <div className="relative w-full h-full flex-1 overflow-hidden">
-        <div
-          ref={containerRef}
-          className="w-full h-full bg-black"
-          style={{
-            opacity: isViewerVisible ? 1 : 0,
-            transition: "opacity 220ms ease",
-          }}
-        />
+       
+	   
+	   <div
+  ref={containerRef}
+  className="w-full h-full bg-black"
+  style={{
+    opacity: isViewerVisible ? 1 : 0,
+    transition: "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1)",
+  }}
+/>
 
-        {(isInitialLoading || isSceneLoading) && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black">
-            {isInitialLoading && resolvedStartScene?.thumbnailUrl && (
-              <div
-                className="absolute inset-0 scale-110 bg-cover bg-center opacity-35 blur-2xl"
-                style={{ backgroundImage: `url(${resolvedStartScene.thumbnailUrl})` }}
-              />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/80 to-black/95" />
-            <div className="relative flex w-[min(90vw,360px)] flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-7 text-center shadow-2xl md:backdrop-blur-xl">
-              <div className="h-1.5 w-40 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/90" />
-              </div>
-              <div className="w-12 h-12 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
-              <p className="text-white/90 text-sm tracking-wide font-medium">
-                {isInitialLoading ? "Duke përgatitur turin virtual" : "Duke hapur skenën"}
-              </p>
-              <span className="min-h-[32px] text-xs leading-5 text-white/58">
-                {isInitialLoading
-                  ? showFirstLoadHint
-                    ? "Hapja e parë mund të zgjasë pak më shumë. Pamjet pasuese do të hapen më shpejt."
-                    : "Po ngarkohet pamja 360° me cilësi të lartë."
-                  : loadingSceneTitle || "Ju lutem prisni"}
-              </span>
-            </div>
-          </div>
+{isInitialLoading && (
+  <div
+    className="absolute inset-0 z-30 overflow-hidden bg-[#050505]"
+    style={{
+      opacity: isViewerVisible ? 0 : 1,
+      transform: isViewerVisible ? "scale(1.01)" : "scale(1)",
+      transition:
+        "opacity 340ms cubic-bezier(0.22, 1, 0.36, 1), transform 500ms cubic-bezier(0.22, 1, 0.36, 1)",
+      pointerEvents: isViewerVisible ? "none" : "auto",
+    }}
+    role="status"
+    aria-live="polite"
+    aria-busy={!isViewerVisible}
+  >
+    {/* Përdor vetëm thumbnail-in që të mos ngadalësohet panorama kryesore */}
+    {resolvedStartScene?.thumbnailUrl && (
+      <div
+        className="absolute inset-[-18px] scale-[1.04] bg-cover bg-center opacity-75 blur-[10px]"
+        style={{
+          backgroundImage: `url(${resolvedStartScene.thumbnailUrl})`,
+        }}
+      />
+    )}
+
+    {/* Overlay i pastër dhe premium */}
+    <div className="absolute inset-0 bg-black/50" />
+
+    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/45" />
+
+    <div
+      className="relative z-10 flex h-full items-center justify-center px-6"
+      style={{
+        paddingTop: "max(24px, env(safe-area-inset-top))",
+        paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+      }}
+    >
+      <div className="virtual-tour-loader__content flex flex-col items-center text-center">
+        {/* Simbol i vogël dhe minimalist */}
+
+
+        <h2 className="font-display text-lg font-medium tracking-[-0.01em] text-white md:text-xl">
+          Duke hapur turin 360°
+        </h2>
+
+        {/* Shfaqet vetëm kur ngarkimi zgjat më shumë */}
+        {showFirstLoadHint && (
+          <p className="mt-3 max-w-[270px] text-[11px] leading-5 text-white/50">
+            Hapja e parë mund të zgjasë pak. Pamjet e radhës do të
+            hapen më shpejt.
+          </p>
         )}
+
+        <div className="mx-auto mt-5 h-px w-36 overflow-hidden bg-white/15">
+          <div className="virtual-tour-loader__progress h-full w-[42%]" />
+        </div>
+
+        <span className="sr-only">
+          Po përgatitet pamja e parë e turit virtual.
+        </span>
+      </div>
+    </div>
+  </div>
+)}
+	   
 
         {loadError && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] rounded-2xl border border-white/10 bg-black/80 px-4 py-3 text-xs text-white shadow-2xl md:backdrop-blur-xl">
@@ -1246,8 +1770,31 @@ export function VirtualTour360({
             </h2>
           </div>
         </div>
+		
+		
+		{showAura360Branding && isViewerVisible && (
+  <div
+    className="absolute left-4 z-40 pointer-events-none select-none"
+    style={{
+      bottom:
+        "calc(4.75rem + max(12px, env(safe-area-inset-bottom)))",
+    }}
+    aria-hidden="true"
+  >
+<div className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-black/30 px-2.5 py-1 shadow-md md:backdrop-blur-md">
+  <span className="text-[8px] md:text-[9px] font-medium tracking-wide text-white/45">
+    Powered by
+  </span>
 
-        <div className="absolute bottom-24 right-6 z-40 flex flex-col gap-3">
+  <span className="text-[9px] md:text-[10px] font-semibold tracking-[0.08em] text-primary/85">
+    Aura360
+  </span>
+</div>
+  </div>
+)}
+		
+
+        <div className="absolute bottom-24 right-6 z-40 hidden lg:flex flex-col gap-3">
           {hasMap && (
             <button
               onClick={() => setShowMap((value) => !value)}
@@ -1295,6 +1842,7 @@ export function VirtualTour360({
                     onMouseEnter={() => void preloadScenePanoramaOnce(scene.id, "high")}
                     onFocus={() => void preloadScenePanoramaOnce(scene.id, "high")}
                     onTouchStart={() => void preloadScenePanoramaOnce(scene.id, "high")}
+                    onPointerDown={() => void preloadScenePanoramaOnce(scene.id, "high")}
                     onClick={() => void handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
@@ -1310,9 +1858,9 @@ export function VirtualTour360({
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
-          <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
-            {sortedScenes.map((scene) => (
+<div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/95 via-black/65 to-transparent flex items-end justify-center pb-4 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
+  <div className="flex gap-2 overflow-x-auto max-w-full pb-2 hide-scrollbar">
+           {sortedScenes.map((scene) => (
               <button
                 key={scene.id}
                 ref={(element) => {
@@ -1321,23 +1869,39 @@ export function VirtualTour360({
                 onMouseEnter={() => void preloadScenePanoramaOnce(scene.id, "high")}
                 onFocus={() => void preloadScenePanoramaOnce(scene.id, "high")}
                 onTouchStart={() => void preloadScenePanoramaOnce(scene.id, "high")}
+                onPointerDown={() => void preloadScenePanoramaOnce(scene.id, "high")}
                 onClick={() => void handleSceneChange(scene.id)}
-                className={`relative shrink-0 w-24 h-14 rounded-xl overflow-hidden border-2 transition-all shadow-lg ${
-                  currentSceneId === scene.id
-                    ? "border-primary opacity-100 scale-[1.03]"
-                    : "border-transparent opacity-70 hover:opacity-100"
-                }`}
+className={`relative shrink-0 w-20 h-12 overflow-hidden rounded-xl border transition-all duration-200 ${
+  currentSceneId === scene.id
+    ? "border-primary opacity-100 shadow-[0_0_0_1px_rgba(212,175,55,0.28)]"
+    : "border-white/10 opacity-60 hover:border-white/25 hover:opacity-100"
+}`}
                 type="button"
               >
                 <img
-                  src={scene.thumbnailUrl || TOUR_THUMBNAIL_PLACEHOLDER}
-                  alt={scene.title}
-                  crossOrigin="anonymous"
-                  loading="lazy"
-                  decoding="async"
-                  fetchPriority={currentSceneId === scene.id ? "high" : "low"}
-                  className="w-full h-full object-cover"
-                />
+  src={
+    scene.thumbnailUrl?.trim() ||
+    TOUR_THUMBNAIL_PLACEHOLDER
+  }
+  alt={scene.title}
+  loading="lazy"
+  decoding="async"
+  fetchPriority={
+    currentSceneId === scene.id ? "high" : "low"
+  }
+  onError={(event) => {
+    const image = event.currentTarget;
+
+    if (
+      !image.src.endsWith(
+        TOUR_THUMBNAIL_PLACEHOLDER,
+      )
+    ) {
+      image.src = TOUR_THUMBNAIL_PLACEHOLDER;
+    }
+  }}
+  className="w-full h-full object-cover"
+/>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent flex items-end p-1.5">
                   <span className="text-[10px] text-white font-semibold truncate drop-shadow-md">
                     {scene.title}
