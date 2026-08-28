@@ -3,49 +3,47 @@ export type MatterportHotspotVariant = "default" | "editing" | "draft";
 type MatterportHotspotMetrics = {
   ringWidth: number;
   ringHeight: number;
-  ringThickness: number;
-  hoverThickness: number;
   hitWidth: number;
   hitHeight: number;
-  opacity: number;
+  ringOpacity: number;
 };
 
-const MATTERPORT_HOTSPOT_STYLE_ID = "aura-matterport-hotspot-styles-v4";
+const MATTERPORT_HOTSPOT_STYLE_ID = "aura-matterport-hotspot-styles-v5";
+
+const OLD_STYLE_IDS = [
+  "aura-matterport-hotspot-styles-v2",
+  "aura-matterport-hotspot-styles-v3",
+  "aura-matterport-hotspot-styles-v4",
+];
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 /**
- * Visual-only approximation of Matterport floor navigation rings.
- * Saved panorama yaw/pitch are never changed here.
+ * Visual-only Matterport-style sizing.
+ * The saved yaw/pitch are NEVER changed here.
  *
- * A hotspot closer to the horizon is treated visually as farther away:
- * it becomes smaller, flatter and more transparent.
- * A hotspot farther below the horizon is treated visually as closer:
- * it becomes larger, less flattened and more opaque.
+ * A point closer to the horizon is visually farther away:
+ * smaller, flatter and more transparent.
+ * A point farther below the horizon is visually closer:
+ * larger, rounder and more opaque.
  */
 const getMatterportHotspotMetrics = (pitch: number): MatterportHotspotMetrics => {
   const safePitch = Number.isFinite(pitch) ? pitch : 0;
   const downwardAngle = Math.max(0, -safePitch);
-  const nearness = clamp01((downwardAngle - 0.03) / 0.98);
+  const nearness = clamp01((downwardAngle - 0.025) / 0.95);
 
-  // Strong perspective difference, matching the visual language of Matterport:
-  // far points are small + very flat; near points are large + wider ellipses.
-  const ringWidth = Math.round(34 + nearness * 112); // 34 -> 146px
-  const flattenRatio = 0.30 + nearness * 0.38; // 0.30 -> 0.68
-  const ringHeight = Math.max(11, Math.round(ringWidth * flattenRatio));
-
-  // The ring is a real transparent donut made with border, not nested circles.
-  const ringThickness = Math.max(2, Math.round(2 + nearness * 10)); // 2 -> 12px
-  const hoverThickness = ringThickness + Math.max(1, Math.round(ringThickness * 0.16));
+  // Matterport reference: distant rings are visibly flattened,
+  // nearby rings become large and almost circular while remaining floor ellipses.
+  const ringWidth = Math.round(46 + nearness * 104); // 46 -> 150px
+  const flattenRatio = 0.43 + nearness * 0.43; // 0.43 -> 0.86
+  const ringHeight = Math.max(20, Math.round(ringWidth * flattenRatio));
 
   return {
     ringWidth,
     ringHeight,
-    ringThickness,
-    hoverThickness,
-    hitWidth: Math.max(54, ringWidth + 26),
-    hitHeight: Math.max(42, ringHeight + 24),
-    opacity: 0.34 + nearness * 0.62,
+    hitWidth: Math.max(62, ringWidth + 20),
+    hitHeight: Math.max(48, ringHeight + 18),
+    ringOpacity: 0.28 + nearness * 0.64, // 0.28 -> 0.92
   };
 };
 
@@ -76,9 +74,7 @@ export const getMatterportHotspotHtml = (
       style="
         --aura-mp-ring-w:${metrics.ringWidth}px;
         --aura-mp-ring-h:${metrics.ringHeight}px;
-        --aura-mp-ring-thickness:${metrics.ringThickness}px;
-        --aura-mp-hover-thickness:${metrics.hoverThickness}px;
-        --aura-mp-opacity:${metrics.opacity};
+        --aura-mp-ring-opacity:${metrics.ringOpacity};
       "
       aria-hidden="true"
     >
@@ -90,8 +86,8 @@ export const getMatterportHotspotHtml = (
 };
 
 /**
- * VirtualTourPlugin remains active only for navigation, transitions and preload.
- * Its native arrows stay hidden; visible points are panorama-locked MarkersPlugin markers.
+ * VirtualTourPlugin remains active for navigation/transitions/preload only.
+ * Visible navigation points are panorama-locked MarkersPlugin markers.
  */
 export const getHiddenVirtualTourArrowStyle = () => ({
   className: "aura-vt-link-hidden",
@@ -100,6 +96,10 @@ export const getHiddenVirtualTourArrowStyle = () => ({
 
 export const ensureMatterportHotspotStyles = () => {
   if (typeof document === "undefined") return;
+
+  // Avoid stale CSS during Vite HMR after upgrading from earlier attempts.
+  OLD_STYLE_IDS.forEach((id) => document.getElementById(id)?.remove());
+
   if (document.getElementById(MATTERPORT_HOTSPOT_STYLE_ID)) return;
 
   const style = document.createElement("style");
@@ -131,11 +131,9 @@ export const ensureMatterportHotspotStyles = () => {
       align-items: center;
       justify-content: center;
       overflow: visible;
-      opacity: var(--aura-mp-opacity);
       pointer-events: none;
       user-select: none;
       -webkit-user-select: none;
-      transition: opacity 120ms ease;
     }
 
     .aura-mp-hotspot__surface {
@@ -146,63 +144,94 @@ export const ensureMatterportHotspotStyles = () => {
       pointer-events: none;
     }
 
-    /* Matterport-style floor donut: one clean, thick, white elliptical ring. */
+    /*
+     * IMPORTANT:
+     * Matterport's visible point is a FILLED translucent annulus, not a thin border.
+     * The mask cuts a real transparent hole through the middle so the floor remains visible.
+     */
     .aura-mp-hotspot__ring {
       position: absolute;
       inset: 0;
-      box-sizing: border-box;
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      border: var(--aura-mp-ring-thickness) solid rgba(255,255,255,.82);
-      background: transparent;
-      box-shadow:
-        0 1px 2px rgba(0,0,0,.08),
-        inset 0 0 0 1px rgba(255,255,255,.06);
-      transition:
-        border-color 120ms ease,
-        border-width 120ms ease,
-        box-shadow 120ms ease;
+      background: rgba(255, 255, 255, var(--aura-mp-ring-opacity));
       pointer-events: none;
+
+      -webkit-mask-image: radial-gradient(
+        ellipse at center,
+        transparent 0%,
+        transparent 61%,
+        rgba(0,0,0,.22) 62%,
+        rgba(0,0,0,.72) 63%,
+        #000 64%,
+        #000 100%
+      );
+      mask-image: radial-gradient(
+        ellipse at center,
+        transparent 0%,
+        transparent 61%,
+        rgba(0,0,0,.22) 62%,
+        rgba(0,0,0,.72) 63%,
+        #000 64%,
+        #000 100%
+      );
+
+      transition:
+        background 110ms ease,
+        filter 110ms ease;
     }
 
-    /* Hover: ONLY whiter + bolder. No blue, no gold, no scale, no glow. */
-    .aura-mp-marker:hover .aura-mp-hotspot,
-    .aura-mp-marker:focus-visible .aura-mp-hotspot {
-      opacity: 1;
-    }
-
+    /*
+     * Hover is Matterport-style: only whiter and visually bolder.
+     * No blue, no gold, no glow and no scale jump.
+     * The slightly smaller inner hole makes the annulus thicker.
+     */
     .aura-mp-marker:hover .aura-mp-hotspot__ring,
     .aura-mp-marker:focus-visible .aura-mp-hotspot__ring {
-      border-color: rgba(255,255,255,1);
-      border-width: var(--aura-mp-hover-thickness);
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,.18),
-        0 1px 3px rgba(0,0,0,.08);
+      background: rgba(255,255,255,1);
+      filter: brightness(1.03);
+
+      -webkit-mask-image: radial-gradient(
+        ellipse at center,
+        transparent 0%,
+        transparent 56%,
+        rgba(0,0,0,.24) 57%,
+        rgba(0,0,0,.76) 58%,
+        #000 59%,
+        #000 100%
+      );
+      mask-image: radial-gradient(
+        ellipse at center,
+        transparent 0%,
+        transparent 56%,
+        rgba(0,0,0,.24) 57%,
+        rgba(0,0,0,.76) 58%,
+        #000 59%,
+        #000 100%
+      );
     }
 
     .aura-mp-marker:active .aura-mp-hotspot__ring {
-      border-color: rgba(255,255,255,1);
+      background: rgba(255,255,255,1);
     }
 
-    /* Admin-only states remain distinguishable while preserving the same geometry. */
+    /* Admin-only states keep identical geometry; only color identifies state. */
     .aura-mp-hotspot.is-editing .aura-mp-hotspot__ring {
-      border-color: rgba(248,113,113,.96);
+      background: rgba(248,113,113,.92);
     }
 
     .aura-mp-hotspot.is-draft .aura-mp-hotspot__ring {
-      border-color: rgba(251,191,36,.96);
-      border-style: dashed;
+      background: rgba(251,191,36,.90);
     }
 
     @media (pointer: coarse) {
-      .aura-mp-hotspot {
-        opacity: max(.44, var(--aura-mp-opacity));
+      .aura-mp-hotspot__ring {
+        filter: none;
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .aura-mp-hotspot,
       .aura-mp-hotspot__ring {
         transition: none !important;
       }
