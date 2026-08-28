@@ -5,12 +5,16 @@ import {
   EquirectangularAdapter,
 } from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
+import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
+import "@photo-sphere-viewer/markers-plugin/index.css";
 import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
 import {
   ensureMatterportHotspotStyles,
-  getMatterportArrowStyle,
+  getHiddenVirtualTourArrowStyle,
+  getMatterportHotspotHtml,
+  getMatterportHotspotSize,
 } from "@/lib/matterport-hotspots";
 
 interface VirtualTour360Props {
@@ -467,7 +471,6 @@ export function VirtualTour360({
             nodeId: String(hotspot.toSceneId),
             position: { yaw, pitch },
             name: baseName,
-            arrowStyle: getMatterportArrowStyle(pitch),
             data: {
               hotspotId: hotspot.id,
               fromSceneId: hotspot.fromSceneId,
@@ -507,6 +510,49 @@ export function VirtualTour360({
     [scenesById],
   );
 
+  const getNavigationMarkerConfigs = useCallback(
+    (sceneId: number) => {
+      const scene = getSceneById(sceneId);
+      if (!scene) return [];
+
+      return scene.hotspots
+        .map((hotspot) => {
+          const runtimeHotspot = hotspot as RuntimeHotspot;
+          const targetSceneId = getRuntimeHotspotTargetSceneId(runtimeHotspot);
+
+          if (targetSceneId === null || !scenesById.has(targetSceneId)) return null;
+
+          const yaw = getRuntimeHotspotYaw(runtimeHotspot);
+          const pitch = getRuntimeHotspotPitch(runtimeHotspot);
+          const targetTitle = scenesById.get(targetSceneId)?.title || "Lidhje";
+          const label = String(hotspot.label || "").trim() || targetTitle;
+
+          return {
+            id: `nav-${getRuntimeHotspotId(runtimeHotspot)}`,
+            position: { yaw, pitch },
+            html: getMatterportHotspotHtml(pitch, "default"),
+            size: getMatterportHotspotSize(pitch),
+            anchor: "center center",
+            className: "aura-mp-marker",
+            hoverScale: false,
+            tooltip: {
+              content: label,
+              position: "top center",
+              trigger: "hover" as const,
+            },
+            data: {
+              hotspotId: getRuntimeHotspotId(runtimeHotspot),
+              fromSceneId: getRuntimeHotspotSourceSceneId(runtimeHotspot, Number(scene.id)),
+              toSceneId: targetSceneId,
+              targetYaw: getRuntimeHotspotTargetYaw(runtimeHotspot),
+              targetPitch: getRuntimeHotspotTargetPitch(runtimeHotspot),
+            },
+          };
+        })
+        .filter((marker): marker is NonNullable<typeof marker> => marker !== null);
+    },
+    [getSceneById, scenesById],
+  );
 
   const getSceneStartOrientation = useCallback(
     (sceneId: number): Orientation | null => {
@@ -950,6 +996,12 @@ export function VirtualTour360({
       },
       plugins: [
         [
+          MarkersPlugin,
+          {
+            clickEventOnMarker: false,
+          },
+        ],
+        [
           VirtualTourPlugin,
           {
             positionMode: "manual",
@@ -958,13 +1010,8 @@ export function VirtualTour360({
             nodes,
             preload: shouldPluginPreloadLink,
             transitionOptions: getPluginTransitionOptions,
-            showLinkTooltip: true,
-            arrowsPosition: {
-              minPitch: 0.2,
-              maxPitch: Math.PI / 2,
-              linkOverlapAngle: 0,
-              linkPitchOffset: -0.08,
-            },
+            showLinkTooltip: false,
+            arrowStyle: getHiddenVirtualTourArrowStyle(),
           },
         ],
       ],
@@ -973,6 +1020,43 @@ export function VirtualTour360({
     viewerRef.current = viewer;
 
     const vtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
+    const markersPlugin = viewer.getPlugin(MarkersPlugin as any) as any;
+
+    const syncNavigationMarkers = (sceneId: number) => {
+      try {
+        markersPlugin.setMarkers(getNavigationMarkerConfigs(sceneId));
+      } catch (error) {
+        console.error("Navigation marker sync error:", error);
+      }
+    };
+
+    syncNavigationMarkers(resolvedStartScene.id);
+
+    const handleMarkerEnter = ({ marker }: any) => {
+      const targetSceneId = toFiniteNumber(marker?.config?.data?.toSceneId);
+      if (targetSceneId !== null) {
+        void preloadScenePanoramaOnce(targetSceneId, "high");
+      }
+    };
+
+    const handleMarkerSelect = ({ marker }: any) => {
+      const markerData = marker?.config?.data;
+      const targetSceneId = toFiniteNumber(markerData?.toSceneId);
+      if (targetSceneId === null) return;
+
+      const entryOrientation = getNavigationEntryOrientation(targetSceneId, {
+        data: {
+          targetYaw: markerData?.targetYaw ?? null,
+          targetPitch: markerData?.targetPitch ?? null,
+          fromSceneId: markerData?.fromSceneId ?? null,
+        },
+      });
+
+      void goToScene(targetSceneId, entryOrientation);
+    };
+
+    markersPlugin.addEventListener("enter-marker", handleMarkerEnter);
+    markersPlugin.addEventListener("select-marker", handleMarkerSelect);
 
     viewer.addEventListener("panorama-loaded", () => {
       setLoadError(null);
@@ -992,13 +1076,6 @@ export function VirtualTour360({
       hideNavigationLoader();
     });
 
-    vtPlugin.addEventListener("enter-arrow", ({ link }: any) => {
-      const targetSceneId = Number(link?.nodeId);
-      if (Number.isFinite(targetSceneId)) {
-        void preloadScenePanoramaOnce(targetSceneId, "high");
-      }
-    });
-
     vtPlugin.addEventListener("node-changed", ({ node }: any) => {
       const nextId = Number(node.id);
       const nextScene = getSceneById(nextId);
@@ -1006,6 +1083,7 @@ export function VirtualTour360({
       currentSceneRef.current = nextScene;
       setCurrentSceneId(nextId);
       setLoadError(null);
+      syncNavigationMarkers(nextId);
 
       if (nextScene?.imageUrl) {
         psvReadyPanoramasRef.current.add(nextScene.imageUrl);
@@ -1021,6 +1099,12 @@ export function VirtualTour360({
       clearLoaderTimer();
       cleanupTasksRef.current.forEach((cleanup) => cleanup());
       cleanupTasksRef.current = [];
+      try {
+        markersPlugin.removeEventListener("enter-marker", handleMarkerEnter);
+        markersPlugin.removeEventListener("select-marker", handleMarkerSelect);
+      } catch {
+        // Plugin cleanup is also handled by viewer.destroy().
+      }
       viewer.destroy();
       viewerRef.current = null;
       currentSceneRef.current = null;
@@ -1036,6 +1120,9 @@ export function VirtualTour360({
     warmSceneNeighborhood,
     hideNavigationLoader,
     clearLoaderTimer,
+    getNavigationMarkerConfigs,
+    getNavigationEntryOrientation,
+    goToScene,
   ]);
 
   useEffect(() => {
@@ -1083,9 +1170,9 @@ export function VirtualTour360({
           display: none !important;
         }
 
-        .virtual-tour-shell .psv-virtual-tour-link.aura-mp-link {
-          filter: none !important;
-          overflow: visible !important;
+        .virtual-tour-shell .aura-vt-link-hidden {
+          display: none !important;
+          pointer-events: none !important;
         }
       `}</style>
 

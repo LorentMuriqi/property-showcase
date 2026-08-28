@@ -23,8 +23,9 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import {
   ensureMatterportHotspotStyles,
-  getMatterportArrowStyle,
+  getHiddenVirtualTourArrowStyle,
   getMatterportHotspotHtml,
+  getMatterportHotspotSize,
 } from "@/lib/matterport-hotspots";
 import { Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
@@ -2201,12 +2202,15 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
 
         markersPlugin.addMarker({
           id: `hs-${hotspot.id}`,
-          longitude: yaw,
-          latitude: pitch,
+          position: { yaw, pitch },
           html: getMatterportHotspotHtml(
             pitch,
             isEditingThis ? "editing" : "default",
           ),
+          size: getMatterportHotspotSize(pitch),
+          anchor: "center center",
+          className: "aura-mp-marker",
+          hoverScale: false,
           tooltip: hotspot.label || target?.title || "Lidhje",
         });
       });
@@ -2214,9 +2218,15 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
       if (tempDraftMarker) {
         markersPlugin.addMarker({
           id: "temp-new-hotspot",
-          longitude: tempDraftMarker.yaw,
-          latitude: tempDraftMarker.pitch,
+          position: {
+            yaw: tempDraftMarker.yaw,
+            pitch: tempDraftMarker.pitch,
+          },
           html: getMatterportHotspotHtml(tempDraftMarker.pitch, "draft"),
+          size: getMatterportHotspotSize(tempDraftMarker.pitch),
+          anchor: "center center",
+          className: "aura-mp-marker",
+          hoverScale: false,
           tooltip: "Pozicioni i hotspot-it të ri",
         });
       }
@@ -2272,7 +2282,6 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
             nodeId: String(hotspot.to_scene_id),
             position: { yaw, pitch },
             name: baseName,
-            arrowStyle: getMatterportArrowStyle(pitch),
             data: {
               hotspotId: hotspot.id,
               fromSceneId: scene.id,
@@ -2457,6 +2466,12 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
         defaultPitch: defaultStartOrientation?.pitch ?? 0,
         plugins: [
           [
+            MarkersPlugin,
+            {
+              clickEventOnMarker: false,
+            },
+          ],
+          [
             VirtualTourPlugin,
             {
               positionMode: "manual",
@@ -2464,16 +2479,90 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
               startNodeId: String(defaultScene.id),
               nodes: virtualTourNodes,
               transitionOptions: getPreviewTransitionOptions,
-              showLinkTooltip: true,
-              arrowsPosition: {
-                linkOverlapAngle: 0,
-              },
+              showLinkTooltip: false,
+              arrowStyle: getHiddenVirtualTourArrowStyle(),
             },
           ],
         ],
       });
 
       previewViewerRef.current = viewer;
+
+      const previewVtPlugin = viewer.getPlugin(VirtualTourPlugin as any) as any;
+      const previewMarkersPlugin = viewer.getPlugin(MarkersPlugin as any) as any;
+
+      const syncPreviewMarkers = (sceneId: number) => {
+        const sourceScene = scenes.find(
+          (scene) => Number(scene.id) === Number(sceneId),
+        );
+
+        if (!sourceScene) {
+          previewMarkersPlugin.clearMarkers();
+          return;
+        }
+
+        const markerConfigs = sourceScene.hotspots
+          .filter((hotspot) => validNodeIds.has(String(hotspot.to_scene_id)))
+          .map((hotspot) => {
+            const yaw = normalizeYaw(hotspot.yaw);
+            const pitch = clampPitch(hotspot.pitch);
+            const targetScene = scenes.find(
+              (scene) => Number(scene.id) === Number(hotspot.to_scene_id),
+            );
+
+            return {
+              id: `preview-hs-${hotspot.id}`,
+              position: { yaw, pitch },
+              html: getMatterportHotspotHtml(pitch, "default"),
+              size: getMatterportHotspotSize(pitch),
+              anchor: "center center",
+              className: "aura-mp-marker",
+              hoverScale: false,
+              tooltip: hotspot.label || targetScene?.title || "Lidhje",
+              data: {
+                hotspotId: hotspot.id,
+                fromSceneId: sourceScene.id,
+                toSceneId: hotspot.to_scene_id,
+                targetYaw: hotspot.target_yaw ?? null,
+                targetPitch: hotspot.target_pitch ?? null,
+              },
+            };
+          });
+
+        previewMarkersPlugin.setMarkers(markerConfigs);
+      };
+
+      syncPreviewMarkers(Number(defaultScene.id));
+
+      previewMarkersPlugin.addEventListener("select-marker", ({ marker }: any) => {
+        const data = marker?.config?.data;
+        const targetSceneId = toNullableNumber(data?.toSceneId);
+        if (targetSceneId == null) return;
+
+        const orientation = getPreviewNavigationEntryOrientation(targetSceneId, {
+          data: {
+            targetYaw: data?.targetYaw ?? null,
+            targetPitch: data?.targetPitch ?? null,
+            fromSceneId: data?.fromSceneId ?? null,
+          },
+        });
+
+        void previewVtPlugin
+          .setCurrentNode(
+            String(targetSceneId),
+            getPreviewTransitionWithOrientation(orientation),
+          )
+          .catch((error: unknown) => {
+            console.error("Preview marker navigation error:", error);
+          });
+      });
+
+      previewVtPlugin.addEventListener("node-changed", ({ node }: any) => {
+        const nextSceneId = Number(node?.id);
+        if (Number.isFinite(nextSceneId)) {
+          syncPreviewMarkers(nextSceneId);
+        }
+      });
     } catch (error) {
       console.error("Preview viewer init error:", error);
     }
