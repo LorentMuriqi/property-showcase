@@ -68,6 +68,90 @@ const NAVIGATION_TRANSITION = {
   rotation: false,
 };
 
+const createAura360NavigationHotspot = () => {
+  const element = document.createElement("div");
+
+  element.className = "aura360-navigation-hotspot";
+
+  element.innerHTML = `
+    <svg
+      viewBox="0 0 88 52"
+      width="88"
+      height="52"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <!-- Subtle shadow under the complete hotspot -->
+      <ellipse
+        cx="44"
+        cy="28"
+        rx="39"
+        ry="19"
+        fill="rgba(0,0,0,0.18)"
+        transform="translate(0 2)"
+      />
+
+      <!-- Main translucent floor plate -->
+      <ellipse
+        class="aura360-hotspot-plate"
+        cx="44"
+        cy="26"
+        rx="39"
+        ry="19"
+        fill="rgba(36,30,24,0.42)"
+        stroke="rgba(255,255,255,0.94)"
+        stroke-width="2.4"
+      />
+
+      <!-- Dark subtle depth inside -->
+      <ellipse
+        cx="44"
+        cy="26"
+        rx="35.5"
+        ry="15.5"
+        fill="none"
+        stroke="rgba(0,0,0,0.08)"
+        stroke-width="1"
+      />
+
+      <!-- Gold chevron shadow -->
+      <path
+        d="M28 32 L44 20 L60 32"
+        fill="none"
+        stroke="rgba(69,45,10,0.42)"
+        stroke-width="10"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        transform="translate(0 1.5)"
+      />
+
+      <!-- Main gold chevron -->
+      <path
+        class="aura360-hotspot-arrow"
+        d="M28 32 L44 20 L60 32"
+        fill="none"
+        stroke="#DDB84F"
+        stroke-width="9"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+
+      <!-- Fine highlight creating the premium bevel -->
+      <path
+        class="aura360-hotspot-highlight"
+        d="M28.8 30.7 L44 19.6 L59.2 30.7"
+        fill="none"
+        stroke="rgba(255,238,171,0.58)"
+        stroke-width="2.4"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  `;
+
+  return element;
+};
+
 
 
 type NavigationTransitionOptions = typeof NAVIGATION_TRANSITION & {
@@ -621,10 +705,10 @@ const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
 
           return {
             nodeId: String(hotspot.toSceneId),
-            position: {
-              yaw: visualPosition?.yaw ?? hotspot.yaw,
-              pitch: visualPosition?.pitch ?? hotspot.pitch,
-            },
+position: {
+  yaw: hotspot.yaw,
+  pitch: hotspot.pitch,
+},
             name: visualPosition?.isClustered
               ? `${baseName} · ${Number(visualPosition.clusterIndex) + 1}/${visualPosition.clusterSize}`
               : baseName,
@@ -636,8 +720,8 @@ const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
               targetPitch: hotspot.targetPitch ?? null,
               rawYaw: visualPosition?.rawYaw ?? hotspot.yaw,
               rawPitch: visualPosition?.rawPitch ?? hotspot.pitch,
-              displayYaw: visualPosition?.yaw ?? hotspot.yaw,
-              displayPitch: visualPosition?.pitch ?? hotspot.pitch,
+displayYaw: hotspot.yaw,
+displayPitch: hotspot.pitch,
               isClustered: !!visualPosition?.isClustered,
               clusterIndex: visualPosition?.clusterIndex ?? 0,
               clusterSize: visualPosition?.clusterSize ?? 1,
@@ -1324,15 +1408,23 @@ const finishInitialLoad = () => {
           VirtualTourPlugin,
           {
             positionMode: "manual",
-            renderMode: "3d",
+            renderMode: "2d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
             preload: shouldPluginPreloadLink,
             transitionOptions: getPluginTransitionOptions,
-            showLinkTooltip: true,
-            arrowStyle: {
-              size: { width: 72, height: 72 },
-            },
+showLinkTooltip: false,
+
+arrowStyle: {
+  element: () => createAura360NavigationHotspot(),
+
+  size: {
+    width: 88,
+    height: 52,
+  },
+
+  className: "aura360-floor-link",
+},
             arrowsPosition: {
               minPitch: 0.2,
               maxPitch: Math.PI / 2,
@@ -1544,9 +1636,78 @@ neighborhoodWarmupCleanupRef.current = null;
     display: none !important;
   }
 
-  .virtual-tour-shell .psv-virtual-tour-link {
-    filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.45));
-  }
+.virtual-tour-shell .psv-virtual-tour-link {
+  filter: none !important;
+  overflow: visible !important;
+}
+
+.virtual-tour-shell .aura360-floor-link {
+  cursor: pointer;
+  overflow: visible !important;
+}
+
+.virtual-tour-shell .aura360-navigation-hotspot {
+  width: 88px;
+  height: 52px;
+  display: block;
+  transform: translateZ(0);
+  transform-origin: center center;
+  transition:
+    opacity 150ms ease,
+    filter 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.virtual-tour-shell .aura360-navigation-hotspot svg {
+  display: block;
+  width: 88px;
+  height: 52px;
+  overflow: visible;
+}
+
+.virtual-tour-shell .aura360-hotspot-plate {
+  transition:
+    fill 150ms ease,
+    stroke 150ms ease,
+    stroke-width 150ms ease;
+}
+
+.virtual-tour-shell .aura360-hotspot-arrow,
+.virtual-tour-shell .aura360-hotspot-highlight {
+  transition:
+    stroke 150ms ease,
+    stroke-width 150ms ease;
+}
+
+/* Hover: vetëm më clean, më i bardhë dhe pak më bold */
+.virtual-tour-shell
+.aura360-floor-link:hover
+.aura360-hotspot-plate {
+  fill: rgba(36, 30, 24, 0.48);
+  stroke: rgba(255, 255, 255, 1);
+  stroke-width: 3;
+}
+
+.virtual-tour-shell
+.aura360-floor-link:hover
+.aura360-hotspot-arrow {
+  stroke: #E5C45F;
+  stroke-width: 9.8;
+}
+
+.virtual-tour-shell
+.aura360-floor-link:hover
+.aura360-hotspot-highlight {
+  stroke: rgba(255, 244, 196, 0.78);
+}
+
+/* Mos e zmadho hotspot-in në hover */
+.virtual-tour-shell
+.aura360-floor-link:hover
+.aura360-navigation-hotspot {
+  transform: translateZ(0);
+  filter: brightness(1.04);
+}
 
   @keyframes virtual-tour-loader-enter {
     from {
