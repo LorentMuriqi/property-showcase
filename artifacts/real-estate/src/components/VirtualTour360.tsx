@@ -68,83 +68,7 @@ const NAVIGATION_TRANSITION = {
   rotation: false,
 };
 
-const AURA360_FLOOR_HOTSPOT_HTML = `
-  <div style="
-    width:112px;
-    height:64px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    user-select:none;
-  ">
-    <svg
-      viewBox="0 0 112 64"
-      width="112"
-      height="64"
-      xmlns="http://www.w3.org/2000/svg"
-      style="display:block; overflow:visible;"
-      aria-hidden="true"
-    >
-      <style>
-        .aura360-floor-plate {
-          fill: rgba(42,34,26,0.38);
-          stroke: rgba(255,255,255,0.98);
-          stroke-width: 3.4;
-          transition: fill .15s ease, stroke-width .15s ease;
-        }
 
-        .aura360-floor-arrow {
-          fill: none;
-          stroke: #e7c35f;
-          stroke-width: 9.5;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          filter: drop-shadow(0 2px 1.5px rgba(0,0,0,.35));
-          transition:
-            stroke .15s ease,
-            stroke-width .15s ease,
-            filter .15s ease;
-        }
-
-        svg:hover .aura360-floor-plate {
-          fill: rgba(42,34,26,0.46);
-          stroke-width: 4.2;
-        }
-
-        svg:hover .aura360-floor-arrow {
-          stroke: #f1d477;
-          stroke-width: 10.5;
-          filter: drop-shadow(0 2px 2px rgba(0,0,0,.38));
-        }
-      </style>
-
-      <ellipse
-        class="aura360-floor-plate"
-        cx="56"
-        cy="32"
-        rx="51"
-        ry="26"
-      />
-
-      <path
-        class="aura360-floor-arrow"
-        d="M37 40 L56 25 L75 40"
-      />
-    </svg>
-  </div>
-`;
-
-const createAura360FloorHotspotElement = () => {
-  const element = document.createElement("div");
-
-  element.style.width = "112px";
-  element.style.height = "64px";
-  element.style.display = "block";
-  element.innerHTML = AURA360_FLOOR_HOTSPOT_HTML;
-
-  return element;
-};
 
 type NavigationTransitionOptions = typeof NAVIGATION_TRANSITION & {
   rotateTo?: Orientation;
@@ -1405,16 +1329,10 @@ const finishInitialLoad = () => {
             nodes,
             preload: shouldPluginPreloadLink,
             transitionOptions: getPluginTransitionOptions,
-            showLinkTooltip: false,
-
-arrowStyle: {
-  element: () => createAura360FloorHotspotElement(),
-  size: {
-    width: 112,
-    height: 64,
-  },
-  className: "aura360-floor-hotspot-link",
-},
+            showLinkTooltip: true,
+            arrowStyle: {
+              size: { width: 72, height: 72 },
+            },
             arrowsPosition: {
               minPitch: 0.2,
               maxPitch: Math.PI / 2,
@@ -1626,9 +1544,9 @@ neighborhoodWarmupCleanupRef.current = null;
     display: none !important;
   }
 
-.virtual-tour-shell .psv-virtual-tour-link {
-  filter: none;
-}
+  .virtual-tour-shell .psv-virtual-tour-link {
+    filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.45));
+  }
 
   @keyframes virtual-tour-loader-enter {
     from {
