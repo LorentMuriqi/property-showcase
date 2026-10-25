@@ -21,12 +21,6 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import {
-  ensureAuraArrowHotspotStyles,
-  getAuraArrowHotspotHtml,
-  getAuraArrowHotspotSize,
-  getHiddenAuraVtArrowStyle,
-} from "@/lib/aura360-arrow-hotspot";
 import { Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
@@ -140,6 +134,121 @@ type PlacementDraft = {
   pitch: number | null;
 };
 
+const NORMAL_HOTSPOT_HTML = `
+  <div style="
+    width: 42px;
+    height: 42px;
+    border-radius: 9999px;
+    background: rgba(0,0,0,0.58);
+    border: 3px solid #d4af37;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:0 10px 24px rgba(0,0,0,.38);
+    cursor:pointer;
+    user-select:none;
+  ">
+    ↗
+  </div>
+`;
+
+const EDITING_HOTSPOT_HTML = `
+  <div style="
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 9999px;
+    background: rgba(239,68,68,0.88);
+    border: 3px solid white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+    box-shadow:
+      0 0 0 10px rgba(239,68,68,.16),
+      0 10px 24px rgba(0,0,0,.38);
+    cursor:pointer;
+    user-select:none;
+  ">
+    ↗
+    <div style="
+      position:absolute;
+      left:50%;
+      top:calc(100% + 8px);
+      transform:translateX(-50%);
+      white-space:nowrap;
+      font-size:11px;
+      font-weight:700;
+      color:white;
+      background:rgba(0,0,0,0.72);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:9999px;
+      padding:4px 8px;
+      box-shadow:0 6px 18px rgba(0,0,0,.28);
+    ">
+      Duke u edituar
+    </div>
+  </div>
+`;
+
+const TEMP_HOTSPOT_HTML = `
+  <div style="
+    position: relative;
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    background: rgba(239,68,68,0.95);
+    border: 3px solid white;
+    box-shadow:
+      0 0 0 10px rgba(239,68,68,.16),
+      0 8px 24px rgba(0,0,0,.35);
+    user-select:none;
+  ">
+    <div style="
+      position:absolute;
+      top:50%;
+      left:50%;
+      width:2px;
+      height:34px;
+      background:white;
+      transform:translate(-50%, -50%);
+      opacity:.95;
+    "></div>
+    <div style="
+      position:absolute;
+      top:50%;
+      left:50%;
+      width:34px;
+      height:2px;
+      background:white;
+      transform:translate(-50%, -50%);
+      opacity:.95;
+    "></div>
+    <div style="
+      position:absolute;
+      left:50%;
+      top:calc(100% + 8px);
+      transform:translateX(-50%);
+      white-space:nowrap;
+      font-size:11px;
+      font-weight:700;
+      color:white;
+      background:rgba(0,0,0,0.72);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:9999px;
+      padding:4px 8px;
+      box-shadow:0 6px 18px rgba(0,0,0,.28);
+    ">
+      Hotspot i ri
+    </div>
+  </div>
+`;
+
 const toNumber = (value: any, fallback = 0) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -186,15 +295,118 @@ const isFiniteOrientation = (orientation: Orientation | null): orientation is Or
 };
 
 
+type HotspotLike = {
+  id: number;
+  yaw: number;
+  pitch: number;
+};
+
+type ClusteredHotspotPosition = {
+  yaw: number;
+  pitch: number;
+  rawYaw: number;
+  rawPitch: number;
+  clusterIndex: number;
+  clusterSize: number;
+  isClustered: boolean;
+};
+
+const HOTSPOT_CLUSTER_RADIUS = 0.04;
+const HOTSPOT_FAN_YAW_STEP = 0.052;
+const HOTSPOT_FAN_PITCH_STEP = 0.018;
+
+const getYawDistance = (a: number, b: number) => {
+  return Math.abs(normalizeYaw(a - b));
+};
+
+const getHotspotDistance = (a: HotspotLike, b: HotspotLike) => {
+  const dyaw = getYawDistance(a.yaw, b.yaw);
+  const dpitch = Math.abs(a.pitch - b.pitch);
+  return Math.sqrt(dyaw * dyaw + dpitch * dpitch);
+};
+
+const getHotspotClusterKey = (hotspot: HotspotLike) => {
+  return `${Math.round(normalizeYaw(hotspot.yaw) / HOTSPOT_CLUSTER_RADIUS)}:${Math.round(
+    clampPitch(hotspot.pitch) / HOTSPOT_CLUSTER_RADIUS,
+  )}`;
+};
+
+const getHotspotClusters = <T extends HotspotLike>(hotspots: T[]): T[][] => {
+  const clusters: T[][] = [];
+
+  hotspots.forEach((hotspot) => {
+    const existingCluster = clusters.find((cluster) =>
+      cluster.some(
+        (clusterHotspot) => getHotspotDistance(clusterHotspot, hotspot) <= HOTSPOT_CLUSTER_RADIUS,
+      ),
+    );
+
+    if (existingCluster) {
+      existingCluster.push(hotspot);
+    } else {
+      clusters.push([hotspot]);
+    }
+  });
+
+  return clusters.map((cluster) =>
+    [...cluster].sort((a, b) => {
+      const keyA = getHotspotClusterKey(a);
+      const keyB = getHotspotClusterKey(b);
+      if (keyA !== keyB) return keyA.localeCompare(keyB);
+      return Number(a.id) - Number(b.id);
+    }),
+  );
+};
+
+const getClusteredHotspotPositions = <T extends HotspotLike>(
+  hotspots: T[],
+): Map<number, ClusteredHotspotPosition> => {
+  const positions = new Map<number, ClusteredHotspotPosition>();
+
+  getHotspotClusters(hotspots).forEach((cluster) => {
+    if (cluster.length === 1) {
+      const hotspot = cluster[0];
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw),
+        pitch: clampPitch(hotspot.pitch),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: 0,
+        clusterSize: 1,
+        isClustered: false,
+      });
+      return;
+    }
+
+    const centerIndex = (cluster.length - 1) / 2;
+
+    cluster.forEach((hotspot, index) => {
+      const offset = index - centerIndex;
+      const verticalDirection = index % 2 === 0 ? 1 : -1;
+
+      positions.set(Number(hotspot.id), {
+        yaw: normalizeYaw(hotspot.yaw + offset * HOTSPOT_FAN_YAW_STEP),
+        pitch: clampPitch(
+          hotspot.pitch + Math.abs(offset) * HOTSPOT_FAN_PITCH_STEP * verticalDirection,
+        ),
+        rawYaw: normalizeYaw(hotspot.yaw),
+        rawPitch: clampPitch(hotspot.pitch),
+        clusterIndex: index,
+        clusterSize: cluster.length,
+        isClustered: true,
+      });
+    });
+  });
+
+  return positions;
+};
+
 const getSmartHotspotLabel = (targetTitle?: string | null) => {
   const cleanTitle = String(targetTitle || "").trim();
   return cleanTitle ? `Shko në ${cleanTitle}` : "Shko në skenën tjetër";
 };
 
 export default function AdminVirtualTour() {
-  useEffect(() => {
-    ensureAuraArrowHotspotStyles();
-  }, []);
   const { isAdmin, permissions, isLoading: authLoading } = useAuth();
   const [location, setLocation] = useLocation();
   const { id } = useParams();
@@ -2126,41 +2338,66 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
         }
       });
 
+      const markerHotspots = selectedScene.hotspots.map((hotspot) => {
+        const isEditingThis = editingHotspot?.id === hotspot.id;
+
+        return isEditingThis
+          ? {
+              ...hotspot,
+              yaw: normalizeYaw(editingHotspot!.yaw),
+              pitch: clampPitch(editingHotspot!.pitch),
+            }
+          : {
+              ...hotspot,
+              yaw: normalizeYaw(hotspot.yaw),
+              pitch: clampPitch(hotspot.pitch),
+            };
+      });
+
+      const tempDraftMarker =
+        isPlacementMode && draft.yaw !== null && draft.pitch !== null
+          ? {
+              id: -1,
+              yaw: normalizeYaw(draft.yaw),
+              pitch: clampPitch(draft.pitch),
+            }
+          : null;
+
+      const clusteredMarkerPositions = getClusteredHotspotPositions([
+        ...markerHotspots,
+        ...(tempDraftMarker ? [tempDraftMarker] : []),
+      ]);
+
       selectedScene.hotspots.forEach((hotspot) => {
         const target = scenes.find(
           (scene) => Number(scene.id) === Number(hotspot.to_scene_id),
         );
-        const isEditing = editingHotspot?.id === hotspot.id;
-        const yaw = isEditing
-          ? normalizeYaw(editingHotspot!.yaw)
-          : normalizeYaw(hotspot.yaw);
-        const pitch = isEditing
-          ? clampPitch(editingHotspot!.pitch)
-          : clampPitch(hotspot.pitch);
+        const isEditingThis = editingHotspot?.id === hotspot.id;
+        const displayPosition = clusteredMarkerPositions.get(Number(hotspot.id));
+        const clusterSuffix = displayPosition?.isClustered
+          ? ` · Grup ${displayPosition.clusterIndex + 1}/${displayPosition.clusterSize}`
+          : "";
 
         markersPlugin.addMarker({
           id: `hs-${hotspot.id}`,
-          position: { yaw, pitch },
-          html: getAuraArrowHotspotHtml(hotspot.id, isEditing ? "editing" : "default"),
-          size: getAuraArrowHotspotSize(pitch, true),
-          anchor: "center center",
-          className: "aura360-arrow-marker",
-          hoverScale: false,
-          tooltip: hotspot.label || target?.title || "Lidhje",
+          longitude:
+            displayPosition?.yaw ??
+            (isEditingThis ? editingHotspot!.yaw : normalizeYaw(hotspot.yaw)),
+          latitude:
+            displayPosition?.pitch ??
+            (isEditingThis ? editingHotspot!.pitch : clampPitch(hotspot.pitch)),
+          html: isEditingThis ? EDITING_HOTSPOT_HTML : NORMAL_HOTSPOT_HTML,
+          tooltip: `${hotspot.label || target?.title || "Lidhje"}${clusterSuffix}`,
         });
       });
 
-      if (isPlacementMode && draft.yaw !== null && draft.pitch !== null) {
-        const yaw = normalizeYaw(draft.yaw);
-        const pitch = clampPitch(draft.pitch);
+      if (tempDraftMarker) {
+        const displayPosition = clusteredMarkerPositions.get(tempDraftMarker.id);
         markersPlugin.addMarker({
           id: "temp-new-hotspot",
-          position: { yaw, pitch },
-          html: getAuraArrowHotspotHtml("draft", "draft"),
-          size: getAuraArrowHotspotSize(pitch, true),
-          anchor: "center center",
-          className: "aura360-arrow-marker",
-          hoverScale: false,
+          longitude: displayPosition?.yaw ?? tempDraftMarker.yaw,
+          latitude: displayPosition?.pitch ?? tempDraftMarker.pitch,
+          html: TEMP_HOTSPOT_HTML,
           tooltip: "Pozicioni i hotspot-it të ri",
         });
       }
@@ -2196,6 +2433,8 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
       const validHotspots = scene.hotspots.filter((hotspot) =>
         validSceneIds.has(Number(hotspot.to_scene_id)),
       );
+      const clusteredPositions = getClusteredHotspotPositions(validHotspots);
+
       return {
         id: String(scene.id),
         panorama: scene.image_url,
@@ -2206,27 +2445,32 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
           initialPitch: scene.initial_pitch ?? null,
         },
         links: validHotspots.map((hotspot) => {
+          const displayPosition = clusteredPositions.get(Number(hotspot.id));
           const targetTitle = validScenesById.get(Number(hotspot.to_scene_id))?.title;
           const baseName = hotspot.label || targetTitle || "Lidhje";
-          const yaw = normalizeYaw(hotspot.yaw);
-          const pitch = clampPitch(hotspot.pitch);
+
           return {
             nodeId: String(hotspot.to_scene_id),
-            position: { yaw, pitch },
-            name: baseName,
+            position: {
+              yaw: displayPosition?.yaw ?? hotspot.yaw,
+              pitch: displayPosition?.pitch ?? hotspot.pitch,
+            },
+            name: displayPosition?.isClustered
+              ? `${baseName} · ${displayPosition.clusterIndex + 1}/${displayPosition.clusterSize}`
+              : baseName,
             data: {
               hotspotId: hotspot.id,
               fromSceneId: scene.id,
               toSceneId: hotspot.to_scene_id,
               targetYaw: hotspot.target_yaw ?? null,
               targetPitch: hotspot.target_pitch ?? null,
-              rawYaw: yaw,
-              rawPitch: pitch,
-              displayYaw: yaw,
-              displayPitch: pitch,
-              isClustered: false,
-              clusterIndex: 0,
-              clusterSize: 1,
+              rawYaw: displayPosition?.rawYaw ?? hotspot.yaw,
+              rawPitch: displayPosition?.rawPitch ?? hotspot.pitch,
+              displayYaw: displayPosition?.yaw ?? hotspot.yaw,
+              displayPitch: displayPosition?.pitch ?? hotspot.pitch,
+              isClustered: !!displayPosition?.isClustered,
+              clusterIndex: displayPosition?.clusterIndex ?? 0,
+              clusterSize: displayPosition?.clusterSize ?? 1,
             },
           };
         }),
@@ -2397,7 +2641,6 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
         defaultYaw: defaultStartOrientation?.yaw ?? 0,
         defaultPitch: defaultStartOrientation?.pitch ?? 0,
         plugins: [
-          [MarkersPlugin, { clickEventOnMarker: false }],
           [
             VirtualTourPlugin,
             {
@@ -2406,72 +2649,12 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
               startNodeId: String(defaultScene.id),
               nodes: virtualTourNodes,
               transitionOptions: getPreviewTransitionOptions,
-              showLinkTooltip: false,
-              arrowStyle: getHiddenAuraVtArrowStyle(),
             },
           ],
         ],
       });
 
       previewViewerRef.current = viewer;
-
-      const previewVt = viewer.getPlugin(VirtualTourPlugin as any) as any;
-      const previewMarkers = viewer.getPlugin(MarkersPlugin as any) as any;
-
-      const syncPreviewMarkers = (sceneId: number) => {
-        const source = scenes.find((scene) => Number(scene.id) === sceneId);
-        if (!source) {
-          previewMarkers.clearMarkers();
-          return;
-        }
-
-        const configs = source.hotspots
-          .filter((hotspot) => validNodeIds.has(String(hotspot.to_scene_id)))
-          .map((hotspot) => {
-            const yaw = normalizeYaw(hotspot.yaw);
-            const pitch = clampPitch(hotspot.pitch);
-            return {
-              id: `preview-hs-${hotspot.id}`,
-              position: { yaw, pitch },
-              html: getAuraArrowHotspotHtml(`preview-${hotspot.id}`),
-              size: getAuraArrowHotspotSize(pitch, true),
-              anchor: "center center",
-              className: "aura360-arrow-marker",
-              hoverScale: false,
-              data: {
-                fromSceneId: source.id,
-                toSceneId: hotspot.to_scene_id,
-                targetYaw: hotspot.target_yaw ?? null,
-                targetPitch: hotspot.target_pitch ?? null,
-              },
-            };
-          });
-        previewMarkers.setMarkers(configs);
-      };
-
-      syncPreviewMarkers(Number(defaultScene.id));
-      previewMarkers.addEventListener("select-marker", ({ marker }: any) => {
-        const data = marker?.config?.data;
-        const targetSceneId = toNullableNumber(data?.toSceneId);
-        if (targetSceneId === null) return;
-        const orientation = getPreviewNavigationEntryOrientation(targetSceneId, {
-          data: {
-            targetYaw: data?.targetYaw ?? null,
-            targetPitch: data?.targetPitch ?? null,
-            fromSceneId: data?.fromSceneId ?? null,
-          },
-        });
-        void previewVt.setCurrentNode(
-          String(targetSceneId),
-          getPreviewTransitionWithOrientation(orientation),
-        ).catch((error: unknown) => {
-          console.error("Aura360 preview marker navigation failed:", error);
-        });
-      });
-      previewVt.addEventListener("node-changed", ({ node }: any) => {
-        const nextId = Number(node?.id);
-        if (Number.isFinite(nextId)) syncPreviewMarkers(nextId);
-      });
     } catch (error) {
       console.error("Preview viewer init error:", error);
     }
