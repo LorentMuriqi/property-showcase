@@ -1373,8 +1373,8 @@ arrowStyle: {
   element: () => createAura360NavigationHotspot(),
 
   size: {
-    width: 180,
-    height: 108,
+    width: 112,
+    height: 66,
   },
 
   className: "aura360-floor-link",
@@ -1392,12 +1392,17 @@ arrowStyle: {
 
 viewerRef.current = viewer;
 
+
 const HOTSPOT_BASE_WIDTH = 112;
-const HOTSPOT_BASE_HEIGHT = 66;
 const HOTSPOT_MAX_SCALE = 1.55;
 
 /*
- * Baza duhet të jetë e njëjtë me defaultZoomLvl të Viewer-it.
+ * Anchor-i i hotspot-it mbetet gjithmonë fiks.
+ * Gjatë zoom-it ndryshojmë VETËM gjerësinë
+ * e vizualit të brendshëm.
+ *
+ * Aspect-ratio ruhet nga CSS, prandaj forma
+ * nuk deformohet dhe nuk "balancohet".
  */
 const hotspotBaseZoomLevel =
   deviceProfile.isMobile ? 32 : 38;
@@ -1407,10 +1412,10 @@ const updateAura360HotspotZoomSize = (
 ) => {
   /*
    * Zoom-out:
-   * hotspoti NUK bëhet më i vogël se madhësia bazë.
+   * mbetet në madhësinë normale.
    *
    * Zoom-in:
-   * hotspoti rritet gradualisht deri në 1.55x.
+   * rritet gradualisht deri në 1.55x.
    */
   const progress =
     zoomLevel <= hotspotBaseZoomLevel
@@ -1424,16 +1429,13 @@ const updateAura360HotspotZoomSize = (
             ),
         );
 
-  const scale =
-    1 +
-    progress *
-      (HOTSPOT_MAX_SCALE - 1);
-
   const width =
-    HOTSPOT_BASE_WIDTH * scale;
-
-  const height =
-    HOTSPOT_BASE_HEIGHT * scale;
+    HOTSPOT_BASE_WIDTH *
+    (
+      1 +
+      progress *
+        (HOTSPOT_MAX_SCALE - 1)
+    );
 
   containerRef.current
     ?.querySelectorAll<HTMLElement>(
@@ -1444,21 +1446,16 @@ const updateAura360HotspotZoomSize = (
         "--aura-hotspot-width",
         `${width.toFixed(1)}px`,
       );
-
-      hotspot.style.setProperty(
-        "--aura-hotspot-height",
-        `${height.toFixed(1)}px`,
-      );
     });
 };
 
-const handleAura360HotspotZoom = ({
-  zoomLevel,
-}: {
-  zoomLevel: number;
-}) => {
+const handleAura360HotspotZoom = (
+  event: any,
+) => {
   updateAura360HotspotZoomSize(
-    zoomLevel,
+    Number.isFinite(event?.zoomLevel)
+      ? event.zoomLevel
+      : viewer.getZoomLevel(),
   );
 };
 
@@ -1467,13 +1464,9 @@ viewer.addEventListener(
   handleAura360HotspotZoom,
 );
 
-/*
- * Apliko scale edhe pas renderimit të parë.
- */
 requestAnimationFrame(() => {
-  updateAura360HotspotZoomScale();
+  updateAura360HotspotZoomSize();
 });
-
 
 
 const vtPlugin = viewer.getPlugin(
@@ -1685,9 +1678,25 @@ viewer.removeEventListener(
   }
 
 
+
 .virtual-tour-shell .psv-virtual-tour-link {
   filter: none !important;
   overflow: visible !important;
+
+  /*
+   * VirtualTourPlugin ka animacionin e vet default
+   * në hover. E çaktivizojmë që të mos ndryshojë
+   * vizualisht hotspot-i ynë.
+   */
+  animation: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.virtual-tour-shell .psv-virtual-tour-link:hover {
+  animation: none !important;
+  box-shadow: none !important;
 }
 
 .virtual-tour-shell .aura360-floor-link {
@@ -1697,53 +1706,60 @@ viewer.removeEventListener(
 }
 
 /*
- * Canvas fiks.
- * Photo Sphere Viewer kontrollon VETËM pozicionin e këtij elementi.
- * Ne nuk i vendosim ASNJË transform.
+ * KY është anchor-i real.
+ *
+ * Photo Sphere Viewer e lëviz vetëm sipas yaw/pitch.
+ * Madhësia e tij NUK ndryshon kurrë.
+ * Nuk vendosim transform/rotate/scale këtu.
  */
 .virtual-tour-shell .aura360-navigation-hotspot {
-  width: 180px;
-  height: 108px;
+  width: 112px;
+  height: 66px;
 
   position: relative;
   display: block;
 
   --aura-hotspot-width: 112px;
-  --aura-hotspot-height: 66px;
 
   pointer-events: none;
 }
 
 /*
- * Vetëm vizuali ndryshon madhësi.
- * Nuk përdorim scale(), rotate(), skew() apo perspective.
+ * Vetëm vizuali i brendshëm mund të zmadhohet.
+ *
+ * Ndryshojmë vetëm WIDTH.
+ * HEIGHT llogaritet automatikisht nga aspect-ratio.
+ *
+ * Kështu raporti i formës është gjithmonë identik.
  */
-.virtual-tour-shell .aura360-navigation-hotspot__visual {
+.virtual-tour-shell
+.aura360-navigation-hotspot__visual {
   position: absolute;
 
   left: 50%;
   top: 50%;
 
   width: var(--aura-hotspot-width);
-  height: var(--aura-hotspot-height);
 
-  transform: translate(-50%, -50%);
+  aspect-ratio: 112 / 66;
+  height: auto;
+
+  transform:
+    translate(-50%, -50%) !important;
 
   transform-origin: center center;
+
+  rotate: 0deg !important;
 
   pointer-events: auto;
 
   transition:
     width 80ms linear,
-    height 80ms linear,
     filter 140ms ease;
-
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 /*
- * SVG ruan gjithmonë saktësisht të njëjtën formë.
+ * SVG-ja nuk merr ASNJË transform.
  */
 .virtual-tour-shell
 .aura360-navigation-hotspot__visual svg {
@@ -1758,7 +1774,7 @@ viewer.removeEventListener(
   rotate: 0deg !important;
 }
 
-/* Matterport-like normal */
+/* Normal */
 .virtual-tour-shell .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.30);
 
@@ -1774,7 +1790,7 @@ viewer.removeEventListener(
   fill: rgba(255, 255, 255, 0.42);
 }
 
-/* Click/touch */
+/* Click / touch */
 .virtual-tour-shell
 .aura360-navigation-hotspot__visual:active
 .aura360-hotspot-ring {
