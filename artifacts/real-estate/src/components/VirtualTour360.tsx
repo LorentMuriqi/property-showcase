@@ -75,43 +75,40 @@ const createAura360NavigationHotspot = () => {
 
 element.innerHTML = `
   <svg
-    viewBox="0 0 84 48"
-    width="84"
-    height="48"
+    viewBox="0 0 92 54"
+    width="92"
+    height="54"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
-    <!-- very soft floor shadow -->
+    <!-- very subtle floor shadow -->
     <ellipse
-      cx="42"
-      cy="28"
-      rx="26"
-      ry="8.5"
-      fill="rgba(0,0,0,0.10)"
+      cx="46"
+      cy="30"
+      rx="24"
+      ry="8"
+      fill="rgba(0,0,0,0.08)"
     />
 
-    <!-- outer ring -->
-    <ellipse
+    <!-- Matterport-like flat white ring -->
+    <path
       class="aura360-hotspot-ring"
-      cx="42"
-      cy="24"
-      rx="26"
-      ry="10.5"
-      fill="rgba(255,255,255,0.05)"
-      stroke="rgba(255,255,255,0.96)"
-      stroke-width="2.6"
-    />
+      fill-rule="evenodd"
+      d="
+        M 46 14
+        C 61.5 14, 74 18.7, 74 24.5
+        C 74 30.3, 61.5 35, 46 35
+        C 30.5 35, 18 30.3, 18 24.5
+        C 18 18.7, 30.5 14, 46 14
+        Z
 
-    <!-- inner subtle center -->
-    <ellipse
-      class="aura360-hotspot-center"
-      cx="42"
-      cy="24"
-      rx="14.5"
-      ry="5.6"
-      fill="rgba(255,255,255,0.03)"
-      stroke="rgba(255,255,255,0.16)"
-      stroke-width="0.8"
+        M 46 18.6
+        C 54.9 18.6, 62 21.2, 62 24.5
+        C 62 27.8, 54.9 30.4, 46 30.4
+        C 37.1 30.4, 30 27.8, 30 24.5
+        C 30 21.2, 37.1 18.6, 46 18.6
+        Z
+      "
     />
   </svg>
 `;
@@ -1386,8 +1383,8 @@ arrowStyle: {
   element: () => createAura360NavigationHotspot(),
 
   size: {
-    width: 84,
-    height: 48,
+    width: 92,
+    height: 54,
   },
 
   className: "aura360-floor-link",
@@ -1604,7 +1601,7 @@ neighborhoodWarmupCleanupRef.current = null;
   }
 
 
-.virtual-tour-shell .psv-virtual-tour-link {
+..virtual-tour-shell .psv-virtual-tour-link {
   filter: none !important;
   overflow: visible !important;
 }
@@ -1615,52 +1612,37 @@ neighborhoodWarmupCleanupRef.current = null;
 }
 
 .virtual-tour-shell .aura360-navigation-hotspot {
-  width: 84px;
-  height: 48px;
+  width: 92px;
+  height: 54px;
   display: block;
   transform: translateZ(0);
   transform-origin: center center;
   transition:
-    opacity 150ms ease,
-    filter 150ms ease;
+    opacity 140ms ease,
+    filter 140ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 
 .virtual-tour-shell .aura360-navigation-hotspot svg {
   display: block;
-  width: 84px;
-  height: 48px;
+  width: 92px;
+  height: 54px;
   overflow: visible;
 }
 
 .virtual-tour-shell .aura360-hotspot-ring {
+  fill: rgba(255, 255, 255, 0.74);
   transition:
-    fill 150ms ease,
-    stroke 150ms ease,
-    stroke-width 150ms ease;
+    fill 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
-.virtual-tour-shell .aura360-hotspot-center {
-  transition:
-    fill 150ms ease,
-    stroke 150ms ease,
-    opacity 150ms ease;
-}
-
-/* hover: vetëm pak më clean/bold si matterport */
+/* hover: vetëm pak më e bardhë si te matterport */
 .virtual-tour-shell
 .aura360-floor-link:hover
 .aura360-hotspot-ring {
-  fill: rgba(255,255,255,0.08);
-  stroke: rgba(255,255,255,1);
-  stroke-width: 2.9;
-}
-
-.virtual-tour-shell
-.aura360-floor-link:hover
-.aura360-hotspot-center {
-  fill: rgba(255,255,255,0.05);
-  stroke: rgba(255,255,255,0.22);
+  fill: rgba(255, 255, 255, 0.96);
 }
 
 .virtual-tour-shell
