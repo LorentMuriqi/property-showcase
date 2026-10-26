@@ -81,32 +81,22 @@ element.innerHTML = `
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
-    <!-- subtle floor shadow -->
-    <ellipse
-      cx="46"
-      cy="30"
-      rx="22"
-      ry="7"
-      fill="rgba(0,0,0,0.06)"
-    />
-
-    <!-- matterport-like outer ring -->
     <path
       class="aura360-hotspot-ring"
       fill-rule="evenodd"
       d="
-        M 46 14
-        C 60.5 14, 72 18.2, 72 23.6
-        C 72 29.0, 60.5 33.2, 46 33.2
-        C 31.5 33.2, 20 29.0, 20 23.6
-        C 20 18.2, 31.5 14, 46 14
+        M 46 9
+        C 67 9, 83 15.5, 83 24
+        C 83 32.5, 67 39, 46 39
+        C 25 39, 9 32.5, 9 24
+        C 9 15.5, 25 9, 46 9
         Z
 
-        M 46 18.8
-        C 54.2 18.8, 60.8 21.0, 60.8 23.6
-        C 60.8 26.2, 54.2 28.4, 46 28.4
-        C 37.8 28.4, 31.2 26.2, 31.2 23.6
-        C 31.2 21.0, 37.8 18.8, 46 18.8
+        M 46 15.5
+        C 58.5 15.5, 68 19.2, 68 24
+        C 68 28.8, 58.5 32.5, 46 32.5
+        C 33.5 32.5, 24 28.8, 24 24
+        C 24 19.2, 33.5 15.5, 46 15.5
         Z
       "
     />
@@ -1383,8 +1373,8 @@ arrowStyle: {
   element: () => createAura360NavigationHotspot(),
 
   size: {
-  width: 92,
-  height: 54,
+    width: 112,
+    height: 66,
   },
 
   className: "aura360-floor-link",
@@ -1401,6 +1391,55 @@ arrowStyle: {
     });
 
 viewerRef.current = viewer;
+
+
+const hotspotBaseZoomLevel = viewer.getZoomLevel();
+
+const updateAura360HotspotZoomScale = () => {
+  const zoomLevel = viewer.getZoomLevel();
+
+  /*
+   * Zoom-out:
+   * hotspoti nuk bëhet kurrë më i vogël se madhësia normale.
+   *
+   * Zoom-in:
+   * rritet gradualisht deri në maksimum 1.8x.
+   */
+  const zoomInAmount = Math.max(
+    0,
+    zoomLevel - hotspotBaseZoomLevel,
+  );
+
+  const scale = Math.min(
+    1.8,
+    1 + zoomInAmount * 0.018,
+  );
+
+  containerRef.current
+    ?.querySelectorAll<HTMLElement>(
+      ".aura360-navigation-hotspot",
+    )
+    .forEach((hotspot) => {
+      hotspot.style.setProperty(
+        "--aura-hotspot-zoom-scale",
+        scale.toFixed(3),
+      );
+    });
+};
+
+viewer.addEventListener(
+  "zoom-updated",
+  updateAura360HotspotZoomScale,
+);
+
+/*
+ * Apliko scale edhe pas renderimit të parë.
+ */
+requestAnimationFrame(() => {
+  updateAura360HotspotZoomScale();
+});
+
+
 
 const vtPlugin = viewer.getPlugin(
   VirtualTourPlugin as any,
@@ -1529,25 +1568,35 @@ pendingEntryOrientationRef.current = null;
  */
 requestAnimationFrame(() => {
   warmSceneNeighborhood(nextId);
+
+  updateAura360HotspotZoomScale();
 });
 });
 
 return () => {
   clearFirstLoadHintTimer();
   clearLoaderExitTimer();
-if (positionWarmupTimer !== null) {
-  window.clearTimeout(positionWarmupTimer);
-}
 
-preloadSequenceRef.current += 1;
+  if (positionWarmupTimer !== null) {
+    window.clearTimeout(positionWarmupTimer);
+  }
 
-neighborhoodWarmupCleanupRef.current?.();
-neighborhoodWarmupCleanupRef.current = null;
-      viewer.destroy();
-      viewerRef.current = null;
-      currentSceneRef.current = null;
-      pendingEntryOrientationRef.current = null;
-    };
+  viewer.removeEventListener(
+    "zoom-updated",
+    updateAura360HotspotZoomScale,
+  );
+
+  preloadSequenceRef.current += 1;
+
+  neighborhoodWarmupCleanupRef.current?.();
+  neighborhoodWarmupCleanupRef.current = null;
+
+  viewer.destroy();
+
+  viewerRef.current = null;
+  currentSceneRef.current = null;
+  pendingEntryOrientationRef.current = null;
+};
   }, [
     resolvedStartScene,
     nodes,
@@ -1614,41 +1663,51 @@ neighborhoodWarmupCleanupRef.current = null;
 }
 
 .virtual-tour-shell .aura360-navigation-hotspot {
-  width: 92px;
-  height: 54px;
+  width: 112px;
+  height: 66px;
   display: block;
+
+  --aura-hotspot-zoom-scale: 1;
+
+  transform:
+    scale(var(--aura-hotspot-zoom-scale));
+
   transform-origin: center center;
+
   transition:
+    transform 90ms linear,
     opacity 140ms ease,
     filter 140ms ease;
+
+  will-change: transform;
+
   pointer-events: auto;
 }
 
 .virtual-tour-shell .aura360-navigation-hotspot svg {
   display: block;
-  width: 92px;
-  height: 54px;
+  width: 112px;
+  height: 66px;
   overflow: visible;
 }
 
 .virtual-tour-shell .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.28);
+  fill: rgba(255, 255, 255, 0.30);
   transition:
     fill 140ms ease,
-    opacity 140ms ease,
-    transform 140ms ease;
+    opacity 140ms ease;
 }
 
 .virtual-tour-shell
 .aura360-floor-link:hover
 .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.40);
+  fill: rgba(255, 255, 255, 0.42);
 }
 
 .virtual-tour-shell
 .aura360-floor-link:active
 .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.58);
+  fill: rgba(255, 255, 255, 0.62);
 }
 
 .virtual-tour-shell
