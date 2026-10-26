@@ -5,8 +5,10 @@ import {
   EquirectangularAdapter,
 } from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
+import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
+import "@photo-sphere-viewer/markers-plugin/index.css";
 import { Maximize, Minimize, Map as MapIcon, X } from "lucide-react";
 
 interface VirtualTour360Props {
@@ -653,6 +655,67 @@ const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
           initialYaw: scene.initialYaw ?? null,
           initialPitch: scene.initialPitch ?? null,
         },
+		markers: validHotspots.map((hotspot) => ({
+  id: `aura-nav-${scene.id}-${hotspot.id}`,
+
+  element: createAura360NavigationHotspot(),
+
+  position: {
+    yaw: hotspot.yaw,
+    pitch: hotspot.pitch,
+  },
+
+  size: {
+    width: 112,
+    height: 66,
+  },
+
+  anchor: "center center",
+
+  /*
+   * Marker 2D: zero rotation.
+   * Forma nuk ndryshon kur kamera lëviz majtas/djathtas.
+   */
+  rotation: 0,
+
+  /*
+   * Mos lejo zoom/scale gjatë hover-it.
+   */
+  hoverScale: false,
+
+  /*
+   * Vetëm zoom-i i viewer-it ndryshon madhësinë.
+   * Nuk ka fare scale sipas yaw.
+   */
+  scale: (zoomLevel: number) => {
+    const BASE_ZOOM = 40;
+
+    if (zoomLevel <= BASE_ZOOM) {
+      return 1;
+    }
+
+    const progress = Math.min(
+      1,
+      (zoomLevel - BASE_ZOOM) /
+        (100 - BASE_ZOOM),
+    );
+
+    return 1 + progress * 0.55;
+  },
+
+  className: "aura360-marker-navigation",
+
+  data: {
+    auraNavigation: true,
+
+    hotspotId: hotspot.id,
+    fromSceneId: hotspot.fromSceneId,
+    toSceneId: hotspot.toSceneId,
+
+    targetYaw: hotspot.targetYaw ?? null,
+    targetPitch: hotspot.targetPitch ?? null,
+  },
+})),
         links: validHotspots.map((hotspot) => {
           const visualPosition = clusteredPositions.get(Number(hotspot.id));
           const targetTitle = scenesById.get(Number(hotspot.toSceneId))?.title;
@@ -1357,9 +1420,16 @@ const finishInitialLoad = () => {
         antialias: !deviceProfile.isMobile && !deviceProfile.isLowMemory,
         powerPreference: "high-performance",
       },
-      plugins: [
-        [
-          VirtualTourPlugin,
+plugins: [
+  [
+    MarkersPlugin,
+    {
+      defaultHoverScale: false,
+    },
+  ],
+
+  [
+    VirtualTourPlugin,
           {
             positionMode: "manual",
             renderMode: "2d",
@@ -1393,85 +1463,101 @@ arrowStyle: {
 viewerRef.current = viewer;
 
 
-const HOTSPOT_BASE_WIDTH = 112;
-const HOTSPOT_MAX_SCALE = 1.55;
 
-/*
- * Anchor-i i hotspot-it mbetet gjithmonë fiks.
- * Gjatë zoom-it ndryshojmë VETËM gjerësinë
- * e vizualit të brendshëm.
- *
- * Aspect-ratio ruhet nga CSS, prandaj forma
- * nuk deformohet dhe nuk "balancohet".
- */
-const hotspotBaseZoomLevel =
-  deviceProfile.isMobile ? 32 : 38;
-
-const updateAura360HotspotZoomSize = (
-  zoomLevel = viewer.getZoomLevel(),
-) => {
-  /*
-   * Zoom-out:
-   * mbetet në madhësinë normale.
-   *
-   * Zoom-in:
-   * rritet gradualisht deri në 1.55x.
-   */
-  const progress =
-    zoomLevel <= hotspotBaseZoomLevel
-      ? 0
-      : Math.min(
-          1,
-          (zoomLevel - hotspotBaseZoomLevel) /
-            Math.max(
-              1,
-              100 - hotspotBaseZoomLevel,
-            ),
-        );
-
-  const width =
-    HOTSPOT_BASE_WIDTH *
-    (
-      1 +
-      progress *
-        (HOTSPOT_MAX_SCALE - 1)
-    );
-
-  containerRef.current
-    ?.querySelectorAll<HTMLElement>(
-      ".aura360-navigation-hotspot",
-    )
-    .forEach((hotspot) => {
-      hotspot.style.setProperty(
-        "--aura-hotspot-width",
-        `${width.toFixed(1)}px`,
-      );
-    });
-};
-
-const handleAura360HotspotZoom = (
-  event: any,
-) => {
-  updateAura360HotspotZoomSize(
-    Number.isFinite(event?.zoomLevel)
-      ? event.zoomLevel
-      : viewer.getZoomLevel(),
-  );
-};
-
-viewer.addEventListener(
-  "zoom-updated",
-  handleAura360HotspotZoom,
-);
-
-requestAnimationFrame(() => {
-  updateAura360HotspotZoomSize();
-});
 
 
 const vtPlugin = viewer.getPlugin(
   VirtualTourPlugin as any,
 ) as any;
+
+
+const markersPlugin = viewer.getPlugin(
+  MarkersPlugin as any,
+) as any;
+
+const handleAuraNavigationMarker = ({
+  marker,
+}: any) => {
+  const markerData =
+    marker?.data ??
+    marker?.config?.data;
+
+  if (!markerData?.auraNavigation) {
+    return;
+  }
+
+  const targetSceneId =
+    toFiniteNumber(
+      markerData.toSceneId,
+    );
+
+  if (targetSceneId === null) {
+    return;
+  }
+
+  const fakeLink = {
+    nodeId: String(targetSceneId),
+
+    data: {
+      fromSceneId:
+        markerData.fromSceneId,
+
+      toSceneId:
+        targetSceneId,
+
+      targetYaw:
+        markerData.targetYaw ?? null,
+
+      targetPitch:
+        markerData.targetPitch ?? null,
+    },
+  };
+
+  const entryOrientation =
+    getNavigationEntryOrientation(
+      targetSceneId,
+      fakeLink,
+    );
+
+  void goToScene(
+    targetSceneId,
+    entryOrientation,
+  );
+};
+
+const handleAuraNavigationMarkerEnter = ({
+  marker,
+}: any) => {
+  const markerData =
+    marker?.data ??
+    marker?.config?.data;
+
+  if (!markerData?.auraNavigation) {
+    return;
+  }
+
+  const targetSceneId =
+    toFiniteNumber(
+      markerData.toSceneId,
+    );
+
+  if (targetSceneId !== null) {
+    void preloadScenePanoramaOnce(
+      targetSceneId,
+      "high",
+    );
+  }
+};
+
+markersPlugin?.addEventListener(
+  "select-marker",
+  handleAuraNavigationMarker,
+);
+
+markersPlugin?.addEventListener(
+  "enter-marker",
+  handleAuraNavigationMarkerEnter,
+);
 
 const originalSetCurrentNode =
   vtPlugin.setCurrentNode.bind(vtPlugin);
@@ -1596,8 +1682,6 @@ pendingEntryOrientationRef.current = null;
  */
 requestAnimationFrame(() => {
   warmSceneNeighborhood(nextId);
-
-  updateAura360HotspotZoomSize();
 });
 });
 
@@ -1609,15 +1693,21 @@ return () => {
     window.clearTimeout(positionWarmupTimer);
   }
 
-viewer.removeEventListener(
-  "zoom-updated",
-  handleAura360HotspotZoom,
-);
 
   preloadSequenceRef.current += 1;
 
   neighborhoodWarmupCleanupRef.current?.();
   neighborhoodWarmupCleanupRef.current = null;
+
+markersPlugin?.removeEventListener(
+  "select-marker",
+  handleAuraNavigationMarker,
+);
+
+markersPlugin?.removeEventListener(
+  "enter-marker",
+  handleAuraNavigationMarkerEnter,
+);
 
   viewer.destroy();
 
@@ -1680,8 +1770,9 @@ viewer.removeEventListener(
 
 
 .virtual-tour-shell .psv-virtual-tour-link {
-  filter: none !important;
-  overflow: visible !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 
   /*
    * VirtualTourPlugin ka animacionin e vet default
@@ -1712,61 +1803,49 @@ viewer.removeEventListener(
  * Madhësia e tij NUK ndryshon kurrë.
  * Nuk vendosim transform/rotate/scale këtu.
  */
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
 .virtual-tour-shell .aura360-navigation-hotspot {
   width: 112px;
   height: 66px;
 
-  position: relative;
   display: block;
-
-  --aura-hotspot-width: 112px;
-
-  pointer-events: none;
-}
-
-/*
- * Vetëm vizuali i brendshëm mund të zmadhohet.
- *
- * Ndryshojmë vetëm WIDTH.
- * HEIGHT llogaritet automatikisht nga aspect-ratio.
- *
- * Kështu raporti i formës është gjithmonë identik.
- */
-.virtual-tour-shell
-.aura360-navigation-hotspot__visual {
-  position: absolute;
-
-  left: 50%;
-  top: 50%;
-
-  width: var(--aura-hotspot-width);
-
-  aspect-ratio: 112 / 66;
-  height: auto;
-
-  transform:
-    translate(-50%, -50%) !important;
-
-  transform-origin: center center;
-
-  rotate: 0deg !important;
 
   pointer-events: auto;
 
-  transition:
-    width 80ms linear,
-    filter 140ms ease;
+  /*
+   * ASNJË transform custom.
+   * ASNJË rotate.
+   * ASNJË skew.
+   */
 }
 
-/*
- * SVG-ja nuk merr ASNJË transform.
- */
 .virtual-tour-shell
-.aura360-navigation-hotspot__visual svg {
-  display: block;
-
+.aura360-navigation-hotspot__visual {
   width: 100%;
   height: 100%;
+
+  display: block;
+
+  transform: none !important;
+  rotate: 0deg !important;
+}
+
+.virtual-tour-shell
+.aura360-navigation-hotspot__visual svg {
+  width: 100%;
+  height: 100%;
+
+  display: block;
 
   overflow: visible;
 
@@ -1774,25 +1853,24 @@ viewer.removeEventListener(
   rotate: 0deg !important;
 }
 
-/* Normal */
 .virtual-tour-shell .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.30);
 
   transition:
-    fill 140ms ease,
-    opacity 140ms ease;
+    fill 120ms ease,
+    opacity 120ms ease;
 }
 
-/* Hover */
+/* Nuk ndryshojmë formën në hover */
 .virtual-tour-shell
-.aura360-navigation-hotspot__visual:hover
+.aura360-navigation-hotspot:hover
 .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.42);
+  fill: rgba(255, 255, 255, 0.38);
 }
 
-/* Click / touch */
+/* Vetëm klikimi e bën më të bardhë */
 .virtual-tour-shell
-.aura360-navigation-hotspot__visual:active
+.aura360-navigation-hotspot:active
 .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.62);
 }
