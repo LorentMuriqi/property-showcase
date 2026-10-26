@@ -74,33 +74,35 @@ const createAura360NavigationHotspot = () => {
   element.className = "aura360-navigation-hotspot";
 
 element.innerHTML = `
-  <svg
-    viewBox="0 0 92 54"
-    width="92"
-    height="54"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <path
-      class="aura360-hotspot-ring"
-      fill-rule="evenodd"
-      d="
-        M 46 9
-        C 67 9, 83 15.5, 83 24
-        C 83 32.5, 67 39, 46 39
-        C 25 39, 9 32.5, 9 24
-        C 9 15.5, 25 9, 46 9
-        Z
+  <div class="aura360-navigation-hotspot__visual">
+    <svg
+      viewBox="0 0 92 54"
+      width="92"
+      height="54"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        class="aura360-hotspot-ring"
+        fill-rule="evenodd"
+        d="
+          M 46 9
+          C 67 9, 83 15.5, 83 24
+          C 83 32.5, 67 39, 46 39
+          C 25 39, 9 32.5, 9 24
+          C 9 15.5, 25 9, 46 9
+          Z
 
-        M 46 15.5
-        C 58.5 15.5, 68 19.2, 68 24
-        C 68 28.8, 58.5 32.5, 46 32.5
-        C 33.5 32.5, 24 28.8, 24 24
-        C 24 19.2, 33.5 15.5, 46 15.5
-        Z
-      "
-    />
-  </svg>
+          M 46 15.5
+          C 58.5 15.5, 68 19.2, 68 24
+          C 68 28.8, 58.5 32.5, 46 32.5
+          C 33.5 32.5, 24 28.8, 24 24
+          C 24 19.2, 33.5 15.5, 46 15.5
+          Z
+        "
+      />
+    </svg>
+  </div>
 `;
 
   return element;
@@ -1393,27 +1395,51 @@ arrowStyle: {
 viewerRef.current = viewer;
 
 
-const hotspotBaseZoomLevel = viewer.getZoomLevel();
+const hotspotBaseZoomLevel =
+  viewer.getZoomLevel();
 
-const updateAura360HotspotZoomScale = () => {
-  const zoomLevel = viewer.getZoomLevel();
+const getAura360HotspotZoomScale = (
+  zoomLevel: number,
+) => {
+  /*
+   * Zoom level në Photo Sphere Viewer:
+   *
+   * 0   = zoom maksimalisht OUT
+   * 100 = zoom maksimalisht IN
+   *
+   * Në zoom-out hotspoti nuk bëhet më i vogël
+   * se madhësia normale.
+   */
+  if (zoomLevel <= hotspotBaseZoomLevel) {
+    return 1;
+  }
+
+  const availableZoomRange = Math.max(
+    1,
+    100 - hotspotBaseZoomLevel,
+  );
+
+  const progress = Math.min(
+    1,
+    Math.max(
+      0,
+      (zoomLevel - hotspotBaseZoomLevel) /
+        availableZoomRange,
+    ),
+  );
 
   /*
-   * Zoom-out:
-   * hotspoti nuk bëhet kurrë më i vogël se madhësia normale.
-   *
-   * Zoom-in:
-   * rritet gradualisht deri në maksimum 1.8x.
+   * Normal = 1.00x
+   * Maximum zoom-in = 1.75x
    */
-  const zoomInAmount = Math.max(
-    0,
-    zoomLevel - hotspotBaseZoomLevel,
-  );
+  return 1 + progress * 0.75;
+};
 
-  const scale = Math.min(
-    1.8,
-    1 + zoomInAmount * 0.018,
-  );
+const updateAura360HotspotZoomScale = (
+  zoomLevel = viewer.getZoomLevel(),
+) => {
+  const scale =
+    getAura360HotspotZoomScale(zoomLevel);
 
   containerRef.current
     ?.querySelectorAll<HTMLElement>(
@@ -1427,10 +1453,47 @@ const updateAura360HotspotZoomScale = () => {
     });
 };
 
+const handleAura360HotspotZoom = ({
+  zoomLevel,
+}: {
+  zoomLevel: number;
+}) => {
+  updateAura360HotspotZoomScale(
+    zoomLevel,
+  );
+};
+
 viewer.addEventListener(
   "zoom-updated",
-  updateAura360HotspotZoomScale,
+  handleAura360HotspotZoom,
 );
+
+requestAnimationFrame(() => {
+  updateAura360HotspotZoomScale();
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
  * Apliko scale edhe pas renderimit të parë.
@@ -1581,10 +1644,10 @@ return () => {
     window.clearTimeout(positionWarmupTimer);
   }
 
-  viewer.removeEventListener(
-    "zoom-updated",
-    updateAura360HotspotZoomScale,
-  );
+viewer.removeEventListener(
+  "zoom-updated",
+  handleAura360HotspotZoom,
+);
 
   preloadSequenceRef.current += 1;
 
@@ -1669,22 +1732,32 @@ return () => {
 
   --aura-hotspot-zoom-scale: 1;
 
+  pointer-events: auto;
+}
+
+/*
+ * SHUMË E RËNDËSISHME:
+ * Root-i i hotspot-it nuk duhet të ketë transform.
+ * Pozicionimin e tij e kontrollon Photo Sphere Viewer.
+ */
+.virtual-tour-shell .aura360-navigation-hotspot__visual {
+  width: 112px;
+  height: 66px;
+  display: block;
+
   transform:
     scale(var(--aura-hotspot-zoom-scale));
 
   transform-origin: center center;
 
   transition:
-    transform 90ms linear,
-    opacity 140ms ease,
+    transform 90ms cubic-bezier(0.22, 1, 0.36, 1),
     filter 140ms ease;
 
   will-change: transform;
-
-  pointer-events: auto;
 }
 
-.virtual-tour-shell .aura360-navigation-hotspot svg {
+.virtual-tour-shell .aura360-navigation-hotspot__visual svg {
   display: block;
   width: 112px;
   height: 66px;
@@ -1712,10 +1785,10 @@ return () => {
 
 .virtual-tour-shell
 .aura360-floor-link:hover
-.aura360-navigation-hotspot,
+.aura360-navigation-hotspot__visual,
 .virtual-tour-shell
 .aura360-floor-link:active
-.aura360-navigation-hotspot {
+.aura360-navigation-hotspot__visual {
   filter: brightness(1.02);
 }
 
