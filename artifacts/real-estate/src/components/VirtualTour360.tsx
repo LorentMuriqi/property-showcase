@@ -1392,7 +1392,7 @@ arrowStyle: {
             arrowsPosition: {
               minPitch: 0.2,
               maxPitch: Math.PI / 2,
-              linkOverlapAngle: Math.PI / 5,
+              linkOverlapAngle: 0,
               linkPitchOffset: -0.08,
             },
           },
@@ -1632,25 +1632,23 @@ neighborhoodWarmupCleanupRef.current = null;
 }
 
 .virtual-tour-shell .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.36);
+  fill: rgba(255, 255, 255, 0.28);
   transition:
     fill 140ms ease,
     opacity 140ms ease,
     transform 140ms ease;
 }
 
-/* Hover / mouse over */
 .virtual-tour-shell
 .aura360-floor-link:hover
 .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.50);
+  fill: rgba(255, 255, 255, 0.40);
 }
 
-/* Klik / touch active – bëhet më pak transparent si te Matterport */
 .virtual-tour-shell
 .aura360-floor-link:active
 .aura360-hotspot-ring {
-  fill: rgba(255, 255, 255, 0.68);
+  fill: rgba(255, 255, 255, 0.58);
 }
 
 .virtual-tour-shell
