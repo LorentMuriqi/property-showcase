@@ -559,7 +559,6 @@ export function VirtualTour360({
   showAura360Branding = true,
 }: VirtualTour360Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const hotspotOverlayRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const currentSceneRef = useRef<SceneType | null>(null);
   const isNavigatingRef = useRef(false);
@@ -1393,6 +1392,90 @@ arrowStyle: {
 
 viewerRef.current = viewer;
 
+const HOTSPOT_BASE_WIDTH = 112;
+const HOTSPOT_BASE_HEIGHT = 66;
+const HOTSPOT_MAX_SCALE = 1.55;
+
+/*
+ * Baza duhet të jetë e njëjtë me defaultZoomLvl të Viewer-it.
+ */
+const hotspotBaseZoomLevel =
+  deviceProfile.isMobile ? 32 : 38;
+
+const updateAura360HotspotZoomSize = (
+  zoomLevel = viewer.getZoomLevel(),
+) => {
+  /*
+   * Zoom-out:
+   * hotspoti NUK bëhet më i vogël se madhësia bazë.
+   *
+   * Zoom-in:
+   * hotspoti rritet gradualisht deri në 1.55x.
+   */
+  const progress =
+    zoomLevel <= hotspotBaseZoomLevel
+      ? 0
+      : Math.min(
+          1,
+          (zoomLevel - hotspotBaseZoomLevel) /
+            Math.max(
+              1,
+              100 - hotspotBaseZoomLevel,
+            ),
+        );
+
+  const scale =
+    1 +
+    progress *
+      (HOTSPOT_MAX_SCALE - 1);
+
+  const width =
+    HOTSPOT_BASE_WIDTH * scale;
+
+  const height =
+    HOTSPOT_BASE_HEIGHT * scale;
+
+  containerRef.current
+    ?.querySelectorAll<HTMLElement>(
+      ".aura360-navigation-hotspot",
+    )
+    .forEach((hotspot) => {
+      hotspot.style.setProperty(
+        "--aura-hotspot-width",
+        `${width.toFixed(1)}px`,
+      );
+
+      hotspot.style.setProperty(
+        "--aura-hotspot-height",
+        `${height.toFixed(1)}px`,
+      );
+    });
+};
+
+const handleAura360HotspotZoom = ({
+  zoomLevel,
+}: {
+  zoomLevel: number;
+}) => {
+  updateAura360HotspotZoomSize(
+    zoomLevel,
+  );
+};
+
+viewer.addEventListener(
+  "zoom-updated",
+  handleAura360HotspotZoom,
+);
+
+/*
+ * Apliko scale edhe pas renderimit të parë.
+ */
+requestAnimationFrame(() => {
+  updateAura360HotspotZoomScale();
+});
+
+
+
 const vtPlugin = viewer.getPlugin(
   VirtualTourPlugin as any,
 ) as any;
@@ -1437,192 +1520,6 @@ vtPlugin.setCurrentNode = async (
   );
 };
 
-
-let hotspotOverlayFrame: number | null = null;
-
-const HOTSPOT_BASE_WIDTH = 112;
-const HOTSPOT_BASE_HEIGHT = 66;
-const HOTSPOT_MAX_SCALE = 1.55;
-const HOTSPOT_BASE_ZOOM = deviceProfile.isMobile ? 32 : 38;
-
-const getAura360HotspotScale = () => {
-  const zoomLevel = viewer.getZoomLevel();
-
-  if (zoomLevel <= HOTSPOT_BASE_ZOOM) {
-    return 1;
-  }
-
-  const progress = Math.min(
-    1,
-    (zoomLevel - HOTSPOT_BASE_ZOOM) /
-      Math.max(1, 100 - HOTSPOT_BASE_ZOOM),
-  );
-
-  return 1 + progress * (HOTSPOT_MAX_SCALE - 1);
-};
-
-const updateAura360OverlayHotspots = () => {
-  const layer = hotspotOverlayRef.current;
-  if (!layer) return;
-
-  const viewerPosition = viewer.getPosition();
-  const scale = getAura360HotspotScale();
-  const visualWidth = HOTSPOT_BASE_WIDTH * scale;
-  const visualHeight = HOTSPOT_BASE_HEIGHT * scale;
-  const viewportWidth = layer.clientWidth;
-  const viewportHeight = layer.clientHeight;
-
-  layer
-    .querySelectorAll<HTMLElement>(".aura360-overlay-hotspot")
-    .forEach((hotspot) => {
-      const yaw = Number(hotspot.dataset.yaw);
-      const pitch = Number(hotspot.dataset.pitch);
-
-      if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) {
-        hotspot.style.opacity = "0";
-        hotspot.style.pointerEvents = "none";
-        return;
-      }
-
-      const yawDistance = Math.abs(
-        normalizeYaw(yaw - viewerPosition.yaw),
-      );
-
-      const point = viewer.dataHelper.sphericalCoordsToViewerCoords({
-        yaw,
-        pitch,
-      });
-
-      const isVisible =
-        yawDistance < Math.PI / 2 &&
-        point.x > -100 &&
-        point.x < viewportWidth + 100 &&
-        point.y > -80 &&
-        point.y < viewportHeight + 80;
-
-      hotspot.style.opacity = isVisible ? "1" : "0";
-      hotspot.style.pointerEvents = isVisible ? "auto" : "none";
-
-      if (!isVisible) return;
-
-      hotspot.style.transform =
-        `translate3d(${point.x.toFixed(2)}px, ${point.y.toFixed(2)}px, 0) ` +
-        "translate(-50%, -50%)";
-
-      hotspot.style.setProperty(
-        "--aura-hotspot-width",
-        `${visualWidth.toFixed(1)}px`,
-      );
-      hotspot.style.setProperty(
-        "--aura-hotspot-height",
-        `${visualHeight.toFixed(1)}px`,
-      );
-    });
-};
-
-const scheduleAura360OverlayHotspotsUpdate = () => {
-  if (hotspotOverlayFrame !== null) return;
-
-  hotspotOverlayFrame = window.requestAnimationFrame(() => {
-    hotspotOverlayFrame = null;
-    updateAura360OverlayHotspots();
-  });
-};
-
-const renderAura360OverlayHotspots = (sceneId: number) => {
-  const layer = hotspotOverlayRef.current;
-  if (!layer) return;
-
-  layer.replaceChildren();
-
-  const node = nodes.find(
-    (candidate) => Number(candidate.id) === Number(sceneId),
-  );
-
-  if (!node) return;
-
-  node.links.forEach((link: any) => {
-    const targetSceneId = toFiniteNumber(link?.nodeId);
-    const yaw = toFiniteNumber(link?.position?.yaw);
-    const pitch = toFiniteNumber(link?.position?.pitch);
-
-    if (
-      targetSceneId === null ||
-      yaw === null ||
-      pitch === null ||
-      !scenesById.has(targetSceneId)
-    ) {
-      return;
-    }
-
-    const hotspot = document.createElement("button");
-    hotspot.type = "button";
-    hotspot.className = "aura360-overlay-hotspot";
-    hotspot.dataset.yaw = String(yaw);
-    hotspot.dataset.pitch = String(pitch);
-    hotspot.dataset.nodeId = String(targetSceneId);
-    hotspot.setAttribute(
-      "aria-label",
-      String(link?.name || "Hap pamjen tjetër"),
-    );
-
-    hotspot.appendChild(createAura360NavigationHotspot());
-
-    const stopPointerPropagation = (event: Event) => {
-      event.stopPropagation();
-    };
-
-    hotspot.addEventListener("pointerdown", stopPointerPropagation);
-    hotspot.addEventListener("pointerup", stopPointerPropagation);
-
-    hotspot.addEventListener("pointerenter", () => {
-      void preloadScenePanoramaOnce(targetSceneId, "high");
-    });
-
-    hotspot.addEventListener("pointerdown", () => {
-      void preloadScenePanoramaOnce(targetSceneId, "high");
-    });
-
-    hotspot.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (isNavigatingRef.current) return;
-
-      isNavigatingRef.current = true;
-      setLoadError(null);
-
-      const entryOrientation = getNavigationEntryOrientation(
-        targetSceneId,
-        link,
-      );
-
-      pendingEntryOrientationRef.current = entryOrientation;
-
-      try {
-        await vtPlugin.setCurrentNode(
-          String(targetSceneId),
-          getTransitionWithEntryOrientation(entryOrientation),
-          link,
-        );
-      } catch (error) {
-        console.error("Scene change error:", error);
-        setLoadError("Skena nuk u hap. Provoni edhe një herë.");
-      } finally {
-        isNavigatingRef.current = false;
-      }
-    });
-
-    layer.appendChild(hotspot);
-  });
-
-  scheduleAura360OverlayHotspotsUpdate();
-};
-
-const handleAura360OverlayPosition = () => {
-  scheduleAura360OverlayHotspotsUpdate();
-};
-
 viewer.addEventListener("panorama-loaded", () => {
 	
       setLoadError(null);
@@ -1630,11 +1527,6 @@ viewer.addEventListener("panorama-loaded", () => {
       if (currentScene?.imageUrl) {
         psvReadyPanoramasRef.current.add(currentScene.imageUrl);
       }
-
-      renderAura360OverlayHotspots(
-        Number(currentScene?.id ?? resolvedStartScene.id),
-      );
-      scheduleAura360OverlayHotspotsUpdate();
 
       finishInitialLoad();
     });
@@ -1675,19 +1567,6 @@ viewer.addEventListener(
   schedulePositionAwareWarmup,
 );
 
-viewer.addEventListener(
-  "position-updated",
-  handleAura360OverlayPosition,
-);
-viewer.addEventListener(
-  "zoom-updated",
-  handleAura360OverlayPosition,
-);
-viewer.addEventListener(
-  "size-updated",
-  handleAura360OverlayPosition,
-);
-
 vtPlugin.addEventListener(
   "enter-arrow",
   ({ link }: any) => {
@@ -1723,9 +1602,9 @@ pendingEntryOrientationRef.current = null;
  * pastaj fillo preload-in e lidhjeve të radhës.
  */
 requestAnimationFrame(() => {
-  renderAura360OverlayHotspots(nextId);
-  scheduleAura360OverlayHotspotsUpdate();
   warmSceneNeighborhood(nextId);
+
+  updateAura360HotspotZoomSize();
 });
 });
 
@@ -1738,24 +1617,9 @@ return () => {
   }
 
 viewer.removeEventListener(
-  "position-updated",
-  handleAura360OverlayPosition,
-);
-viewer.removeEventListener(
   "zoom-updated",
-  handleAura360OverlayPosition,
+  handleAura360HotspotZoom,
 );
-viewer.removeEventListener(
-  "size-updated",
-  handleAura360OverlayPosition,
-);
-
-if (hotspotOverlayFrame !== null) {
-  window.cancelAnimationFrame(hotspotOverlayFrame);
-  hotspotOverlayFrame = null;
-}
-
-hotspotOverlayRef.current?.replaceChildren();
 
   preloadSequenceRef.current += 1;
 
@@ -1822,85 +1686,105 @@ hotspotOverlayRef.current?.replaceChildren();
 
 
 .virtual-tour-shell .psv-virtual-tour-link {
-  display: none !important;
+  filter: none !important;
+  overflow: visible !important;
 }
 
-.virtual-tour-shell .aura360-hotspot-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.virtual-tour-shell .aura360-overlay-hotspot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 180px;
-  height: 108px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  opacity: 0;
-  pointer-events: none;
+.virtual-tour-shell .aura360-floor-link {
   cursor: pointer;
-  transform: translate3d(-9999px, -9999px, 0) translate(-50%, -50%);
-  transform-origin: center center;
-  will-change: transform;
+  overflow: visible !important;
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+ * Canvas fiks.
+ * Photo Sphere Viewer kontrollon VETËM pozicionin e këtij elementi.
+ * Ne nuk i vendosim ASNJË transform.
+ */
 .virtual-tour-shell .aura360-navigation-hotspot {
   width: 180px;
   height: 108px;
+
   position: relative;
   display: block;
+
   --aura-hotspot-width: 112px;
   --aura-hotspot-height: 66px;
+
   pointer-events: none;
 }
 
+/*
+ * Vetëm vizuali ndryshon madhësi.
+ * Nuk përdorim scale(), rotate(), skew() apo perspective.
+ */
 .virtual-tour-shell .aura360-navigation-hotspot__visual {
   position: absolute;
+
   left: 50%;
   top: 50%;
+
   width: var(--aura-hotspot-width);
   height: var(--aura-hotspot-height);
+
   transform: translate(-50%, -50%);
+
   transform-origin: center center;
-  pointer-events: none;
+
+  pointer-events: auto;
+
   transition:
     width 80ms linear,
     height 80ms linear,
     filter 140ms ease;
+
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-.virtual-tour-shell .aura360-navigation-hotspot__visual svg {
+/*
+ * SVG ruan gjithmonë saktësisht të njëjtën formë.
+ */
+.virtual-tour-shell
+.aura360-navigation-hotspot__visual svg {
   display: block;
+
   width: 100%;
   height: 100%;
+
   overflow: visible;
+
   transform: none !important;
+  rotate: 0deg !important;
 }
 
+/* Matterport-like normal */
 .virtual-tour-shell .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.30);
-  transition: fill 140ms ease;
+
+  transition:
+    fill 140ms ease,
+    opacity 140ms ease;
 }
 
+/* Hover */
 .virtual-tour-shell
-.aura360-overlay-hotspot:hover
+.aura360-navigation-hotspot__visual:hover
 .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.42);
 }
 
+/* Click/touch */
 .virtual-tour-shell
-.aura360-overlay-hotspot:active
+.aura360-navigation-hotspot__visual:active
 .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.62);
 }
+
+
+
+
+
 
   @keyframes virtual-tour-loader-enter {
     from {
@@ -2046,12 +1930,6 @@ hotspotOverlayRef.current?.replaceChildren();
     opacity: isViewerVisible ? 1 : 0,
     transition: "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1)",
   }}
-/>
-
-<div
-  ref={hotspotOverlayRef}
-  className="aura360-hotspot-layer"
-  aria-label="Navigimi i turit virtual"
 />
 
 {isInitialLoading && (
