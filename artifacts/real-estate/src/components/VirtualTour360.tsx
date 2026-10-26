@@ -77,9 +77,8 @@ element.innerHTML = `
   <div class="aura360-navigation-hotspot__visual">
     <svg
       viewBox="0 0 92 54"
-      width="92"
-      height="54"
       xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="xMidYMid meet"
       aria-hidden="true"
     >
       <path
@@ -1332,7 +1331,6 @@ const finishInitialLoad = () => {
   });
 };
    
-   
 
     const deviceProfile = getDeviceProfile();
 
@@ -1375,8 +1373,8 @@ arrowStyle: {
   element: () => createAura360NavigationHotspot(),
 
   size: {
-    width: 112,
-    height: 66,
+    width: 180,
+    height: 108,
   },
 
   className: "aura360-floor-link",
@@ -1394,52 +1392,48 @@ arrowStyle: {
 
 viewerRef.current = viewer;
 
+const HOTSPOT_BASE_WIDTH = 112;
+const HOTSPOT_BASE_HEIGHT = 66;
+const HOTSPOT_MAX_SCALE = 1.55;
 
+/*
+ * Baza duhet të jetë e njëjtë me defaultZoomLvl të Viewer-it.
+ */
 const hotspotBaseZoomLevel =
-  viewer.getZoomLevel();
+  deviceProfile.isMobile ? 32 : 38;
 
-const getAura360HotspotZoomScale = (
-  zoomLevel: number,
-) => {
-  /*
-   * Zoom level në Photo Sphere Viewer:
-   *
-   * 0   = zoom maksimalisht OUT
-   * 100 = zoom maksimalisht IN
-   *
-   * Në zoom-out hotspoti nuk bëhet më i vogël
-   * se madhësia normale.
-   */
-  if (zoomLevel <= hotspotBaseZoomLevel) {
-    return 1;
-  }
-
-  const availableZoomRange = Math.max(
-    1,
-    100 - hotspotBaseZoomLevel,
-  );
-
-  const progress = Math.min(
-    1,
-    Math.max(
-      0,
-      (zoomLevel - hotspotBaseZoomLevel) /
-        availableZoomRange,
-    ),
-  );
-
-  /*
-   * Normal = 1.00x
-   * Maximum zoom-in = 1.75x
-   */
-  return 1 + progress * 0.75;
-};
-
-const updateAura360HotspotZoomScale = (
+const updateAura360HotspotZoomSize = (
   zoomLevel = viewer.getZoomLevel(),
 ) => {
+  /*
+   * Zoom-out:
+   * hotspoti NUK bëhet më i vogël se madhësia bazë.
+   *
+   * Zoom-in:
+   * hotspoti rritet gradualisht deri në 1.55x.
+   */
+  const progress =
+    zoomLevel <= hotspotBaseZoomLevel
+      ? 0
+      : Math.min(
+          1,
+          (zoomLevel - hotspotBaseZoomLevel) /
+            Math.max(
+              1,
+              100 - hotspotBaseZoomLevel,
+            ),
+        );
+
   const scale =
-    getAura360HotspotZoomScale(zoomLevel);
+    1 +
+    progress *
+      (HOTSPOT_MAX_SCALE - 1);
+
+  const width =
+    HOTSPOT_BASE_WIDTH * scale;
+
+  const height =
+    HOTSPOT_BASE_HEIGHT * scale;
 
   containerRef.current
     ?.querySelectorAll<HTMLElement>(
@@ -1447,8 +1441,13 @@ const updateAura360HotspotZoomScale = (
     )
     .forEach((hotspot) => {
       hotspot.style.setProperty(
-        "--aura-hotspot-zoom-scale",
-        scale.toFixed(3),
+        "--aura-hotspot-width",
+        `${width.toFixed(1)}px`,
+      );
+
+      hotspot.style.setProperty(
+        "--aura-hotspot-height",
+        `${height.toFixed(1)}px`,
       );
     });
 };
@@ -1458,7 +1457,7 @@ const handleAura360HotspotZoom = ({
 }: {
   zoomLevel: number;
 }) => {
-  updateAura360HotspotZoomScale(
+  updateAura360HotspotZoomSize(
     zoomLevel,
   );
 };
@@ -1467,33 +1466,6 @@ viewer.addEventListener(
   "zoom-updated",
   handleAura360HotspotZoom,
 );
-
-requestAnimationFrame(() => {
-  updateAura360HotspotZoomScale();
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
  * Apliko scale edhe pas renderimit të parë.
@@ -1632,7 +1604,7 @@ pendingEntryOrientationRef.current = null;
 requestAnimationFrame(() => {
   warmSceneNeighborhood(nextId);
 
-  updateAura360HotspotZoomScale();
+  updateAura360HotspotZoomSize();
 });
 });
 
@@ -1713,7 +1685,6 @@ viewer.removeEventListener(
   }
 
 
-
 .virtual-tour-shell .psv-virtual-tour-link {
   filter: none !important;
   overflow: visible !important;
@@ -1725,71 +1696,89 @@ viewer.removeEventListener(
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+ * Canvas fiks.
+ * Photo Sphere Viewer kontrollon VETËM pozicionin e këtij elementi.
+ * Ne nuk i vendosim ASNJË transform.
+ */
 .virtual-tour-shell .aura360-navigation-hotspot {
-  width: 112px;
-  height: 66px;
+  width: 180px;
+  height: 108px;
+
+  position: relative;
   display: block;
 
-  --aura-hotspot-zoom-scale: 1;
+  --aura-hotspot-width: 112px;
+  --aura-hotspot-height: 66px;
 
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 /*
- * SHUMË E RËNDËSISHME:
- * Root-i i hotspot-it nuk duhet të ketë transform.
- * Pozicionimin e tij e kontrollon Photo Sphere Viewer.
+ * Vetëm vizuali ndryshon madhësi.
+ * Nuk përdorim scale(), rotate(), skew() apo perspective.
  */
 .virtual-tour-shell .aura360-navigation-hotspot__visual {
-  width: 112px;
-  height: 66px;
-  display: block;
+  position: absolute;
 
-  transform:
-    scale(var(--aura-hotspot-zoom-scale));
+  left: 50%;
+  top: 50%;
+
+  width: var(--aura-hotspot-width);
+  height: var(--aura-hotspot-height);
+
+  transform: translate(-50%, -50%);
 
   transform-origin: center center;
 
+  pointer-events: auto;
+
   transition:
-    transform 90ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 80ms linear,
+    height 80ms linear,
     filter 140ms ease;
 
-  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-.virtual-tour-shell .aura360-navigation-hotspot__visual svg {
+/*
+ * SVG ruan gjithmonë saktësisht të njëjtën formë.
+ */
+.virtual-tour-shell
+.aura360-navigation-hotspot__visual svg {
   display: block;
-  width: 112px;
-  height: 66px;
+
+  width: 100%;
+  height: 100%;
+
   overflow: visible;
+
+  transform: none !important;
+  rotate: 0deg !important;
 }
 
+/* Matterport-like normal */
 .virtual-tour-shell .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.30);
+
   transition:
     fill 140ms ease,
     opacity 140ms ease;
 }
 
+/* Hover */
 .virtual-tour-shell
-.aura360-floor-link:hover
+.aura360-navigation-hotspot__visual:hover
 .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.42);
 }
 
+/* Click/touch */
 .virtual-tour-shell
-.aura360-floor-link:active
+.aura360-navigation-hotspot__visual:active
 .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.62);
-}
-
-.virtual-tour-shell
-.aura360-floor-link:hover
-.aura360-navigation-hotspot__visual,
-.virtual-tour-shell
-.aura360-floor-link:active
-.aura360-navigation-hotspot__visual {
-  filter: brightness(1.02);
 }
 
 
