@@ -1372,7 +1372,7 @@ const finishInitialLoad = () => {
           VirtualTourPlugin,
           {
             positionMode: "manual",
-            renderMode: "3d",
+            renderMode: "2d",
             startNodeId: String(resolvedStartScene.id),
             nodes,
             preload: shouldPluginPreloadLink,
@@ -1383,8 +1383,8 @@ arrowStyle: {
   element: () => createAura360NavigationHotspot(),
 
   size: {
-    width: 86,
-    height: 50,
+  width: 92,
+  height: 54,
   },
 
   className: "aura360-floor-link",
@@ -1614,8 +1614,8 @@ neighborhoodWarmupCleanupRef.current = null;
 }
 
 .virtual-tour-shell .aura360-navigation-hotspot {
-  width: 86px;
-  height: 50px;
+  width: 92px;
+  height: 54px;
   display: block;
   transform-origin: center center;
   transition:
@@ -1626,8 +1626,8 @@ neighborhoodWarmupCleanupRef.current = null;
 
 .virtual-tour-shell .aura360-navigation-hotspot svg {
   display: block;
-  width: 86px;
-  height: 50px;
+  width: 92px;
+  height: 54px;
   overflow: visible;
 }
 
