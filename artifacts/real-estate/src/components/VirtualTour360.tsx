@@ -64,9 +64,20 @@ const CACHE_TTL_SECONDS = 30 * 60;
 const NAVIGATION_TRANSITION = {
   showLoader: false,
   effect: "fade" as const,
-  speed: 240,
+  speed: 520,
   rotation: false,
 };
+
+// Wider first view, without the edge distortion of maximum zoom-out.
+const TOUR_MIN_FOV = 28;
+const getTourLens = (isMobile: boolean) => {
+  const maxFov = isMobile ? 108 : 100;
+  const openingFov = isMobile ? 92 : 85;
+  return { maxFov, openingZoom: (maxFov - openingFov) / (maxFov - TOUR_MIN_FOV) * 100 };
+};
+
+const prefersReducedTourMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const HOTSPOT_BASE_WIDTH = 112;
 const HOTSPOT_BASE_HEIGHT = 66;
@@ -84,23 +95,34 @@ const getAura360HotspotDepthScale = (pitch: number) => {
 const setAura360HotspotSize = (element: HTMLElement, zoomScale: number) => {
   const depthScale = Number(element.dataset.auraDepthScale) || 1;
   const scale = depthScale * zoomScale;
+  const flattening = Number(element.dataset.auraFlattening) || 1;
   element.style.setProperty("--aura-hotspot-width", `${(HOTSPOT_BASE_WIDTH * scale).toFixed(2)}px`);
-  element.style.setProperty("--aura-hotspot-height", `${(HOTSPOT_BASE_HEIGHT * scale).toFixed(2)}px`);
+  element.style.setProperty("--aura-hotspot-height", `${(HOTSPOT_BASE_HEIGHT * scale * flattening).toFixed(2)}px`);
 };
 
-const createAura360NavigationHotspot = (pitch: number, zoomScale = 1) => {
+const createAura360NavigationHotspot = (
+  pitch: number,
+  zoomScale = 1,
+  label = "Hap pamjen tjetër",
+  onActivate?: () => void,
+) => {
   const element = document.createElement("div");
 
   element.className = "aura360-navigation-hotspot";
   element.dataset.auraDepthScale = String(getAura360HotspotDepthScale(pitch));
+  // Preserve the familiar ring at 35 degrees; flatten distant floor rings.
+  const depression = Number.isFinite(pitch) ? Math.max(0, Math.min(Math.PI / 2, -pitch)) : 35 * Math.PI / 180;
+  element.dataset.auraFlattening = String(Math.max(0.5, Math.min(2.1,
+    Math.sin(depression) / Math.sin(35 * Math.PI / 180),
+  )));
   setAura360HotspotSize(element, zoomScale);
 
 element.innerHTML = `
   <div class="aura360-navigation-hotspot__visual">
     <svg
-      viewBox="0 0 92 54"
+      viewBox="0 -3 92 54"
       xmlns="http://www.w3.org/2000/svg"
-      preserveAspectRatio="xMidYMid meet"
+      preserveAspectRatio="none"
       aria-hidden="true"
     >
       <path
@@ -126,6 +148,18 @@ element.innerHTML = `
   </div>
 `;
 
+  const visual = element.querySelector<HTMLElement>(".aura360-navigation-hotspot__visual");
+  if (visual) {
+    visual.tabIndex = 0;
+    visual.setAttribute("role", "link");
+    visual.setAttribute("aria-label", label);
+    visual.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onActivate?.();
+    });
+  }
   return element;
 };
 
@@ -133,6 +167,7 @@ element.innerHTML = `
 
 type NavigationTransitionOptions = typeof NAVIGATION_TRANSITION & {
   rotateTo?: Orientation;
+  zoomTo?: number;
 };
 
 
@@ -607,6 +642,7 @@ const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
+  const [isNavigationPending, setIsNavigationPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showFirstLoadHint, setShowFirstLoadHint] = useState(false);
   const [canUseFullscreen, setCanUseFullscreen] = useState(false);
@@ -772,9 +808,11 @@ displayPitch: hotspot.pitch,
       const targetScene = getSceneById(targetSceneId);
       if (!targetScene) return null;
 
-      const reverseHotspot = targetScene.hotspots.find(
+      const reverseHotspots = targetScene.hotspots.filter(
         (hotspot) => getRuntimeHotspotTargetSceneId(hotspot as RuntimeHotspot) === Number(sourceId),
       );
+      // Multiple return links are ambiguous: use the saved entry view instead.
+      const reverseHotspot = reverseHotspots.length === 1 ? reverseHotspots[0] : null;
 
       const reverseYaw = reverseHotspot
         ? getRuntimeHotspotYaw(reverseHotspot as RuntimeHotspot)
@@ -800,12 +838,24 @@ displayPitch: hotspot.pitch,
 
       // Only hotspot navigation may use a reverse-link fallback. Map/gallery clicks should
       // open the scene with its own start view instead of guessing from the current scene.
-      const sourceSceneId = toFiniteNumber(link?.data?.fromSceneId);
+      const sourceSceneId = toFiniteNumber(link?.data?.fromSceneId) ?? currentSceneRef.current?.id;
       const reverseOrientation = link
         ? getReverseHotspotEntryOrientation(targetSceneId, sourceSceneId)
         : null;
 
-      if (reverseOrientation) return reverseOrientation;
+      if (reverseOrientation) {
+        const departure = viewerRef.current?.getPosition();
+        const sourceYaw = toFiniteNumber(link?.data?.rawYaw ?? link?.position?.yaw);
+        if (departure && sourceYaw !== null) {
+          // Preserve where the visitor is looking relative to the travel direction.
+          // A saved targetYaw above remains authoritative.
+          return {
+            yaw: normalizeYaw(reverseOrientation.yaw + normalizeYaw(departure.yaw - sourceYaw)),
+            pitch: clampPitch(departure.pitch),
+          };
+        }
+        return reverseOrientation;
+      }
 
       return getSceneStartOrientation(targetSceneId);
     },
@@ -1134,7 +1184,11 @@ const warmSceneNeighborhood = useCallback(
 
   const getTransitionWithEntryOrientation = useCallback(
     (orientation: Orientation | null): NavigationTransitionOptions => {
-      const transition: NavigationTransitionOptions = { ...NAVIGATION_TRANSITION };
+      const transition: NavigationTransitionOptions = {
+        ...NAVIGATION_TRANSITION,
+        speed: prefersReducedTourMotion() ? 140 : NAVIGATION_TRANSITION.speed,
+        zoomTo: viewerRef.current?.getZoomLevel(),
+      };
 
       if (isFiniteOrientation(orientation)) {
         transition.rotateTo = {
@@ -1174,7 +1228,6 @@ const warmSceneNeighborhood = useCallback(
       if (currentSceneRef.current?.id === targetSceneId) return;
       if (isNavigatingRef.current) return;
 
-      isNavigatingRef.current = true;
       setLoadError(null);
 
       const entryOrientation = forcedOrientation ?? getNavigationEntryOrientation(targetSceneId, null);
@@ -1190,8 +1243,6 @@ const warmSceneNeighborhood = useCallback(
       } catch (error) {
         console.error("Scene change error:", error);
         setLoadError("Skena nuk u hap. Provoni edhe një herë.");
-      } finally {
-        isNavigatingRef.current = false;
       }
     },
     [getSceneById, getNavigationEntryOrientation, getTransitionWithEntryOrientation],
@@ -1301,10 +1352,29 @@ const warmSceneNeighborhood = useCallback(
     setIsViewerVisible(false);
     setLoadError(null);
     setShowFirstLoadHint(false);
+    setIsNavigationPending(false);
 
    
    
    const initialOrientation = getSceneStartOrientation(resolvedStartScene.id);
+
+let disposed = false;
+let navigationBusy = false;
+let navigationHintTimer: number | null = null;
+let stepOverlay: HTMLCanvasElement | null = null;
+let stepAnimation: Animation | null = null;
+let pendingStepOrigin: { x: number; y: number } | null = null;
+let captureStepOnRender = false;
+const host = containerRef.current;
+
+const clearStepOverlay = () => {
+  stepAnimation?.cancel();
+  stepAnimation = null;
+  stepOverlay?.remove();
+  stepOverlay = null;
+  captureStepOnRender = false;
+  pendingStepOrigin = null;
+};
 
 let didFinishInitialLoad = false;
 let loaderExitTimer: number | null = null;
@@ -1340,6 +1410,7 @@ const finishInitialLoad = () => {
   psvReadyPanoramasRef.current.add(resolvedStartScene.imageUrl);
 
   requestAnimationFrame(() => {
+    if (disposed) return;
     setIsViewerVisible(true);
     warmSceneNeighborhood(resolvedStartScene.id);
 
@@ -1355,14 +1426,15 @@ const finishInitialLoad = () => {
    
 
     const deviceProfile = getDeviceProfile();
+    const lens = getTourLens(deviceProfile.isMobile);
 
     // Match the viewer's configured FOV. Focal-length scaling also shrinks
     // the rings on zoom-out while preserving their relative depth sizes.
     const getHotspotZoomScale = (zoomLevel: number) => {
-      const maxFov = deviceProfile.isMobile ? 108 : 100;
-      const baseZoom = deviceProfile.isMobile ? 32 : 38;
+      const maxFov = lens.maxFov;
+      const baseZoom = lens.openingZoom;
       const fovAt = (zoom: number) =>
-        maxFov + (28 - maxFov) * Math.max(0, Math.min(100, zoom)) / 100;
+        maxFov + (TOUR_MIN_FOV - maxFov) * Math.max(0, Math.min(100, zoom)) / 100;
       return Math.tan(fovAt(baseZoom) * Math.PI / 360) /
         Math.tan(fovAt(zoomLevel) * Math.PI / 360);
     };
@@ -1377,9 +1449,9 @@ const finishInitialLoad = () => {
       defaultYaw: initialOrientation?.yaw ?? 0,
       defaultPitch: initialOrientation?.pitch ?? 0,
       defaultTransition: NAVIGATION_TRANSITION,
-      maxFov: deviceProfile.isMobile ? 108 : 100,
-      minFov: 28,
-      defaultZoomLvl: deviceProfile.isMobile ? 32 : 38,
+      maxFov: lens.maxFov,
+      minFov: TOUR_MIN_FOV,
+      defaultZoomLvl: lens.openingZoom,
       zoomSpeed: 1.05,
       moveSpeed: 1,
       moveInertia: 0.82,
@@ -1403,12 +1475,20 @@ const finishInitialLoad = () => {
 showLinkTooltip: false,
 
 arrowStyle: {
-  element: (link: { data?: { rawPitch?: number }; position?: { pitch?: number | string } }) =>
+  element: (link: any) =>
     createAura360NavigationHotspot(
       toFiniteNumber(link.data?.rawPitch ?? link.position?.pitch) ?? NaN,
       getHotspotZoomScale(
-        viewerRef.current?.getZoomLevel() ?? (deviceProfile.isMobile ? 32 : 38),
+        viewerRef.current?.getZoomLevel() ?? lens.openingZoom,
       ),
+      `Shko te ${link.name || scenesById.get(Number(link.nodeId))?.title || "pamja tjetër"}`,
+      () => {
+        const activeViewer = viewerRef.current;
+        if (activeViewer && !isNavigatingRef.current) {
+          const plugin = activeViewer.getPlugin(VirtualTourPlugin as any) as any;
+          void plugin.setCurrentNode(String(link.nodeId), null, link);
+        }
+      },
     ),
 
   size: {
@@ -1440,14 +1520,8 @@ const updateAura360HotspotZoomSize = (
     .forEach((hotspot) => setAura360HotspotSize(hotspot, zoomScale));
 };
 
-const handleAura360HotspotZoom = ({
-  zoomLevel,
-}: {
-  zoomLevel: number;
-}) => {
-  updateAura360HotspotZoomSize(
-    zoomLevel,
-  );
+const handleAura360HotspotZoom = () => {
+  updateAura360HotspotZoomSize();
 };
 
 viewer.addEventListener(
@@ -1459,10 +1533,47 @@ viewer.addEventListener(
  * Apliko scale edhe pas renderimit të parë.
  */
 requestAnimationFrame(() => {
-  updateAura360HotspotZoomSize();
+  if (!disposed) updateAura360HotspotZoomSize();
 });
 
-
+// Capture the outgoing WebGL frame immediately after rendering, when its
+// drawing buffer is valid. Only one capped 2D snapshot is retained per step.
+// This is a directional visual cue, not invented 3D geometry.
+const renderStepOverlay = () => {
+  if (!captureStepOnRender || disposed) return;
+  captureStepOnRender = false;
+  const origin = pendingStepOrigin;
+  pendingStepOrigin = null;
+  const source = host.querySelector<HTMLCanvasElement>(".psv-canvas-container canvas");
+  if (!origin || !source || prefersReducedTourMotion()) return;
+  const { width, height } = viewer.getSize();
+  if (!width || !height) return;
+  const canvas = document.createElement("canvas");
+  const resolution = Math.min(1, 1600 / Math.max(width, height));
+  canvas.width = Math.max(1, Math.round(width * resolution));
+  canvas.height = Math.max(1, Math.round(height * resolution));
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context || typeof canvas.animate !== "function") return;
+  try {
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    canvas.setAttribute("aria-hidden", "true");
+    Object.assign(canvas.style, {
+      position: "absolute", inset: "0", width: "100%", height: "100%",
+      pointerEvents: "none", zIndex: "4",
+      transformOrigin: `${origin.x}% ${origin.y}%`,
+    });
+    host.appendChild(canvas);
+    stepOverlay = canvas;
+    stepAnimation = canvas.animate([
+      { opacity: 1, transform: "scale(1)" },
+      { opacity: 0, transform: "scale(1.055)" },
+    ], { duration: NAVIGATION_TRANSITION.speed, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)", fill: "forwards" });
+    void stepAnimation.finished.then(() => canvas.remove(), () => canvas.remove());
+  } catch {
+    canvas.remove(); // The native panorama fade is always available as a fallback.
+  }
+};
+viewer.addEventListener("render", renderStepOverlay);
 
 const vtPlugin = viewer.getPlugin(
   VirtualTourPlugin as any,
@@ -1471,44 +1582,106 @@ const vtPlugin = viewer.getPlugin(
 const originalSetCurrentNode =
   vtPlugin.setCurrentNode.bind(vtPlugin);
 
-/*
- * Kur përdoruesi klikon hotspot-in gjatë kohës që
- * fotografia e tij është duke u prefetch-uar, navigimi
- * pret të njëjtin request.
- *
- * Në këtë mënyrë nuk hapet një request i dytë për të
- * njëjtën panoramë.
- */
+// One navigation owner for hotspots, keyboard, map and gallery.
 vtPlugin.setCurrentNode = async (
   nodeId: string,
   options?: any,
   fromLink?: any,
 ): Promise<boolean> => {
+  if (disposed || navigationBusy) return false;
+  if (String(currentSceneRef.current?.id) === nodeId && !options?.forceUpdate) return true;
   const targetSceneId = toFiniteNumber(nodeId);
+  const targetScene = targetSceneId !== null ? getSceneById(targetSceneId) : null;
+  if (!targetScene) return false;
 
-  const targetScene =
-    targetSceneId !== null
-      ? getSceneById(targetSceneId)
-      : null;
+  navigationBusy = true;
+  isNavigatingRef.current = true;
+  setLoadError(null);
+  const sourceScene = currentSceneRef.current;
+  let departure = viewer.getPosition();
+  let entryZoom = viewer.getZoomLevel();
+  let hasStarted = false;
+  const wasInert = host.inert;
+  neighborhoodWarmupCleanupRef.current?.();
+  neighborhoodWarmupCleanupRef.current = null;
+  preloadSequenceRef.current += 1;
+  navigationHintTimer = window.setTimeout(() => {
+    if (!disposed) setIsNavigationPending(true);
+  }, 850);
 
-  const pendingPreload = targetScene?.imageUrl
-    ? psvPreloadPromisesRef.current.get(
-        targetScene.imageUrl,
-      )
-    : null;
-
-  if (pendingPreload) {
-    await pendingPreload;
+  try {
+    // Reuse the existing blob request. The viewer then decodes the destination
+    // and starts its native transition only once the texture is available.
+    await preloadScenePanoramaOnce(targetSceneId, "high");
+    if (disposed) return false;
+    departure = viewer.getPosition();
+    entryZoom = viewer.getZoomLevel();
+    const entry = options?.rotateTo ?? getNavigationEntryOrientation(targetScene.id, fromLink ?? null);
+    const reducedMotion = prefersReducedTourMotion();
+    const sourceYaw = toFiniteNumber(fromLink?.data?.rawYaw ?? fromLink?.position?.yaw);
+    const sourcePitch = toFiniteNumber(fromLink?.data?.rawPitch ?? fromLink?.position?.pitch);
+    if (!reducedMotion && !deviceProfile.isLowMemory && sourceYaw !== null && sourcePitch !== null) {
+      const point = viewer.dataHelper.sphericalCoordsToViewerCoords({ yaw: sourceYaw, pitch: sourcePitch });
+      const size = viewer.getSize();
+      if (point && size.width > 0 && size.height > 0 &&
+          point.x >= 0 && point.x <= size.width && point.y >= 0 && point.y <= size.height) {
+        pendingStepOrigin = { x: point.x / size.width * 100, y: point.y / size.height * 100 };
+      }
+    }
+    host.inert = true;
+    host.setAttribute("aria-busy", "true");
+    hasStarted = true;
+    const completed = await originalSetCurrentNode(nodeId, {
+      ...getTransitionWithEntryOrientation(entry),
+      ...options,
+      zoomTo: entryZoom,
+      showLoader: false,
+      rotation: false,
+      effect: "fade",
+      speed: reducedMotion ? 140 : NAVIGATION_TRANSITION.speed,
+    }, fromLink);
+    if (!completed && !disposed) throw new Error("Panorama transition was interrupted");
+    return completed;
+  } catch (error) {
+    if (disposed) return false;
+    console.error("Tour navigation failed:", error);
+    clearStepOverlay();
+    // The plugin clears arrows before loading. Re-render the previous node on
+    // failure so a bad destination never leaves the tour without navigation.
+    if (hasStarted && sourceScene) {
+      try {
+        await originalSetCurrentNode(String(sourceScene.id), {
+          forceUpdate: true, showLoader: false, effect: "none", rotation: false,
+          rotateTo: departure, zoomTo: entryZoom,
+        });
+      } catch { /* Keep the gallery available even if recovery also fails. */ }
+    }
+    if (!disposed) {
+      viewer.hideError();
+      setLoadError("Pamja nuk u hap. Provo përsëri ose zgjidh një pamje tjetër.");
+    }
+    return false;
+  } finally {
+    if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
+    navigationHintTimer = null;
+    clearStepOverlay();
+    host.inert = wasInert;
+    host.removeAttribute("aria-busy");
+    navigationBusy = false;
+    if (!disposed && viewerRef.current === viewer) {
+      isNavigatingRef.current = false;
+      setIsNavigationPending(false);
+      warmSceneNeighborhood(currentSceneRef.current?.id ?? null);
+    }
   }
-
-  return originalSetCurrentNode(
-    nodeId,
-    options,
-    fromLink,
-  );
 };
 
 viewer.addEventListener("panorama-loaded", () => {
+      if (disposed) return;
+      if (navigationBusy && pendingStepOrigin) captureStepOnRender = true;
+      if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
+      navigationHintTimer = null;
+      setIsNavigationPending(false);
 	
       setLoadError(null);
       const currentScene = currentSceneRef.current || resolvedStartScene;
@@ -1520,6 +1693,7 @@ viewer.addEventListener("panorama-loaded", () => {
     });
 
     viewer.addEventListener("panorama-error", (error: any) => {
+      if (disposed) return;
       console.error("Panorama error:", error);
       setLoadError("Panorama nuk u ngarkua si duhet.");
       finishInitialLoad();
@@ -1528,12 +1702,14 @@ viewer.addEventListener("panorama-loaded", () => {
 let positionWarmupTimer: number | null = null;
 
 const schedulePositionAwareWarmup = () => {
+  if (disposed || navigationBusy) return;
   if (positionWarmupTimer !== null) {
     window.clearTimeout(positionWarmupTimer);
   }
 
   positionWarmupTimer = window.setTimeout(() => {
     positionWarmupTimer = null;
+    if (disposed || navigationBusy) return;
 
     const activeSceneId = toFiniteNumber(
       currentSceneRef.current?.id,
@@ -1560,7 +1736,7 @@ vtPlugin.addEventListener(
   ({ link }: any) => {
     const targetSceneId = Number(link?.nodeId);
 
-    if (Number.isFinite(targetSceneId)) {
+    if (!disposed && !navigationBusy && Number.isFinite(targetSceneId)) {
       void preloadScenePanoramaOnce(
         targetSceneId,
         "high",
@@ -1572,6 +1748,7 @@ vtPlugin.addEventListener(
 vtPlugin.addEventListener(
   "node-changed",
   ({ node }: any) => {
+      if (disposed) return;
       const nextId = Number(node.id);
       const nextScene = getSceneById(nextId);
 
@@ -1590,13 +1767,21 @@ pendingEntryOrientationRef.current = null;
  * pastaj fillo preload-in e lidhjeve të radhës.
  */
 requestAnimationFrame(() => {
-  warmSceneNeighborhood(nextId);
+  if (disposed) return;
+  if (!navigationBusy) warmSceneNeighborhood(nextId);
 
   updateAura360HotspotZoomSize();
 });
 });
 
 return () => {
+  disposed = true;
+  if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
+  clearStepOverlay();
+  host.inert = false;
+  host.removeAttribute("aria-busy");
+  isNavigatingRef.current = false;
+  viewer.removeEventListener("render", renderStepOverlay);
   clearFirstLoadHintTimer();
   clearLoaderExitTimer();
 
@@ -1627,6 +1812,9 @@ viewer.removeEventListener(
     getSceneStartOrientation,
     preloadScenePanoramaOnce,
     getPluginTransitionOptions,
+    getNavigationEntryOrientation,
+    getTransitionWithEntryOrientation,
+    scenesById,
     warmSceneNeighborhood,
   ]);
 
@@ -1720,6 +1908,9 @@ viewer.removeEventListener(
   transform-origin: center center;
 
   pointer-events: auto;
+  outline: none;
+  border-radius: 50%;
+  cursor: pointer;
 
   transition:
     width 80ms linear,
@@ -1731,7 +1922,7 @@ viewer.removeEventListener(
 }
 
 /*
- * SVG ruan gjithmonë saktësisht të njëjtën formë.
+ * SVG ruan stilin e unazës; lartësia përshtatet me perspektivën e dyshemesë.
  */
 .virtual-tour-shell
 .aura360-navigation-hotspot__visual svg {
@@ -1746,6 +1937,20 @@ viewer.removeEventListener(
   rotate: 0deg !important;
 }
 
+/* A forgiving touch target without enlarging the visible distant ring. */
+.virtual-tour-shell .aura360-navigation-hotspot__visual::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: max(100%, 32px); height: max(100%, 28px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+.virtual-tour-shell .aura360-navigation-hotspot__visual:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.95);
+  outline-offset: 5px;
+}
+
 /* Matterport-like normal */
 .virtual-tour-shell .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.30);
@@ -1758,7 +1963,8 @@ viewer.removeEventListener(
 /* Hover */
 .virtual-tour-shell
 .aura360-navigation-hotspot__visual:hover
-.aura360-hotspot-ring {
+.aura360-hotspot-ring,
+.virtual-tour-shell .aura360-navigation-hotspot__visual:focus-visible .aura360-hotspot-ring {
   fill: rgba(255, 255, 255, 0.42);
 }
 
@@ -1864,6 +2070,9 @@ viewer.removeEventListener(
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .virtual-tour-shell .aura360-navigation-hotspot__visual {
+      transition: none;
+    }
     .virtual-tour-shell .virtual-tour-loader__content,
     .virtual-tour-shell .virtual-tour-loader__orbit,
     .virtual-tour-shell .virtual-tour-loader__progress,
@@ -1984,6 +2193,13 @@ viewer.removeEventListener(
   </div>
 )}
 	   
+
+        {isNavigationPending && !isInitialLoading && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 rounded-full border border-white/10 bg-black/65 px-4 py-2 text-xs text-white/90 pointer-events-none"
+            role="status" aria-live="polite">
+            Duke përgatitur pamjen…
+          </div>
+        )}
 
         {loadError && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] rounded-2xl border border-white/10 bg-black/80 px-4 py-3 text-xs text-white shadow-2xl md:backdrop-blur-xl">
