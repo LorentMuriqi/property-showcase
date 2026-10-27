@@ -642,7 +642,6 @@ const neighborhoodWarmupCleanupRef = useRef<(() => void) | null>(
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
-  const [isNavigationPending, setIsNavigationPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showFirstLoadHint, setShowFirstLoadHint] = useState(false);
   const [canUseFullscreen, setCanUseFullscreen] = useState(false);
@@ -1352,7 +1351,6 @@ const warmSceneNeighborhood = useCallback(
     setIsViewerVisible(false);
     setLoadError(null);
     setShowFirstLoadHint(false);
-    setIsNavigationPending(false);
 
    
    
@@ -1360,7 +1358,6 @@ const warmSceneNeighborhood = useCallback(
 
 let disposed = false;
 let navigationBusy = false;
-let navigationHintTimer: number | null = null;
 // The native fade owns the animation clock. Translate its two existing
 // panorama spheres on that same clock; never animate a screenshot or zoom.
 // Renderer groups are version-sensitive, so unsupported layouts use plain fade.
@@ -1618,9 +1615,6 @@ vtPlugin.setCurrentNode = async (
   neighborhoodWarmupCleanupRef.current?.();
   neighborhoodWarmupCleanupRef.current = null;
   preloadSequenceRef.current += 1;
-  navigationHintTimer = window.setTimeout(() => {
-    if (!disposed) setIsNavigationPending(true);
-  }, 850);
 
   try {
     // Reuse the existing blob request. The viewer then decodes the destination
@@ -1696,15 +1690,12 @@ vtPlugin.setCurrentNode = async (
     }
     return false;
   } finally {
-    if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
-    navigationHintTimer = null;
     clearWalkTransition();
     host.inert = wasInert;
     host.removeAttribute("aria-busy");
     navigationBusy = false;
     if (!disposed && viewerRef.current === viewer) {
       isNavigatingRef.current = false;
-      setIsNavigationPending(false);
       warmSceneNeighborhood(currentSceneRef.current?.id ?? null);
     }
   }
@@ -1712,9 +1703,6 @@ vtPlugin.setCurrentNode = async (
 
 viewer.addEventListener("panorama-loaded", () => {
       if (disposed) return;
-      if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
-      navigationHintTimer = null;
-      setIsNavigationPending(false);
 	
       setLoadError(null);
       const currentScene = currentSceneRef.current || resolvedStartScene;
@@ -1809,7 +1797,6 @@ requestAnimationFrame(() => {
 
 return () => {
   disposed = true;
-  if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
   clearWalkTransition();
   host.inert = false;
   host.removeAttribute("aria-busy");
@@ -2226,13 +2213,6 @@ viewer.removeEventListener(
   </div>
 )}
 	   
-
-        {isNavigationPending && !isInitialLoading && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 rounded-full border border-white/10 bg-black/65 px-4 py-2 text-xs text-white/90 pointer-events-none"
-            role="status" aria-live="polite">
-            Duke përgatitur pamjen…
-          </div>
-        )}
 
         {loadError && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] rounded-2xl border border-white/10 bg-black/80 px-4 py-3 text-xs text-white shadow-2xl md:backdrop-blur-xl">
