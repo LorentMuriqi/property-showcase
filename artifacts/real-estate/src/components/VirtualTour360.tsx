@@ -68,10 +68,32 @@ const NAVIGATION_TRANSITION = {
   rotation: false,
 };
 
-const createAura360NavigationHotspot = () => {
+const HOTSPOT_BASE_WIDTH = 112;
+const HOTSPOT_BASE_HEIGHT = 66;
+
+// Flat-floor perspective: camera height / slant distance = sin(-pitch).
+// Use the stored pitch, never the current viewing direction or cluster offset.
+// This estimates depth; the tour does not contain measured 3D distances.
+const getAura360HotspotDepthScale = (pitch: number) => {
+  if (!Number.isFinite(pitch)) return 1;
+  const depression = Math.max(0, Math.min(Math.PI / 2, -pitch));
+  const referencePitch = (35 * Math.PI) / 180;
+  return Math.max(0.18, Math.min(1, Math.sin(depression) / Math.sin(referencePitch)));
+};
+
+const setAura360HotspotSize = (element: HTMLElement, zoomScale: number) => {
+  const depthScale = Number(element.dataset.auraDepthScale) || 1;
+  const scale = depthScale * zoomScale;
+  element.style.setProperty("--aura-hotspot-width", `${(HOTSPOT_BASE_WIDTH * scale).toFixed(2)}px`);
+  element.style.setProperty("--aura-hotspot-height", `${(HOTSPOT_BASE_HEIGHT * scale).toFixed(2)}px`);
+};
+
+const createAura360NavigationHotspot = (pitch: number, zoomScale = 1) => {
   const element = document.createElement("div");
 
   element.className = "aura360-navigation-hotspot";
+  element.dataset.auraDepthScale = String(getAura360HotspotDepthScale(pitch));
+  setAura360HotspotSize(element, zoomScale);
 
 element.innerHTML = `
   <div class="aura360-navigation-hotspot__visual">
@@ -1334,6 +1356,17 @@ const finishInitialLoad = () => {
 
     const deviceProfile = getDeviceProfile();
 
+    // Match the viewer's configured FOV. Focal-length scaling also shrinks
+    // the rings on zoom-out while preserving their relative depth sizes.
+    const getHotspotZoomScale = (zoomLevel: number) => {
+      const maxFov = deviceProfile.isMobile ? 108 : 100;
+      const baseZoom = deviceProfile.isMobile ? 32 : 38;
+      const fovAt = (zoom: number) =>
+        maxFov + (28 - maxFov) * Math.max(0, Math.min(100, zoom)) / 100;
+      return Math.tan(fovAt(baseZoom) * Math.PI / 360) /
+        Math.tan(fovAt(zoomLevel) * Math.PI / 360);
+    };
+
     const viewer = new Viewer({
       container: containerRef.current,
       navbar: deviceProfile.isDesktop ? ["zoom", "move"] : false,
@@ -1370,7 +1403,13 @@ const finishInitialLoad = () => {
 showLinkTooltip: false,
 
 arrowStyle: {
-  element: () => createAura360NavigationHotspot(),
+  element: (link: { data?: { rawPitch?: number }; position?: { pitch?: number | string } }) =>
+    createAura360NavigationHotspot(
+      toFiniteNumber(link.data?.rawPitch ?? link.position?.pitch) ?? NaN,
+      getHotspotZoomScale(
+        viewerRef.current?.getZoomLevel() ?? (deviceProfile.isMobile ? 32 : 38),
+      ),
+    ),
 
   size: {
     width: 180,
@@ -1392,64 +1431,13 @@ arrowStyle: {
 
 viewerRef.current = viewer;
 
-const HOTSPOT_BASE_WIDTH = 112;
-const HOTSPOT_BASE_HEIGHT = 66;
-const HOTSPOT_MAX_SCALE = 1.55;
-
-/*
- * Baza duhet të jetë e njëjtë me defaultZoomLvl të Viewer-it.
- */
-const hotspotBaseZoomLevel =
-  deviceProfile.isMobile ? 32 : 38;
-
 const updateAura360HotspotZoomSize = (
   zoomLevel = viewer.getZoomLevel(),
 ) => {
-  /*
-   * Zoom-out:
-   * hotspoti NUK bëhet më i vogël se madhësia bazë.
-   *
-   * Zoom-in:
-   * hotspoti rritet gradualisht deri në 1.55x.
-   */
-  const progress =
-    zoomLevel <= hotspotBaseZoomLevel
-      ? 0
-      : Math.min(
-          1,
-          (zoomLevel - hotspotBaseZoomLevel) /
-            Math.max(
-              1,
-              100 - hotspotBaseZoomLevel,
-            ),
-        );
-
-  const scale =
-    1 +
-    progress *
-      (HOTSPOT_MAX_SCALE - 1);
-
-  const width =
-    HOTSPOT_BASE_WIDTH * scale;
-
-  const height =
-    HOTSPOT_BASE_HEIGHT * scale;
-
+  const zoomScale = getHotspotZoomScale(zoomLevel);
   containerRef.current
-    ?.querySelectorAll<HTMLElement>(
-      ".aura360-navigation-hotspot",
-    )
-    .forEach((hotspot) => {
-      hotspot.style.setProperty(
-        "--aura-hotspot-width",
-        `${width.toFixed(1)}px`,
-      );
-
-      hotspot.style.setProperty(
-        "--aura-hotspot-height",
-        `${height.toFixed(1)}px`,
-      );
-    });
+    ?.querySelectorAll<HTMLElement>(".aura360-navigation-hotspot")
+    .forEach((hotspot) => setAura360HotspotSize(hotspot, zoomScale));
 };
 
 const handleAura360HotspotZoom = ({
@@ -1471,7 +1459,7 @@ viewer.addEventListener(
  * Apliko scale edhe pas renderimit të parë.
  */
 requestAnimationFrame(() => {
-  updateAura360HotspotZoomScale();
+  updateAura360HotspotZoomSize();
 });
 
 
