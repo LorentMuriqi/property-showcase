@@ -64,7 +64,7 @@ const CACHE_TTL_SECONDS = 30 * 60;
 const NAVIGATION_TRANSITION = {
   showLoader: false,
   effect: "fade" as const,
-  speed: 520,
+  speed: 640,
   rotation: false,
 };
 
@@ -1361,19 +1361,29 @@ const warmSceneNeighborhood = useCallback(
 let disposed = false;
 let navigationBusy = false;
 let navigationHintTimer: number | null = null;
-let stepOverlay: HTMLCanvasElement | null = null;
-let stepAnimation: Animation | null = null;
-let pendingStepOrigin: { x: number; y: number } | null = null;
-let captureStepOnRender = false;
+// The native fade owns the animation clock. Translate its two existing
+// panorama spheres on that same clock; never animate a screenshot or zoom.
+// Renderer groups are version-sensitive, so unsupported layouts use plain fade.
+type WalkState = {
+  direction: { x: number; y: number; z: number };
+  outgoingMesh: any;
+  outgoingContainer: any;
+  outgoingOrigin: { x: number; y: number; z: number };
+  incomingContainer?: any;
+  incomingOrigin?: { x: number; y: number; z: number };
+};
+let walkState: WalkState | null = null;
 const host = containerRef.current;
 
-const clearStepOverlay = () => {
-  stepAnimation?.cancel();
-  stepAnimation = null;
-  stepOverlay?.remove();
-  stepOverlay = null;
-  captureStepOnRender = false;
-  pendingStepOrigin = null;
+const clearWalkTransition = () => {
+  if (walkState) {
+    const { outgoingContainer, outgoingOrigin, incomingContainer, incomingOrigin } = walkState;
+    outgoingContainer.position.set(outgoingOrigin.x, outgoingOrigin.y, outgoingOrigin.z);
+    if (incomingContainer && incomingOrigin) {
+      incomingContainer.position.set(incomingOrigin.x, incomingOrigin.y, incomingOrigin.z);
+    }
+  }
+  walkState = null;
 };
 
 let didFinishInitialLoad = false;
@@ -1536,44 +1546,47 @@ requestAnimationFrame(() => {
   if (!disposed) updateAura360HotspotZoomSize();
 });
 
-// Capture the outgoing WebGL frame immediately after rendering, when its
-// drawing buffer is valid. Only one capped 2D snapshot is retained per step.
-// This is a directional visual cue, not invented 3D geometry.
-const renderStepOverlay = () => {
-  if (!captureStepOnRender || disposed) return;
-  captureStepOnRender = false;
-  const origin = pendingStepOrigin;
-  pendingStepOrigin = null;
-  const source = host.querySelector<HTMLCanvasElement>(".psv-canvas-container canvas");
-  if (!origin || !source || prefersReducedTourMotion()) return;
-  const { width, height } = viewer.getSize();
-  if (!width || !height) return;
-  const canvas = document.createElement("canvas");
-  const resolution = Math.min(1, 1600 / Math.max(width, height));
-  canvas.width = Math.max(1, Math.round(width * resolution));
-  canvas.height = Math.max(1, Math.round(height * resolution));
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context || typeof canvas.animate !== "function") return;
-  try {
-    context.drawImage(source, 0, 0, canvas.width, canvas.height);
-    canvas.setAttribute("aria-hidden", "true");
-    Object.assign(canvas.style, {
-      position: "absolute", inset: "0", width: "100%", height: "100%",
-      pointerEvents: "none", zIndex: "4",
-      transformOrigin: `${origin.x}% ${origin.y}%`,
-    });
-    host.appendChild(canvas);
-    stepOverlay = canvas;
-    stepAnimation = canvas.animate([
-      { opacity: 1, transform: "scale(1)" },
-      { opacity: 0, transform: "scale(1.055)" },
-    ], { duration: NAVIGATION_TRANSITION.speed, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)", fill: "forwards" });
-    void stepAnimation.finished.then(() => canvas.remove(), () => canvas.remove());
-  } catch {
-    canvas.remove(); // The native panorama fade is always available as a fallback.
+// Use the native opacity tick, so motion and blending can never drift apart.
+// No additional canvas, panorama download, texture or animation loop is created.
+const adapter = (viewer as any).adapter;
+const originalSetTextureOpacity = adapter.setTextureOpacity;
+adapter.setTextureOpacity = function (mesh: any, opacity: number) {
+  const state = walkState;
+  const parent = mesh?.parent;
+  if (!state || mesh === state.outgoingMesh || !parent?.position?.set ||
+      parent === state.outgoingContainer ||
+      (state.incomingContainer && state.incomingContainer !== parent)) {
+    return originalSetTextureOpacity.call(adapter, mesh, opacity);
   }
+  if (!state.incomingContainer) {
+    state.incomingContainer = parent;
+    state.incomingOrigin = { x: parent.position.x, y: parent.position.y, z: parent.position.z };
+  }
+  const progress = Math.max(0, Math.min(1, opacity));
+  const d = state.direction;
+  const out = state.outgoingOrigin;
+  const into = state.incomingOrigin!;
+
+  // Moving the sphere opposite the travel vector is equivalent to moving
+  // the camera forward inside it. The incoming sphere settles at its center.
+  // Both images move in the same direction; neither zooms back at arrival.
+  const outgoingProgress = progress >= 1 ? 0 : progress;
+  state.outgoingContainer.position.set(
+    out.x - d.x * outgoingProgress,
+    out.y - d.y * outgoingProgress,
+    out.z - d.z * outgoingProgress,
+  );
+  parent.position.set(
+    into.x + d.x * (1 - progress),
+    into.y + d.y * (1 - progress),
+    into.z + d.z * (1 - progress),
+  );
+
+  // Keep the start/end visually clean; mix the views mainly mid-step.
+  const blend = Math.max(0, Math.min(1, (progress - 0.12) / 0.76));
+  const opacityIn = blend * blend * (3 - 2 * blend);
+  return originalSetTextureOpacity.call(adapter, mesh, opacityIn);
 };
-viewer.addEventListener("render", renderStepOverlay);
 
 const vtPlugin = viewer.getPlugin(
   VirtualTourPlugin as any,
@@ -1620,12 +1633,33 @@ vtPlugin.setCurrentNode = async (
     const reducedMotion = prefersReducedTourMotion();
     const sourceYaw = toFiniteNumber(fromLink?.data?.rawYaw ?? fromLink?.position?.yaw);
     const sourcePitch = toFiniteNumber(fromLink?.data?.rawPitch ?? fromLink?.position?.pitch);
-    if (!reducedMotion && !deviceProfile.isLowMemory && sourceYaw !== null && sourcePitch !== null) {
-      const point = viewer.dataHelper.sphericalCoordsToViewerCoords({ yaw: sourceYaw, pitch: sourcePitch });
-      const size = viewer.getSize();
-      if (point && size.width > 0 && size.height > 0 &&
-          point.x >= 0 && point.x <= size.width && point.y >= 0 && point.y <= size.height) {
-        pendingStepOrigin = { x: point.x / size.width * 100, y: point.y / size.height * 100 };
+    const renderer = viewer.renderer as any;
+    const outgoingContainer = renderer?.meshContainer;
+    const outgoingMesh = renderer?.mesh;
+    // Floor links define horizontal travel. Never move downward toward the
+    // floor marker, and do not infer a travel path for gallery/map jumps.
+    if (!reducedMotion && sourceYaw !== null && sourcePitch !== null &&
+        outgoingContainer?.position?.set && outgoingMesh && !adapter.config?.shader) {
+      const radius = outgoingMesh.geometry?.parameters?.radius;
+      const angleFromView = Math.abs(normalizeYaw(sourceYaw - departure.yaw));
+      if (Number.isFinite(radius) && radius > 0 && angleFromView < Math.PI / 2) {
+        // Conservative, bounded displacement on an approximate sphere.
+        // This is not a measured room reconstruction or a real depth map.
+        const depression = Math.max(0, Math.min(Math.PI / 2, -sourcePitch));
+        const distanceFactor = 0.14 + 0.06 * (1 - Math.sin(depression));
+        const vector = viewer.dataHelper.sphericalCoordsToVector3({ yaw: sourceYaw, pitch: 0 });
+        const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
+        const distance = radius * distanceFactor;
+        walkState = {
+          direction: { x: vector.x / length * distance, y: 0, z: vector.z / length * distance },
+          outgoingMesh,
+          outgoingContainer,
+          outgoingOrigin: {
+            x: outgoingContainer.position.x,
+            y: outgoingContainer.position.y,
+            z: outgoingContainer.position.z,
+          },
+        };
       }
     }
     host.inert = true;
@@ -1645,7 +1679,7 @@ vtPlugin.setCurrentNode = async (
   } catch (error) {
     if (disposed) return false;
     console.error("Tour navigation failed:", error);
-    clearStepOverlay();
+    clearWalkTransition();
     // The plugin clears arrows before loading. Re-render the previous node on
     // failure so a bad destination never leaves the tour without navigation.
     if (hasStarted && sourceScene) {
@@ -1664,7 +1698,7 @@ vtPlugin.setCurrentNode = async (
   } finally {
     if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
     navigationHintTimer = null;
-    clearStepOverlay();
+    clearWalkTransition();
     host.inert = wasInert;
     host.removeAttribute("aria-busy");
     navigationBusy = false;
@@ -1678,7 +1712,6 @@ vtPlugin.setCurrentNode = async (
 
 viewer.addEventListener("panorama-loaded", () => {
       if (disposed) return;
-      if (navigationBusy && pendingStepOrigin) captureStepOnRender = true;
       if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
       navigationHintTimer = null;
       setIsNavigationPending(false);
@@ -1777,11 +1810,11 @@ requestAnimationFrame(() => {
 return () => {
   disposed = true;
   if (navigationHintTimer !== null) window.clearTimeout(navigationHintTimer);
-  clearStepOverlay();
+  clearWalkTransition();
   host.inert = false;
   host.removeAttribute("aria-busy");
   isNavigatingRef.current = false;
-  viewer.removeEventListener("render", renderStepOverlay);
+  adapter.setTextureOpacity = originalSetTextureOpacity;
   clearFirstLoadHintTimer();
   clearLoaderExitTimer();
 
