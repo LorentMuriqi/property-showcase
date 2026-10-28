@@ -347,12 +347,12 @@ const createTourPreloadScheduler = (backgroundLimit: number) => {
   };
 };
 
-// A full-width phone swipe should turn roughly 165 degrees at the opening
+// A full-width phone swipe should turn roughly 145 degrees at the opening
 // view. PSV applies its normal FOV scaling when the visitor zooms in.
 const getTourMoveSpeed = (width: number, height: number, isTouch: boolean, openingFov: number) => {
   if (!isTouch) return 1;
   const horizontalFov = 2 * Math.atan(Math.tan(openingFov * Math.PI / 360) * width / Math.max(1, height)) * 180 / Math.PI;
-  return Math.max(1.5, Math.min(3.2, 165 / Math.max(1, horizontalFov)));
+  return Math.max(1.3, Math.min(2.8, 145 / Math.max(1, horizontalFov)));
 };
 
 const waitForPreloadGap = (delay: number): Promise<void> => {
@@ -1695,6 +1695,35 @@ const resumePreparation = () => {
 };
 document.addEventListener("visibilitychange", resumePreparation);
 
+// Preserve user rotation across the panorama coordinate change at arrival.
+const transitionRenderer = viewer.renderer as any;
+const originalRendererTransition = transitionRenderer.transition;
+let stopTrackingTransition: (() => void) | null = null;
+transitionRenderer.transition = function (textureData: any, options: any, transition: any) {
+  stopTrackingTransition?.();
+  if (!options.position || transition.rotation) {
+    return originalRendererTransition.call(this, textureData, options, transition);
+  }
+  const departure = viewer.getPosition();
+  const arrival = { ...options.position };
+  const liveOptions = { ...options, position: { ...arrival } };
+  const trackRotation = () => {
+    const position = viewer.getPosition();
+    liveOptions.position = {
+      yaw: normalizeYaw(arrival.yaw + normalizeYaw(position.yaw - departure.yaw)),
+      pitch: clampPitch(arrival.pitch + position.pitch - departure.pitch),
+    };
+  };
+  viewer.addEventListener("position-updated", trackRotation);
+  const stop = () => viewer.removeEventListener("position-updated", trackRotation);
+  stopTrackingTransition = stop;
+  try {
+    const animation = originalRendererTransition.call(this, textureData, liveOptions, transition);
+    animation.then(() => { stop(); if (stopTrackingTransition === stop) stopTrackingTransition = null; });
+    return animation;
+  } catch (error) { stop(); throw error; }
+};
+
 const originalSetTextureOpacity = adapter.setTextureOpacity;
 adapter.setTextureOpacity = function (mesh: any, opacity: number) {
   const state = walkState;
@@ -1808,7 +1837,7 @@ vtPlugin.setCurrentNode = async (
         };
       }
     }
-    host.inert = true;
+    // Keep dragging available; navigationBusy still prevents duplicate jumps.
     host.setAttribute("aria-busy", "true");
     hasStarted = true;
     const completed = await originalSetCurrentNode(nodeId, {
@@ -1964,6 +1993,8 @@ return () => {
   host.inert = false;
   host.removeAttribute("aria-busy");
   isNavigatingRef.current = false;
+  stopTrackingTransition?.();
+  transitionRenderer.transition = originalRendererTransition;
   adapter.setTextureOpacity = originalSetTextureOpacity;
   clearFirstLoadHintTimer();
   clearLoaderExitTimer();
