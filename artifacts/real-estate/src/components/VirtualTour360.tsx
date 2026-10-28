@@ -105,6 +105,7 @@ const createAura360NavigationHotspot = (
   zoomScale = 1,
   label = "Hap pamjen tjetër",
   onActivate?: () => void,
+  onIntent?: () => void,
 ) => {
   const element = document.createElement("div");
 
@@ -153,6 +154,11 @@ element.innerHTML = `
     visual.tabIndex = 0;
     visual.setAttribute("role", "link");
     visual.setAttribute("aria-label", label);
+    if (onIntent) {
+      visual.addEventListener("focus", onIntent);
+      visual.addEventListener("pointerenter", onIntent);
+      visual.addEventListener("pointerdown", onIntent);
+    }
     visual.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
@@ -260,6 +266,93 @@ const getPreloadPlan = (): PreloadPlan => {
     gapMs: 110,
     positionDebounceMs: 150,
   };
+};
+
+// One shared queue per viewer, including hover/focus and changing look direction.
+// The clicked destination may use one reserved slot; background work cannot.
+const createTourPreloadScheduler = (backgroundLimit: number) => {
+  type Job = {
+    key: string; priority: number; started: boolean;
+    run: () => Promise<void>; resolve: () => void; reject: (error: unknown) => void;
+    promise: Promise<void>;
+  };
+  const jobs = new Map<string, Job>();
+  let queue: Job[] = [];
+  let active = 0;
+  let stopped = false;
+  const maxQueued = backgroundLimit === 1 ? 6 : 10;
+  const drain = () => {
+    if (stopped) return;
+    queue.sort((a, b) => b.priority - a.priority);
+    while (queue.length) {
+      const job = queue[0];
+      const limit = backgroundLimit + (job.priority === 2 ? 1 : 0);
+      if (active >= limit) break;
+      queue.shift();
+      job.started = true;
+      active += 1;
+      void Promise.resolve().then(job.run).then(job.resolve, job.reject).finally(() => {
+        active -= 1;
+        if (jobs.get(job.key) === job) jobs.delete(job.key);
+        drain();
+      });
+    }
+  };
+  const cancelQueued = () => {
+    queue = queue.filter((job) => {
+      if (job.priority === 2) return true;
+      jobs.delete(job.key);
+      job.resolve();
+      return false;
+    });
+  };
+  return {
+    request(key: string, run: () => Promise<void>, priority: number) {
+      if (stopped) return Promise.resolve();
+      const existing = jobs.get(key);
+      if (existing) {
+        existing.priority = Math.max(existing.priority, priority);
+        if (!existing.started && priority > 0) {
+          queue = queue.filter((entry) => entry !== existing);
+          queue.unshift(existing);
+        }
+        drain();
+        return existing.promise;
+      }
+      let resolve!: () => void;
+      let reject!: (error: unknown) => void;
+      const promise = new Promise<void>((ok, fail) => { resolve = ok; reject = fail; });
+      const job: Job = { key, run, priority, promise, resolve, reject, started: false };
+      jobs.set(key, job);
+      // New user intent goes before older speculation of the same priority.
+      if (priority > 0) queue.unshift(job); else queue.push(job);
+      while (queue.length > maxQueued) {
+        const removable = queue.map((entry, index) => ({ entry, index }))
+          .filter(({ entry }) => entry.priority < 2)
+          .sort((a, b) => a.entry.priority - b.entry.priority || b.index - a.index)[0];
+        if (!removable) break;
+        queue.splice(removable.index, 1);
+        jobs.delete(removable.entry.key);
+        removable.entry.resolve();
+      }
+      drain();
+      return promise;
+    },
+    cancelQueued,
+    stop() {
+      stopped = true;
+      queue.forEach((job) => { jobs.delete(job.key); job.resolve(); });
+      queue = [];
+    },
+  };
+};
+
+// A full-width phone swipe should turn roughly 165 degrees at the opening
+// view. PSV applies its normal FOV scaling when the visitor zooms in.
+const getTourMoveSpeed = (width: number, height: number, isTouch: boolean, openingFov: number) => {
+  if (!isTouch) return 1;
+  const horizontalFov = 2 * Math.atan(Math.tan(openingFov * Math.PI / 360) * width / Math.max(1, height)) * 180 / Math.PI;
+  return Math.max(1.5, Math.min(3.2, 165 / Math.max(1, horizontalFov)));
 };
 
 const waitForPreloadGap = (delay: number): Promise<void> => {
@@ -625,9 +718,11 @@ const browserPreloadPromisesRef = useRef<Map<string, Promise<void>>>(
   new Map(),
 );
 
-const psvPreloadPromisesRef = useRef<Map<string, Promise<void>>>(
-  new Map(),
-);
+const preloadSchedulerRef = useRef<ReturnType<typeof createTourPreloadScheduler> | null>(null);
+const preparedPlanRef = useRef<((sceneIds: number[]) => void) | null>(null);
+const preparedIntentRef = useRef<((sceneId: number) => void) | null>(null);
+const isPreparedRef = useRef<((src: string) => boolean) | null>(null);
+const preloadRetryAfterRef = useRef<Map<string, number>>(new Map());
 
 const psvReadyPanoramasRef = useRef<Set<string>>(new Set());
 
@@ -887,96 +982,46 @@ displayPitch: hotspot.pitch,
 );
 
 const preloadScenePanoramaOnce = useCallback(
-  (
-    sceneId: number | null,
-    priority: PreloadPriority = "low",
-  ): Promise<void> => {
-    if (sceneId === null) {
-      return Promise.resolve();
-    }
-
+  (sceneId: number | null, priority: PreloadPriority = "low", foreground = false): Promise<void> => {
+    if (sceneId === null) return Promise.resolve();
     const scene = getSceneById(sceneId);
-
-    if (!scene?.imageUrl) {
-      return Promise.resolve();
-    }
-
-    const viewer = viewerRef.current as any;
+    if (!scene?.imageUrl) return Promise.resolve();
     const src = scene.imageUrl;
-
-    /*
-     * Photo Sphere Viewer e ruan Blob-in duke përdorur URL-në
-     * e panoramës si cache key.
-     *
-     * Nëse fotografia është tashmë në cache, nuk bëjmë:
-     * - request të dytë;
-     * - decode të dytë;
-     * - punë të panevojshme në GPU.
-     */
-    if (Cache.get(src, src)) {
-      return Promise.resolve();
+    const viewer = viewerRef.current as any;
+    if (Cache.get(src, src) || isPreparedRef.current?.(src)) return Promise.resolve();
+    if (!viewer) return Promise.resolve();
+    if (!foreground && (preloadRetryAfterRef.current.get(src) ?? 0) > Date.now()) return Promise.resolve();
+    if (!preloadSchedulerRef.current) {
+      preloadSchedulerRef.current = createTourPreloadScheduler(getPreloadPlan().immediate);
     }
-
-    const existingPromise =
-      psvPreloadPromisesRef.current.get(src);
-
-    if (existingPromise) {
-      return existingPromise;
-    }
-
-    let task: Promise<unknown>;
-
-    if (viewer?.textureLoader?.loadFile) {
-      /*
-       * Preload vetëm skedarin Blob.
-       *
-       * Mos përdor preloadPanorama për çdo hotspot,
-       * sepse ai vazhdon edhe me dekodimin dhe krijimin
-       * e texture-it, gjë që rëndon telefonin kur kemi
-       * shumë lidhje.
-       */
-      task = Promise.resolve(
-        viewer.textureLoader.loadFile(
-          src,
-          undefined,
-          src,
-        ),
-      );
-    } else if (viewer?.textureLoader?.preloadPanorama) {
-      /*
-       * Fallback për versione ku loadFile nuk është
-       * i ekspozuar.
-       */
-      task = Promise.resolve(
-        viewer.textureLoader.preloadPanorama(src),
-      );
-    } else {
-      return preloadBrowserImageOnce(src, priority);
-    }
-
-    const promise = task
-      .then(() => undefined)
-      .catch((error) => {
-        console.warn(
-          "Panorama preload failed:",
-          error,
-        );
-      })
-      .finally(() => {
-        /*
-         * Në këtë Map mbajmë vetëm request-et aktive.
-         * Pas përfundimit, Cache është burimi real
-         * i informacionit.
-         */
-        psvPreloadPromisesRef.current.delete(src);
-      });
-
-    psvPreloadPromisesRef.current.set(src, promise);
-
-    return promise;
+    return preloadSchedulerRef.current.request(src, async () => {
+      if (viewerRef.current !== viewer || Cache.get(src, src) || isPreparedRef.current?.(src)) return;
+      try {
+        if (viewer.textureLoader?.loadFile) {
+          await viewer.textureLoader.loadFile(src, undefined, src);
+        } else if (viewer.textureLoader?.preloadPanorama) {
+          const data = await viewer.textureLoader.preloadPanorama(src);
+          // A fallback preload creates a texture. Release it after caching the file.
+          viewer.adapter?.disposeTexture?.(data);
+        } else {
+          await preloadBrowserImageOnce(src, priority);
+        }
+        preloadRetryAfterRef.current.delete(src);
+      } catch (error) {
+        if (viewerRef.current === viewer) preloadRetryAfterRef.current.set(src, Date.now() + 15000);
+        // A failed speculation must not prevent the real navigation from retrying.
+        console.warn("Panorama preload failed:", error);
+      }
+    }, foreground ? 2 : priority === "high" ? 1 : 0);
   },
   [getSceneById, preloadBrowserImageOnce],
 );
+
+const handleSceneIntent = useCallback((sceneId: number) => {
+  if (isNavigatingRef.current) return;
+  void preloadScenePanoramaOnce(sceneId, "high");
+  preparedIntentRef.current?.(sceneId);
+}, [preloadScenePanoramaOnce]);
 
 const getPrioritizedLinkedSceneIds = useCallback(
   (sceneId: number | null) => {
@@ -1096,6 +1141,7 @@ const warmSceneNeighborhood = useCallback(
     neighborhoodWarmupCleanupRef.current = null;
 
     const sequenceId = ++preloadSequenceRef.current;
+    preloadSchedulerRef.current?.cancelQueued();
 
     if (sceneId === null) {
       return;
@@ -1108,6 +1154,8 @@ const warmSceneNeighborhood = useCallback(
         0,
         plan.total,
       );
+
+    preparedPlanRef.current?.(orderedTargetIds);
 
     if (orderedTargetIds.length === 0) {
       return;
@@ -1299,34 +1347,11 @@ const warmSceneNeighborhood = useCallback(
   useEffect(() => {
     if (!resolvedStartScene) return;
 
-    const cleanups = [
-      addPreconnectHint(resolvedStartScene.imageUrl),
-      addResourceHint(resolvedStartScene.thumbnailUrl, {
-        rel: "preload",
-        as: "image",
-        priority: "high",
-      }),
-      addResourceHint(resolvedStartScene.imageUrl, {
-        rel: "preload",
-        as: "image",
-        priority: "high",
-      }),
-    ];
-
-    void preloadBrowserImageOnce(resolvedStartScene.thumbnailUrl, "high");
-    void preloadBrowserImageOnce(resolvedStartScene.imageUrl, "high");
-
-    const firstNeighborId = linkedSceneIdsBySceneId.get(Number(resolvedStartScene.id))?.[0];
-    const firstNeighbor = firstNeighborId ? scenesById.get(firstNeighborId) : null;
-
-    if (firstNeighbor?.imageUrl) {
-      cleanups.push(
-        addResourceHint(firstNeighbor.imageUrl, {
-          rel: "prefetch",
-          as: "image",
-          priority: "low",
-        }),
-      );
+    const cleanups = [addPreconnectHint(resolvedStartScene.imageUrl)];
+    const thumbnail = resolvedStartScene.thumbnailUrl;
+    if (thumbnail && thumbnail !== resolvedStartScene.imageUrl) {
+      cleanups.push(addResourceHint(thumbnail, { rel: "preload", as: "image", priority: "high" }));
+      void preloadBrowserImageOnce(thumbnail, "high");
     }
 
     return () => {
@@ -1335,8 +1360,6 @@ const warmSceneNeighborhood = useCallback(
   }, [
     resolvedStartScene,
     preloadBrowserImageOnce,
-    linkedSceneIdsBySceneId,
-    scenesById,
   ]);
 
   useEffect(() => {
@@ -1434,6 +1457,8 @@ const finishInitialLoad = () => {
 
     const deviceProfile = getDeviceProfile();
     const lens = getTourLens(deviceProfile.isMobile);
+    const hasTouchInput = navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches;
+    const openingFov = lens.maxFov + (TOUR_MIN_FOV - lens.maxFov) * lens.openingZoom / 100;
 
     // Match the viewer's configured FOV. Focal-length scaling also shrinks
     // the rings on zoom-out while preserving their relative depth sizes.
@@ -1460,7 +1485,7 @@ const finishInitialLoad = () => {
       minFov: TOUR_MIN_FOV,
       defaultZoomLvl: lens.openingZoom,
       zoomSpeed: 1.05,
-      moveSpeed: 1,
+      moveSpeed: getTourMoveSpeed(host.clientWidth, host.clientHeight, hasTouchInput, openingFov),
       moveInertia: 0.82,
       mousewheelCtrlKey: false,
       touchmoveTwoFingers: false,
@@ -1496,6 +1521,7 @@ arrowStyle: {
           void plugin.setCurrentNode(String(link.nodeId), null, link);
         }
       },
+      () => handleSceneIntent(Number(link.nodeId)),
     ),
 
   size: {
@@ -1517,6 +1543,13 @@ arrowStyle: {
     });
 
 viewerRef.current = viewer;
+
+const updateTouchMoveSpeed = () => {
+  if (disposed) return;
+  const size = viewer.getSize();
+  viewer.setOption("moveSpeed", getTourMoveSpeed(size.width, size.height, hasTouchInput, openingFov));
+};
+viewer.addEventListener("size-updated", updateTouchMoveSpeed);
 
 const updateAura360HotspotZoomSize = (
   zoomLevel = viewer.getZoomLevel(),
@@ -1543,9 +1576,125 @@ requestAnimationFrame(() => {
   if (!disposed) updateAura360HotspotZoomSize();
 });
 
-// Use the native opacity tick, so motion and blending can never drift apart.
-// No additional canvas, panorama download, texture or animation loop is created.
+// Keep preparation separate from the existing native transition.
+// Only a bounded number of likely destinations retain decoded textures.
 const adapter = (viewer as any).adapter;
+const originalLoadTexture = adapter.loadTexture;
+type PreparedTexture = { data: any; pixels: number };
+type PreparingTexture = { src: string; claimed: boolean; promise: Promise<any | null> };
+const preparedTextures = new Map<string, PreparedTexture>();
+const tooLargeToPrepare = new Set<string>();
+const preparationCooldown = new Map<string, number>();
+const preparedLimit = deviceProfile.isLowMemory ? 0 : deviceProfile.isMobile ? 1 : 2;
+const preparedPixelBudget = (deviceProfile.isMobile ? 16 : 32) * 1024 * 1024;
+let preparingTexture: PreparingTexture | null = null;
+let preparationQueue: number[] = [];
+let wantedPreparedUrls = new Set<string>();
+let cancelPreparationIdle: (() => void) | null = null;
+let lastViewMovement = 0;
+
+const disposePrepared = (src: string) => {
+  const entry = preparedTextures.get(src);
+  if (!entry) return;
+  preparedTextures.delete(src);
+  adapter.disposeTexture(entry.data);
+};
+const abortTexture = () => Object.assign(new Error("Tour closed"), { name: "AbortError" });
+const usedPreparedPixels = () => Array.from(preparedTextures.values()).reduce((sum, entry) => sum + entry.pixels, 0);
+
+const schedulePreparation = () => {
+  cancelPreparationIdle?.();
+  cancelPreparationIdle = null;
+  if (disposed || navigationBusy || !preparedLimit || preparingTexture || !preparationQueue.length || document.hidden) return;
+  cancelPreparationIdle = scheduleDelayedIdleTask(() => {
+    cancelPreparationIdle = null;
+    if (disposed || navigationBusy || document.hidden) return;
+    if (performance.now() - lastViewMovement < 300) { schedulePreparation(); return; }
+    const id = preparationQueue.shift();
+    const scene = id !== undefined ? getSceneById(id) : null;
+    if (!scene || scene.id === currentSceneRef.current?.id || preparedTextures.has(scene.imageUrl) ||
+        tooLargeToPrepare.has(scene.imageUrl) || (preparationCooldown.get(scene.imageUrl) ?? 0) > Date.now()) {
+      schedulePreparation(); return;
+    }
+    const src = scene.imageUrl;
+    const job: PreparingTexture = { src, claimed: false, promise: Promise.resolve(null) };
+    preparingTexture = job;
+    job.promise = (async () => {
+      // Reuse the blob queue; never start a second request for the same file.
+      await preloadScenePanoramaOnce(id!, "low");
+      if (disposed || (!job.claimed && (navigationBusy || !wantedPreparedUrls.has(src))) || !Cache.get(src, src)) return null;
+      while (preparedTextures.size >= preparedLimit) disposePrepared(preparedTextures.keys().next().value!);
+      const data = await originalLoadTexture.call(adapter, src, false);
+      if (disposed) { adapter.disposeTexture(data); return null; }
+      // Ownership is transferred exactly once to setPanorama when clicked.
+      if (job.claimed) return data;
+      if (navigationBusy || !wantedPreparedUrls.has(src)) { adapter.disposeTexture(data); return null; }
+      const img = data.texture?.image;
+      const pixels = Number(img?.width) * Number(img?.height);
+      if (!Number.isFinite(pixels) || pixels <= 0 || pixels > preparedPixelBudget) {
+        tooLargeToPrepare.add(src);
+        adapter.disposeTexture(data);
+        return null;
+      }
+      while (preparedTextures.size && usedPreparedPixels() + pixels > preparedPixelBudget) {
+        disposePrepared(preparedTextures.keys().next().value!);
+      }
+      // Upload at idle as well, when supported, so clicking avoids this work.
+      try { (viewer.renderer as any).renderer?.initTexture?.(data.texture); } catch { /* Native transition can upload it. */ }
+      preparedTextures.set(src, { data, pixels });
+      return data;
+    })().catch(() => {
+      preparationCooldown.set(src, Date.now() + 15000);
+      return null;
+    }).finally(() => {
+      if (preparingTexture === job) preparingTexture = null;
+      schedulePreparation();
+    });
+  }, 160);
+};
+
+const planPreparedTextures = (sceneIds: number[]) => {
+  if (disposed || !preparedLimit) return;
+  preparationQueue = uniqueNumbers(sceneIds).slice(0, preparedLimit);
+  wantedPreparedUrls = new Set(preparationQueue.map((id) => getSceneById(id)?.imageUrl).filter((src): src is string => !!src));
+  // Keep already prepared views until their bounded slots are needed.
+  // Turning slightly must not repeatedly dispose and decode the same image.
+  for (const src of Array.from(wantedPreparedUrls).reverse()) {
+    const entry = preparedTextures.get(src);
+    if (entry) { preparedTextures.delete(src); preparedTextures.set(src, entry); }
+  }
+  schedulePreparation();
+};
+preparedPlanRef.current = planPreparedTextures;
+preparedIntentRef.current = (id) => planPreparedTextures([id, ...getPrioritizedLinkedSceneIds(currentSceneRef.current?.id ?? null)]);
+isPreparedRef.current = (src) => preparedTextures.has(src);
+
+adapter.loadTexture = async function (panorama: any, loader = true, panoData?: any, useXmp?: boolean) {
+  const compatible = typeof panorama === "string" && panoData == null &&
+    (useXmp === undefined || useXmp === adapter.config?.useXmpData);
+  if (compatible) {
+    const ready = preparedTextures.get(panorama);
+    if (ready) {
+      preparedTextures.delete(panorama); // The viewer now owns and disposes it.
+      return ready.data;
+    }
+    const pending = preparingTexture;
+    if (pending?.src === panorama && !pending.claimed) {
+      pending.claimed = true;
+      const data = await pending.promise;
+      if (disposed) throw abortTexture();
+      if (data) return data;
+    }
+  }
+  if (disposed) throw abortTexture();
+  return originalLoadTexture.call(adapter, panorama, loader, panoData, useXmp);
+};
+
+const resumePreparation = () => {
+  if (!document.hidden) schedulePreparation();
+};
+document.addEventListener("visibilitychange", resumePreparation);
+
 const originalSetTextureOpacity = adapter.setTextureOpacity;
 adapter.setTextureOpacity = function (mesh: any, opacity: number) {
   const state = walkState;
@@ -1615,11 +1764,14 @@ vtPlugin.setCurrentNode = async (
   neighborhoodWarmupCleanupRef.current?.();
   neighborhoodWarmupCleanupRef.current = null;
   preloadSequenceRef.current += 1;
+  preloadSchedulerRef.current?.cancelQueued();
+  cancelPreparationIdle?.();
+  cancelPreparationIdle = null;
 
   try {
     // Reuse the existing blob request. The viewer then decodes the destination
     // and starts its native transition only once the texture is available.
-    await preloadScenePanoramaOnce(targetSceneId, "high");
+    await preloadScenePanoramaOnce(targetSceneId, "high", true);
     if (disposed) return false;
     departure = viewer.getPosition();
     entryZoom = viewer.getZoomLevel();
@@ -1723,6 +1875,7 @@ viewer.addEventListener("panorama-loaded", () => {
 let positionWarmupTimer: number | null = null;
 
 const schedulePositionAwareWarmup = () => {
+  lastViewMovement = performance.now();
   if (disposed || navigationBusy) return;
   if (positionWarmupTimer !== null) {
     window.clearTimeout(positionWarmupTimer);
@@ -1758,10 +1911,7 @@ vtPlugin.addEventListener(
     const targetSceneId = Number(link?.nodeId);
 
     if (!disposed && !navigationBusy && Number.isFinite(targetSceneId)) {
-      void preloadScenePanoramaOnce(
-        targetSceneId,
-        "high",
-      );
+      handleSceneIntent(targetSceneId);
     }
   },
 );
@@ -1797,6 +1947,19 @@ requestAnimationFrame(() => {
 
 return () => {
   disposed = true;
+  cancelPreparationIdle?.();
+  preparationQueue = [];
+  wantedPreparedUrls.clear();
+  preparedPlanRef.current = null;
+  preparedIntentRef.current = null;
+  isPreparedRef.current = null;
+  preloadSchedulerRef.current?.stop();
+  preloadSchedulerRef.current = null;
+  preloadRetryAfterRef.current.clear();
+  for (const src of preparedTextures.keys()) disposePrepared(src);
+  adapter.loadTexture = originalLoadTexture;
+  document.removeEventListener("visibilitychange", resumePreparation);
+  viewer.removeEventListener("size-updated", updateTouchMoveSpeed);
   clearWalkTransition();
   host.inert = false;
   host.removeAttribute("aria-busy");
@@ -1831,6 +1994,8 @@ viewer.removeEventListener(
     getSceneById,
     getSceneStartOrientation,
     preloadScenePanoramaOnce,
+    getPrioritizedLinkedSceneIds,
+    handleSceneIntent,
     getPluginTransitionOptions,
     getNavigationEntryOrientation,
     getTransitionWithEntryOrientation,
@@ -2296,10 +2461,10 @@ viewer.removeEventListener(
                 .map((scene) => (
                   <button
                     key={scene.id}
-                    onMouseEnter={() => void preloadScenePanoramaOnce(scene.id, "high")}
-                    onFocus={() => void preloadScenePanoramaOnce(scene.id, "high")}
-                    onTouchStart={() => void preloadScenePanoramaOnce(scene.id, "high")}
-                    onPointerDown={() => void preloadScenePanoramaOnce(scene.id, "high")}
+                    onMouseEnter={() => handleSceneIntent(scene.id)}
+                    onFocus={() => handleSceneIntent(scene.id)}
+                    onTouchStart={() => handleSceneIntent(scene.id)}
+                    onPointerDown={() => handleSceneIntent(scene.id)}
                     onClick={() => void handleSceneChange(scene.id)}
                     className={`absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 transition-all ${
                       currentSceneId === scene.id
@@ -2323,10 +2488,10 @@ viewer.removeEventListener(
                 ref={(element) => {
                   sceneButtonRefs.current[scene.id] = element;
                 }}
-                onMouseEnter={() => void preloadScenePanoramaOnce(scene.id, "high")}
-                onFocus={() => void preloadScenePanoramaOnce(scene.id, "high")}
-                onTouchStart={() => void preloadScenePanoramaOnce(scene.id, "high")}
-                onPointerDown={() => void preloadScenePanoramaOnce(scene.id, "high")}
+                onMouseEnter={() => handleSceneIntent(scene.id)}
+                onFocus={() => handleSceneIntent(scene.id)}
+                onTouchStart={() => handleSceneIntent(scene.id)}
+                onPointerDown={() => handleSceneIntent(scene.id)}
                 onClick={() => void handleSceneChange(scene.id)}
 className={`relative shrink-0 w-20 h-12 overflow-hidden rounded-xl border transition-all duration-200 ${
   currentSceneId === scene.id
