@@ -242,7 +242,7 @@ export default function Contact() {
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-muted-foreground">Telefoni</span>
                     <span className="mt-2 block text-xl font-medium leading-snug tracking-[-0.025em] sm:text-2xl">
-                      +383 49 123 456
+                      +383 49 239 568
                     </span>
                   </span>
                   <ArrowUpRight aria-hidden="true" size={20} strokeWidth={1.5} className="shrink-0 text-muted-foreground transition-colors group-hover:text-foreground motion-reduce:transition-none" />
