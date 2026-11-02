@@ -2425,24 +2425,43 @@ viewer.removeEventListener(
         </div>
 		
 		
-		{showAura360Branding && isViewerVisible && (
+{showAura360Branding && isViewerVisible && (
   <div
     className="absolute left-4 z-40 pointer-events-none select-none"
     style={{
       bottom:
         "calc(4.75rem + max(12px, env(safe-area-inset-bottom)))",
     }}
-    aria-hidden="true"
   >
-<div className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-black/30 px-2.5 py-1 shadow-md md:backdrop-blur-md">
-  <span className="text-[8px] md:text-[9px] font-medium tracking-wide text-white/45">
-    Powered by
-  </span>
+    <a
+      href="https://www.auraks.com/contact"
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Dëshironi një tur virtual? Na kontaktoni."
+      aria-label="Powered by Aura360 — na kontaktoni për një tur virtual. Hapet në një skedë të re."
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      className="
+        pointer-events-auto inline-flex items-center gap-1
+        rounded-full border border-white/[0.08]
+        bg-black/30 px-2.5 py-1 shadow-md md:backdrop-blur-md
+        cursor-pointer no-underline transition-colors duration-200
+        hover:bg-black/50 hover:border-white/20
+        focus-visible:outline-none focus-visible:ring-2
+        focus-visible:ring-primary/80 focus-visible:ring-offset-2
+        focus-visible:ring-offset-black/40
+        motion-reduce:transition-none
+      "
+    >
+      <span className="text-[8px] md:text-[9px] font-medium tracking-wide text-white/45">
+        Powered by
+      </span>
 
-  <span className="text-[9px] md:text-[10px] font-semibold tracking-[0.08em] text-primary/85">
-    Aura360
-  </span>
-</div>
+      <span className="text-[9px] md:text-[10px] font-semibold tracking-[0.08em] text-primary/85">
+        Aura360
+      </span>
+    </a>
   </div>
 )}
 		
