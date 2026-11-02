@@ -3923,6 +3923,14 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
   
     const handleAura360BrandingChange = async (enabled: boolean) => {
     if (!project || !recordId || isSavingBranding) return;
+	
+	const confirmed = window.confirm(
+  enabled
+    ? "A dëshironi ta aktivizoni badge-in “Powered by Aura360” në këtë tur virtual?"
+    : "A dëshironi ta çaktivizoni badge-in “Powered by Aura360” në këtë tur virtual?"
+);
+
+if (!confirmed) return;
 
     try {
       setIsSavingBranding(true);
