@@ -191,7 +191,15 @@ export const getAuraSphereRadius = (mesh: any): number | undefined =>
 export class AuraTilesAdapter extends EquirectangularTilesAdapter {
   private readonly meshSources: WeakMap<Group, TilesPanorama>;
   private readonly actualViewer: Viewer;
+  private readonly transitionBaseOrders = new Map<Group, number>();
   private closed = false;
+
+  private readonly restoreTransitionBaseOrders = () => {
+    for (const [group, order] of this.transitionBaseOrders) {
+      group.children[0].renderOrder = order;
+    }
+    this.transitionBaseOrders.clear();
+  };
 
   static override withConfig(config: EquirectangularTilesAdapterConfig): [AdapterConstructor, any] {
     return [AuraTilesAdapter, config];
@@ -219,6 +227,11 @@ export class AuraTilesAdapter extends EquirectangularTilesAdapter {
     super(facade, { ...config, resolution: 64, baseBlur: false, showErrorTile: false });
     this.meshSources = meshSources;
     this.actualViewer = viewer;
+  }
+
+  override init(): void {
+    super.init();
+    this.actualViewer.addEventListener("transition-done", this.restoreTransitionBaseOrders);
   }
 
   override supportsTransition(panorama: any): boolean {
@@ -263,11 +276,30 @@ export class AuraTilesAdapter extends EquirectangularTilesAdapter {
     if (data.auraSource && !data.auraSource.tiled && group.children[1]) {
       group.children[1].visible = false;
     }
+    const outgoing = (this.actualViewer.renderer as unknown as { mesh?: Group }).mesh;
+    const outgoingTiles = outgoing?.children[1];
+    if (transition && outgoingTiles?.visible) {
+      const base = group.children[0];
+      this.transitionBaseOrders.set(group, base.renderOrder);
+      // The walking fade reaches opacity 1 before the native swap. Three.js
+      // then moves this preview into its opaque render pass. Keep it above
+      // the outgoing tiles, or those tiles flash back over the new view.
+      base.renderOrder = Math.max(base.renderOrder, outgoingTiles.renderOrder + 1);
+    }
     super.setTexture(group, { ...data, panorama }, transition);
+  }
+
+  override disposeMesh(group: Group): void {
+    const order = this.transitionBaseOrders.get(group);
+    if (order !== undefined) group.children[0].renderOrder = order;
+    this.transitionBaseOrders.delete(group);
+    super.disposeMesh(group);
   }
 
   override destroy(): void {
     this.closed = true;
+    this.actualViewer.removeEventListener("transition-done", this.restoreTransitionBaseOrders);
+    this.restoreTransitionBaseOrders();
     super.destroy();
   }
 
