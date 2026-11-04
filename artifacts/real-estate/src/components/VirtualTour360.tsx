@@ -1,8 +1,8 @@
+import { AuraTilesAdapter as EquirectangularAdapter, preloadAuraPanorama, hasAuraPanoramaCache, getAuraSphereRadius } from "@/lib/auraTileAssets";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Cache,
   Viewer,
-  EquirectangularAdapter,
 } from "@photo-sphere-viewer/core";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
@@ -988,17 +988,17 @@ const preloadScenePanoramaOnce = useCallback(
     if (!scene?.imageUrl) return Promise.resolve();
     const src = scene.imageUrl;
     const viewer = viewerRef.current as any;
-    if (Cache.get(src, src) || isPreparedRef.current?.(src)) return Promise.resolve();
+    if (hasAuraPanoramaCache(viewer, src) || isPreparedRef.current?.(src)) return Promise.resolve();
     if (!viewer) return Promise.resolve();
     if (!foreground && (preloadRetryAfterRef.current.get(src) ?? 0) > Date.now()) return Promise.resolve();
     if (!preloadSchedulerRef.current) {
       preloadSchedulerRef.current = createTourPreloadScheduler(getPreloadPlan().immediate);
     }
     return preloadSchedulerRef.current.request(src, async () => {
-      if (viewerRef.current !== viewer || Cache.get(src, src) || isPreparedRef.current?.(src)) return;
+      if (viewerRef.current !== viewer || hasAuraPanoramaCache(viewer, src) || isPreparedRef.current?.(src)) return;
       try {
         if (viewer.textureLoader?.loadFile) {
-          await viewer.textureLoader.loadFile(src, undefined, src);
+          await preloadAuraPanorama(viewer, src);
         } else if (viewer.textureLoader?.preloadPanorama) {
           const data = await viewer.textureLoader.preloadPanorama(src);
           // A fallback preload creates a texture. Release it after caching the file.
@@ -1622,7 +1622,7 @@ const schedulePreparation = () => {
     job.promise = (async () => {
       // Reuse the blob queue; never start a second request for the same file.
       await preloadScenePanoramaOnce(id!, "low");
-      if (disposed || (!job.claimed && (navigationBusy || !wantedPreparedUrls.has(src))) || !Cache.get(src, src)) return null;
+      if (disposed || (!job.claimed && (navigationBusy || !wantedPreparedUrls.has(src))) || !hasAuraPanoramaCache(viewer, src)) return null;
       while (preparedTextures.size >= preparedLimit) disposePrepared(preparedTextures.keys().next().value!);
       const data = await originalLoadTexture.call(adapter, src, false);
       if (disposed) { adapter.disposeTexture(data); return null; }
@@ -1815,7 +1815,7 @@ vtPlugin.setCurrentNode = async (
     // floor marker, and do not infer a travel path for gallery/map jumps.
     if (!reducedMotion && sourceYaw !== null && sourcePitch !== null &&
         outgoingContainer?.position?.set && outgoingMesh && !adapter.config?.shader) {
-      const radius = outgoingMesh.geometry?.parameters?.radius;
+      const radius = getAuraSphereRadius(outgoingMesh);
       const angleFromView = Math.abs(normalizeYaw(sourceYaw - departure.yaw));
       if (Number.isFinite(radius) && radius > 0 && angleFromView < Math.PI / 2) {
         // Conservative, bounded displacement on an approximate sphere.

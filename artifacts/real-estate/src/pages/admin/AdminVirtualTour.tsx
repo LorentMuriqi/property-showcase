@@ -1,3 +1,4 @@
+import { AuraTilesAdapter as EquirectangularAdapter, preloadAuraPanorama, hasAuraPanoramaCache, getAuraSphereRadius } from "@/lib/auraTileAssets";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import {
@@ -23,7 +24,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Cache, Viewer, EquirectangularAdapter } from "@photo-sphere-viewer/core";
+import { Cache, Viewer } from "@photo-sphere-viewer/core";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
@@ -1506,17 +1507,17 @@ const preloadScenePanoramaOnce = useCallback(
     if (!scene?.imageUrl) return Promise.resolve();
     const src = scene.imageUrl;
     const viewer = viewerRef.current as any;
-    if (Cache.get(src, src) || isPreparedRef.current?.(src)) return Promise.resolve();
+    if (hasAuraPanoramaCache(viewer, src) || isPreparedRef.current?.(src)) return Promise.resolve();
     if (!viewer) return Promise.resolve();
     if (!foreground && (preloadRetryAfterRef.current.get(src) ?? 0) > Date.now()) return Promise.resolve();
     if (!preloadSchedulerRef.current) {
       preloadSchedulerRef.current = createTourPreloadScheduler(getPreloadPlan().immediate);
     }
     return preloadSchedulerRef.current.request(src, async () => {
-      if (viewerRef.current !== viewer || Cache.get(src, src) || isPreparedRef.current?.(src)) return;
+      if (viewerRef.current !== viewer || hasAuraPanoramaCache(viewer, src) || isPreparedRef.current?.(src)) return;
       try {
         if (viewer.textureLoader?.loadFile) {
-          await viewer.textureLoader.loadFile(src, undefined, src);
+          await preloadAuraPanorama(viewer, src);
         } else if (viewer.textureLoader?.preloadPanorama) {
           const data = await viewer.textureLoader.preloadPanorama(src);
           // A fallback preload creates a texture. Release it after caching the file.
@@ -2140,7 +2141,7 @@ const schedulePreparation = () => {
     job.promise = (async () => {
       // Reuse the blob queue; never start a second request for the same file.
       await preloadScenePanoramaOnce(id!, "low");
-      if (disposed || (!job.claimed && (navigationBusy || !wantedPreparedUrls.has(src))) || !Cache.get(src, src)) return null;
+      if (disposed || (!job.claimed && (navigationBusy || !wantedPreparedUrls.has(src))) || !hasAuraPanoramaCache(viewer, src)) return null;
       while (preparedTextures.size >= preparedLimit) disposePrepared(preparedTextures.keys().next().value!);
       const data = await originalLoadTexture.call(adapter, src, false);
       if (disposed) { adapter.disposeTexture(data); return null; }
@@ -2306,7 +2307,7 @@ vtPlugin.setCurrentNode = async (
     // floor marker, and do not infer a travel path for gallery/map jumps.
     if (!reducedMotion && sourceYaw !== null && sourcePitch !== null &&
         outgoingContainer?.position?.set && outgoingMesh && !adapter.config?.shader) {
-      const radius = outgoingMesh.geometry?.parameters?.radius;
+      const radius = getAuraSphereRadius(outgoingMesh);
       const angleFromView = Math.abs(normalizeYaw(sourceYaw - departure.yaw));
       if (Number.isFinite(radius) && radius > 0 && angleFromView < Math.PI / 2) {
         // Conservative, bounded displacement on an approximate sphere.
@@ -2987,11 +2988,11 @@ const createAdminEditorRuntime = (
   };
   const preload = (id: number, priority = 0) => {
     const src = sceneById(id)?.image_url;
-    if (!src || disposed || prepared.has(src) || Cache.get(src, src)) return Promise.resolve();
+    if (!src || disposed || prepared.has(src) || hasAuraPanoramaCache(viewer, src)) return Promise.resolve();
     if (priority < 2 && (retryAfter.get(src) ?? 0) > Date.now()) return Promise.resolve();
     return queue.request(src, async () => {
-      if (disposed || Cache.get(src, src)) return;
-      try { await viewer.textureLoader.loadFile(src, undefined, src); retryAfter.delete(src); }
+      if (disposed || hasAuraPanoramaCache(viewer, src)) return;
+      try { await preloadAuraPanorama(viewer, src); retryAfter.delete(src); }
       catch { retryAfter.set(src, Date.now() + 15000); }
     }, priority);
   };
@@ -3003,7 +3004,7 @@ const createAdminEditorRuntime = (
       if (disposed || loading || document.hidden) return;
       if (performance.now() - lastMovement < 300) { schedulePreparation(); return; }
       const src = preparationQueue.shift()!;
-      if (prepared.has(src) || tooLarge.has(src) || !Cache.get(src, src)) { schedulePreparation(); return; }
+      if (prepared.has(src) || tooLarge.has(src) || !hasAuraPanoramaCache(viewer, src)) { schedulePreparation(); return; }
       while (prepared.size >= limit) drop(prepared.keys().next().value!);
       const job = { src, claimed: false, promise: Promise.resolve<any | null>(null) };
       preparing = job;
@@ -3923,14 +3924,6 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
   
     const handleAura360BrandingChange = async (enabled: boolean) => {
     if (!project || !recordId || isSavingBranding) return;
-	
-	const confirmed = window.confirm(
-  enabled
-    ? "A dëshironi ta aktivizoni badge-in “Powered by Aura360” në këtë tur virtual?"
-    : "A dëshironi ta çaktivizoni badge-in “Powered by Aura360” në këtë tur virtual?"
-);
-
-if (!confirmed) return;
 
     try {
       setIsSavingBranding(true);
