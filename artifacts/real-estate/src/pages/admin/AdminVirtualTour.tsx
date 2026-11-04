@@ -1,3 +1,5 @@
+import { BulkSceneImportDialog } from "@/components/admin/BulkSceneImportDialog";
+import { buildTourImportRows, type TourImportScene, type TourImportResult } from "@/lib/tourImport";
 import { AuraTilesAdapter as EquirectangularAdapter, preloadAuraPanorama, hasAuraPanoramaCache, getAuraSphereRadius } from "@/lib/auraTileAssets";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
@@ -3160,6 +3162,8 @@ export default function AdminVirtualTour() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const bulkImportLockRef = useRef(false);
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
   const [sceneForm, setSceneForm] = useState({
     title: "",
@@ -4115,6 +4119,50 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
         variant: "destructive",
       });
     } finally {
+      setIsSavingScene(false);
+    }
+  };
+
+  const handleBulkSceneImport = async (
+    importedScenes: TourImportScene[],
+    defaultKey: string | null,
+  ): Promise<TourImportResult> => {
+    if (!isAdmin || !canManageCurrentTour || !recordId || !project) {
+      throw new Error("Nuk ke qasje për të shtuar skena në këtë tur.");
+    }
+    if (isSavingScene || bulkImportLockRef.current) throw new Error("Prit të përfundojë ruajtja aktuale.");
+    bulkImportLockRef.current = true;
+    setIsSavingScene(true);
+    try {
+      // Read again at save time: a retry/another admin may have added scenes.
+      const { data: currentScenes, error: readError } = await supabase
+        .from("virtual_tour_scenes")
+        .select("id, image_url, sort_order, is_default")
+        .eq(ownerColumn, recordId);
+      if (readError) throw readError;
+      const plan = buildTourImportRows(importedScenes, currentScenes || [], {
+        column: ownerColumn, id: recordId,
+      }, defaultKey);
+      if (plan.rows.length) {
+        // One INSERT statement, rather than partially saved per-scene requests.
+        const { data: created, error: insertError } = await supabase
+          .from("virtual_tour_scenes")
+          .insert(plan.rows)
+          .select("id, image_url");
+        if (insertError) throw insertError;
+        if (created?.length) {
+          const first = created.find((scene) => scene.image_url === plan.rows[0].image_url) || created[0];
+          selectedSceneIdRef.current = toNumber(first.id);
+        }
+      }
+      await refreshTour();
+      toast({
+        title: plan.rows.length ? "Skenat u importuan" : "Skenat ekzistojnë tashmë",
+        description: `${plan.rows.length} skena të reja. ${plan.skipped} skena ekzistuese u anashkaluan.`,
+      });
+      return { imported: plan.rows.length, skipped: plan.skipped };
+    } finally {
+      bulkImportLockRef.current = false;
       setIsSavingScene(false);
     }
   };
@@ -5683,7 +5731,7 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
         )}
 
         <div className="glass-panel p-6 rounded-2xl">
-          <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-border pb-4">
             <div>
               <h2 className="font-display text-xl text-primary font-bold">
                 1. Skenat 360°
@@ -5693,12 +5741,17 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
               </p>
             </div>
 
-            <button
-              onClick={openCreateScene}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-xs rounded-xl hover:bg-white hover:text-foreground transition-colors"
-            >
-              <Plus size={14} /> Shto Skenë
-            </button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setIsBulkImportOpen(true)}
+                disabled={isLoading || isSavingScene}
+                className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50">
+                <Plus size={14} /> Importo skena
+              </button>
+              <button onClick={openCreateScene}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold tracking-widest uppercase text-xs rounded-xl hover:bg-white hover:text-foreground transition-colors">
+                <Plus size={14} /> Shto Skenë
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
@@ -6455,6 +6508,14 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
           </div>
         </div>
       </main>
+
+      <BulkSceneImportDialog
+        key={`${ownerColumn}:${recordId}`}
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        existingScenes={scenes}
+        onImport={handleBulkSceneImport}
+      />
 
       <Dialog open={isSceneModalOpen} onOpenChange={setIsSceneModalOpen}>
         <DialogContent className="bg-card border-border text-foreground">
