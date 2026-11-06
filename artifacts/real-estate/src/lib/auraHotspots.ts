@@ -7,9 +7,15 @@ const hotspotAngle = (pitch: number) =>
 /** A bounded visual estimate; pitch is not a measured 3D distance on stairs. */
 export function getAura360HotspotDepthScale(pitch: number): number {
   if (!Number.isFinite(pitch)) return 1;
-  return Math.max(0.52, Math.min(1,
+
+  const perspective = Math.min(
+    1,
     Math.sin(hotspotAngle(pitch)) / Math.sin(REFERENCE_PITCH),
-  ));
+  );
+
+  const minimumScale = pitch < 0 ? 0.28 : 0.52;
+
+  return Math.max(minimumScale, perspective);
 }
 
 export function getAura360HotspotFlattening(pitch: number): number {
