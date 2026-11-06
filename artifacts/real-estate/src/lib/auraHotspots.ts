@@ -48,7 +48,7 @@ export class AuraHotspotPickingPlugin extends AbstractPlugin {
     const x = data.clientX, y = data.clientY;
     if (x < viewport.left || x > viewport.right || y < viewport.top || y > viewport.bottom) return;
     const touch = data.originalEvent?.type.startsWith("touch") ?? false;
-    const padding = touch ? 14 : 8;
+    const padding = touch ? 32 : 24;
     let best: HTMLElement | null = null;
     let bestDistance = Infinity;
 
