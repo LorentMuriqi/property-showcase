@@ -23,6 +23,12 @@ import {
   Maximize,
   Minimize,
 } from "lucide-react";
+
+import {
+  AuraHotspotPickingPlugin,
+  getAura360HotspotDepthScale,
+  getAura360HotspotFlattening,
+} from "@/lib/auraHotspots";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -443,15 +449,7 @@ const prefersReducedTourMotion = () =>
 const HOTSPOT_BASE_WIDTH = 112;
 const HOTSPOT_BASE_HEIGHT = 66;
 
-// Flat-floor perspective: camera height / slant distance = sin(-pitch).
-// Use the stored pitch, never the current viewing direction or cluster offset.
-// This estimates depth; the tour does not contain measured 3D distances.
-const getAura360HotspotDepthScale = (pitch: number) => {
-  if (!Number.isFinite(pitch)) return 1;
-  const depression = Math.max(0, Math.min(Math.PI / 2, -pitch));
-  const referencePitch = (35 * Math.PI) / 180;
-  return Math.max(0.18, Math.min(1, Math.sin(depression) / Math.sin(referencePitch)));
-};
+
 
 const setAura360HotspotSize = (element: HTMLElement, zoomScale: number) => {
   const depthScale = Number(element.dataset.auraDepthScale) || 1;
@@ -472,11 +470,9 @@ const createAura360NavigationHotspot = (
 
   element.className = "aura360-navigation-hotspot";
   element.dataset.auraDepthScale = String(getAura360HotspotDepthScale(pitch));
-  // Preserve the familiar ring at 35 degrees; flatten distant floor rings.
-  const depression = Number.isFinite(pitch) ? Math.max(0, Math.min(Math.PI / 2, -pitch)) : 35 * Math.PI / 180;
-  element.dataset.auraFlattening = String(Math.max(0.5, Math.min(2.1,
-    Math.sin(depression) / Math.sin(35 * Math.PI / 180),
-  )));
+element.dataset.auraFlattening = String(
+  getAura360HotspotFlattening(pitch),
+);
   setAura360HotspotSize(element, zoomScale);
 
 element.innerHTML = `
@@ -1126,7 +1122,7 @@ const AURA360_HOTSPOT_STYLES = `
   --aura-hotspot-width: 112px;
   --aura-hotspot-height: 66px;
 
-  pointer-events: none;
+  pointer-events: none !important;
 }
 
 /*
@@ -2016,6 +2012,7 @@ const finishInitialLoad = () => {
         powerPreference: "high-performance",
       },
       plugins: [
+	  AuraHotspotPickingPlugin,
         [
           VirtualTourPlugin,
           {
@@ -3928,7 +3925,13 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
   
     const handleAura360BrandingChange = async (enabled: boolean) => {
     if (!project || !recordId || isSavingBranding) return;
+	const confirmed = window.confirm(
+  enabled
+    ? 'A dëshiron ta aktivizosh badge-in “Powered by Aura360” në këtë tur virtual?'
+    : 'A dëshiron ta çaktivizosh badge-in “Powered by Aura360” në këtë tur virtual?'
+);
 
+if (!confirmed) return;
     try {
       setIsSavingBranding(true);
 
@@ -4973,7 +4976,10 @@ const { data: rawRecordData, error: recordError } = isClientTourEditor
           moveInertia: 0.82, zoomSpeed: 1.05,
           mousewheelCtrlKey: false, touchmoveTwoFingers: false,
           rendererParameters: { alpha: false, antialias: !profile.isMobile && !profile.isLowMemory, powerPreference: "high-performance" },
-          plugins: [[MarkersPlugin, {}]],
+          plugins: [
+  AuraHotspotPickingPlugin,
+  [MarkersPlugin, {}],
+],
         });
         editorViewerRef.current = viewer;
         editorRuntimeRef.current = createAdminEditorRuntime(viewer, editorContainerRef.current, () => scenesRef.current);

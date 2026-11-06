@@ -4,6 +4,11 @@ import {
   Cache,
   Viewer,
 } from "@photo-sphere-viewer/core";
+import {
+  AuraHotspotPickingPlugin,
+  getAura360HotspotDepthScale,
+  getAura360HotspotFlattening,
+} from "@/lib/auraHotspots";
 import { VirtualTourPlugin } from "@photo-sphere-viewer/virtual-tour-plugin";
 import "@photo-sphere-viewer/core/index.css";
 import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
@@ -82,15 +87,7 @@ const prefersReducedTourMotion = () =>
 const HOTSPOT_BASE_WIDTH = 112;
 const HOTSPOT_BASE_HEIGHT = 66;
 
-// Flat-floor perspective: camera height / slant distance = sin(-pitch).
-// Use the stored pitch, never the current viewing direction or cluster offset.
-// This estimates depth; the tour does not contain measured 3D distances.
-const getAura360HotspotDepthScale = (pitch: number) => {
-  if (!Number.isFinite(pitch)) return 1;
-  const depression = Math.max(0, Math.min(Math.PI / 2, -pitch));
-  const referencePitch = (35 * Math.PI) / 180;
-  return Math.max(0.18, Math.min(1, Math.sin(depression) / Math.sin(referencePitch)));
-};
+
 
 const setAura360HotspotSize = (element: HTMLElement, zoomScale: number) => {
   const depthScale = Number(element.dataset.auraDepthScale) || 1;
@@ -111,11 +108,9 @@ const createAura360NavigationHotspot = (
 
   element.className = "aura360-navigation-hotspot";
   element.dataset.auraDepthScale = String(getAura360HotspotDepthScale(pitch));
-  // Preserve the familiar ring at 35 degrees; flatten distant floor rings.
-  const depression = Number.isFinite(pitch) ? Math.max(0, Math.min(Math.PI / 2, -pitch)) : 35 * Math.PI / 180;
-  element.dataset.auraFlattening = String(Math.max(0.5, Math.min(2.1,
-    Math.sin(depression) / Math.sin(35 * Math.PI / 180),
-  )));
+element.dataset.auraFlattening = String(
+  getAura360HotspotFlattening(pitch),
+);
   setAura360HotspotSize(element, zoomScale);
 
 element.innerHTML = `
@@ -1495,6 +1490,7 @@ const finishInitialLoad = () => {
         powerPreference: "high-performance",
       },
       plugins: [
+	  AuraHotspotPickingPlugin,
         [
           VirtualTourPlugin,
           {
@@ -2103,7 +2099,7 @@ viewer.removeEventListener(
   --aura-hotspot-width: 112px;
   --aura-hotspot-height: 66px;
 
-  pointer-events: none;
+  pointer-events: none !important;
 }
 
 /*
