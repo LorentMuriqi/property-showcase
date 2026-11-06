@@ -26,6 +26,8 @@ const sources = new Map<string, SourceEntry>();
 const MAX_SOURCES = 256;
 const MANIFEST_TTL_MS = 30 * 60 * 1000;
 const FALLBACK_TTL_MS = 30 * 1000;
+const MANIFEST_TIMEOUT_MS = 5000;
+const RETRY_DELAY_MS = 180;
 const EMPTY_PANORAMA: EquirectangularTilesPanorama = {
   width: 2048, cols: 4, rows: 2, tileUrl: () => null,
 };
@@ -115,14 +117,55 @@ const originalSource = (url: string): ResolvedSource => ({
   panorama: { ...EMPTY_PANORAMA, baseUrl: url },
 });
 
-const remember = (key: string, value: ResolvedSource) => {
+const remember = (key: string, value: ResolvedSource,
+  ttlMs = value.tiled ? MANIFEST_TTL_MS : FALLBACK_TTL_MS) => {
   sources.delete(key);
-  sources.set(key, { value, expires: Date.now() + (value.tiled ? MANIFEST_TTL_MS : FALLBACK_TTL_MS) });
+  sources.set(key, { value, expires: Date.now() + ttlMs });
   for (const [oldKey, entry] of sources) {
     if (sources.size <= MAX_SOURCES) break;
     if (!entry.pending) sources.delete(oldKey);
   }
   return value;
+};
+
+const isAbort = (error: unknown) => (error as { name?: string })?.name === "AbortError";
+const retryDelay = () => new Promise<void>((resolve) => window.setTimeout(resolve, RETRY_DELAY_MS));
+const isTransient = (error: unknown): boolean => {
+  const value = error as { name?: string; status?: number; response?: { status?: number } };
+  const status = value?.response?.status ?? value?.status;
+  if (typeof status === "number") return status === 408 || status === 425 || status === 429 || status >= 500;
+  return value?.name === "AbortError" || value?.name === "TypeError";
+};
+
+/** Retry the base once, clearing only its failed file/decode cache entry. */
+const loadBaseWithRetry = async <T>(base: string, load: () => Promise<T>, closed = () => false): Promise<T> => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (closed()) throw Object.assign(new Error("Tour closed"), { name: "AbortError" });
+    try { return await load(); }
+    catch (error) {
+      // Viewer cancellations are intentional; never restart them in the background.
+      if (isAbort(error) || closed()) throw error;
+      Cache.remove(base, base);
+      const status = (error as { status?: number; response?: { status?: number } })?.response?.status
+        ?? (error as { status?: number })?.status;
+      if (attempt || (typeof status === "number" && !isTransient(error))) throw error;
+      await retryDelay();
+    }
+  }
+  throw new Error("Panorama base did not load");
+};
+
+const rememberLoadedOriginal = (source: string, fallback: ResolvedSource, previous: ResolvedSource) => {
+  const key = sourceKey(source);
+  const entry = sources.get(key);
+  // Another viewer may have discovered a valid manifest while this load ran.
+  if (!entry?.pending && (!entry?.value || entry.value === previous)) remember(key, fallback);
+  return fallback;
+};
+
+const forgetFailedOriginal = (source: string, resolved: ResolvedSource) => {
+  const key = sourceKey(source);
+  if (!resolved.tiled && sources.get(key)?.value === resolved) sources.delete(key);
 };
 
 export const resolveAuraPanorama = (source: string): Promise<ResolvedSource> => {
@@ -137,19 +180,29 @@ export const resolveAuraPanorama = (source: string): Promise<ResolvedSource> => 
   if (!manifestUrl) return Promise.resolve(remember(key, originalSource(key)));
   const explicit = isManifestSource(key);
   const pending = (async () => {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), explicit ? 8000 : 1800);
-    try {
-      const response = await fetch(manifestUrl, { signal: controller.signal, mode: "cors", credentials: "omit" });
-      if (!response.ok) throw new Error(`Tile manifest HTTP ${response.status}`);
-      const value: unknown = await response.json();
-      return remember(key, parseManifest(value, manifestUrl, explicit ? null : key));
-    } catch (error) {
-      if (explicit) { sources.delete(key); throw error; }
-      return remember(key, originalSource(key));
-    } finally {
-      window.clearTimeout(timeout);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), explicit ? 8000 : MANIFEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(manifestUrl, {
+          signal: controller.signal, mode: "cors", credentials: "omit",
+          cache: attempt ? "reload" : "default",
+        });
+        if (!response.ok) throw Object.assign(new Error(`Tile manifest HTTP ${response.status}`), { status: response.status });
+        const value: unknown = await response.json();
+        return remember(key, parseManifest(value, manifestUrl, explicit ? null : key));
+      } catch (error) {
+        window.clearTimeout(timeout);
+        if (!attempt && isTransient(error)) { await retryDelay(); continue; }
+        if (explicit) { sources.delete(key); throw error; }
+        // Discovery can fall back to a legacy JPG, but do not cache that choice
+        // until the JPG actually loads. It may be intentionally absent in R2.
+        return remember(key, originalSource(key), 0);
+      } finally {
+        window.clearTimeout(timeout);
+      }
     }
+    throw new Error("Tile manifest did not load");
   })();
   sources.set(key, { pending, expires: 0 });
   return pending;
@@ -157,16 +210,20 @@ export const resolveAuraPanorama = (source: string): Promise<ResolvedSource> => 
 
 /** The existing bounded preload scheduler now downloads only the base image. */
 export const preloadAuraPanorama = async (viewer: Viewer, source: string): Promise<void> => {
-  let resolved = await resolveAuraPanorama(source);
+  const resolved = await resolveAuraPanorama(source);
   try {
     const base = resolved.panorama.baseUrl!;
-    await viewer.textureLoader.loadFile(base, undefined, base);
+    await loadBaseWithRetry(base, () => viewer.textureLoader.loadFile(base, undefined, base));
+    if (!resolved.tiled) rememberLoadedOriginal(source, resolved, resolved);
   } catch (error) {
-    if ((error as Error)?.name === "AbortError") throw error;
-    if (!resolved.tiled || !resolved.originalUrl) throw error;
-    resolved = remember(sourceKey(source), originalSource(resolved.originalUrl));
-    const base = resolved.panorama.baseUrl!;
-    await viewer.textureLoader.loadFile(base, undefined, base);
+    if (isAbort(error)) throw error;
+    if (!resolved.tiled || !resolved.originalUrl) { forgetFailedOriginal(source, resolved); throw error; }
+    const fallback = originalSource(resolved.originalUrl);
+    const base = fallback.panorama.baseUrl!;
+    await loadBaseWithRetry(base, () => viewer.textureLoader.loadFile(base, undefined, base));
+    // Publish fallback only after that file actually loaded. If the JPG is
+    // intentionally absent, retain the valid tile manifest for the next attempt.
+    rememberLoadedOriginal(source, fallback, resolved);
   }
 };
 
@@ -199,6 +256,9 @@ export class AuraTilesAdapter extends EquirectangularTilesAdapter {
       group.children[0].renderOrder = order;
     }
     this.transitionBaseOrders.clear();
+    // Enforce the viewer's existing cache limit on arrival, rather than waiting
+    // for the library's one-minute sweep while visiting many scenes on a phone.
+    Cache.purge();
   };
 
   static override withConfig(config: EquirectangularTilesAdapterConfig): [AdapterConstructor, any] {
@@ -246,18 +306,20 @@ export class AuraTilesAdapter extends EquirectangularTilesAdapter {
     if (typeof source !== "string") return super.loadTexture(source, loader);
     let resolved = await resolveAuraPanorama(source);
     this.requireOpen();
-    const load = () => super.loadTexture({
-      ...resolved.panorama,
-      ...(!resolved.tiled && panoData ? { basePanoData: panoData } : {}),
+    const load = (config: ResolvedSource) => super.loadTexture({
+      ...config.panorama,
+      ...(!config.tiled && panoData ? { basePanoData: panoData } : {}),
     }, loader);
     let data: NativeTextureData;
     try {
-      data = await load();
+      data = await loadBaseWithRetry(resolved.panorama.baseUrl!, () => load(resolved), () => this.closed);
+      if (!resolved.tiled) rememberLoadedOriginal(source, resolved, resolved);
     } catch (error) {
-      if ((error as Error)?.name === "AbortError") throw error;
-      if (this.closed || !resolved.tiled || !resolved.originalUrl) throw error;
-      resolved = remember(sourceKey(source), originalSource(resolved.originalUrl));
-      data = await load();
+      if (isAbort(error)) throw error;
+      if (this.closed || !resolved.tiled || !resolved.originalUrl) { forgetFailedOriginal(source, resolved); throw error; }
+      const fallback = originalSource(resolved.originalUrl);
+      data = await loadBaseWithRetry(fallback.panorama.baseUrl!, () => load(fallback), () => this.closed);
+      resolved = rememberLoadedOriginal(source, fallback, resolved);
     }
     if (this.closed) { super.disposeTexture(data); this.requireOpen(); }
     const baseData = data.panoData?.baseData;
@@ -287,6 +349,7 @@ export class AuraTilesAdapter extends EquirectangularTilesAdapter {
       base.renderOrder = Math.max(base.renderOrder, outgoingTiles.renderOrder + 1);
     }
     super.setTexture(group, { ...data, panorama }, transition);
+    if (!transition) Cache.purge();
   }
 
   override disposeMesh(group: Group): void {
