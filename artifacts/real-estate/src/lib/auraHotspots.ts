@@ -13,7 +13,7 @@ export function getAura360HotspotDepthScale(pitch: number): number {
     Math.sin(hotspotAngle(pitch)) / Math.sin(REFERENCE_PITCH),
   );
 
-  const minimumScale = pitch < 0 ? 0.28 : 0.52;
+  const minimumScale = pitch < 0 ? 0.34 : 0.52;
 
   return Math.max(minimumScale, perspective);
 }
