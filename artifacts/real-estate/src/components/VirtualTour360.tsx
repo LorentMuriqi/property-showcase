@@ -2412,13 +2412,37 @@ viewer.removeEventListener(
           </div>
         )}
 
-        <div className="absolute top-6 left-6 z-40 pointer-events-none max-w-[80%]">
-          <div className="px-4 py-2 rounded-2xl bg-gradient-to-br from-black/55 to-black/30 md:backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.45)]">
-            <h2 className="text-white/95 text-xs md:text-sm font-semibold tracking-wide">
-              {currentScene?.title || "Pamja 360°"}
-            </h2>
-          </div>
-        </div>
+<div
+  className="absolute top-6 left-6 z-40 pointer-events-none select-none"
+  style={{
+    maxWidth: "min(320px, calc(100% - 104px))",
+  }}
+>
+  <div
+    className="
+      inline-flex max-w-full items-center gap-2.5
+      rounded-xl border border-white/[0.08]
+      bg-[rgba(17,21,24,0.38)] px-3 py-2
+      shadow-[0_2px_8px_rgba(0,0,0,0.10)]
+    "
+  >
+    <span
+      aria-hidden="true"
+      className="h-3.5 w-0.5 shrink-0 rounded-full bg-[#D4AF37]"
+    />
+
+    <h2
+      className="
+        min-w-0 line-clamp-2 break-words
+        text-[13px] md:text-sm font-medium
+        leading-5 tracking-[0.01em] text-white/95
+        [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]
+      "
+    >
+      {currentScene?.title || "Pamja 360°"}
+    </h2>
+  </div>
+</div>
 		
 		
 {showAura360Branding && isViewerVisible && (
@@ -2571,7 +2595,7 @@ className={`relative shrink-0 w-20 h-12 overflow-hidden rounded-xl border transi
   className="w-full h-full object-cover"
 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent flex items-end p-1.5">
-                  <span className="text-[10px] text-white font-semibold truncate drop-shadow-md">
+                  <span className="hidden text-[10px] text-white font-semibold truncate drop-shadow-md">
                     {scene.title}
                   </span>
                 </div>
